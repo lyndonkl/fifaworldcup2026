@@ -1,0 +1,25 @@
+# Raw and intermediate pipeline data stays out of git — only derived
+# LOD tiles, aggregates, and small reference files are committed (see CLAUDE.md)
+pipeline/data/
+*.parquet
+*.duckdb
+*.duckdb.wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node (if any tooling appears)
+node_modules/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Scratch
+scratch/
+*.log
