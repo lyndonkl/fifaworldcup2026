@@ -1,0 +1,39 @@
+{
+  "missing": [
+    "KXWCGROUPBOTTOM (Sports, 12 events / 48 markets, ~872K contracts, e.g. event KXWCGROUPBOTTOM-26L 'Group L Team to Finish Bottom') - biggest miss; named in fact-base",
+    "KXWCGOALCOMBO (Sports, 17 events / 177 markets, e.g. 'Tournament Goals: Yamal + Vini Jr. + Olise') - largest miss by market count",
+    "KXWCGROUPGOALS (Sports, 2 events / 24 markets, ~249K contracts, events KXWCGROUPGOALS-26MOST/-26LEAST 'Highest/Lowest Scoring Group') - named in fact-base",
+    "KXWCMESSIMBAPPE (Sports, 1 event / 3 markets, ~795K contracts, event KXWCMESSIMBAPPE-26LMESSI10KMBAPP10 'Messi vs Mbappe: 2026 Tournament Goals') - named in fact-base",
+    "KXWCMESSIRONALDO (Sports, 1 event / 3 markets, ~450K contracts, event KXWCMESSIRONALDO-26LMESCRON) - named in fact-base",
+    "KXWCGBOOTGOALS (Sports, 1 event / 10 markets, event KXWCGBOOTGOALS-26 'Golden Boot Winner: Total Goals') - named in fact-base",
+    "KXWCMBAPPEGOALLEADER (Sports, 1 event / 9 markets, 'When will Mbappe become the Tournament All-Time Goal Leader?') - named in fact-base",
+    "KXWCGOALSTREAK (Sports, 1 event / 6 markets, 'Messi World Cup Goal Streak')",
+    "KXWCGOLDENBOOTCLEAT (Sports, 1 event / 4 markets, event KXWCGOLDENBOOTCLEAT-26 'Brand of Cleats Worn by the Golden Boot Winner') - named in fact-base",
+    "KXWCADS (Financials, 1 event / 36 markets, ~582K contracts, 'Which brands will advertise during the World Soccer Cup Final')",
+    "KXWCPRICE (Financials, 3 events / 49 markets, ~459K contracts, 'Get-in price of the World Cup Final/Semi-Finals')",
+    "KXTRUMPWORLDCUP (Politics, 1 event / 3 markets, ~482K contracts, 'Donald Trump: World Cup matches attended')",
+    "KXWCFINALSONGS (Entertainment, 1 event / 52 markets, 'World Cup Final Halftime Show: Songs')",
+    "KXWCATTEND (Entertainment, 1 event / 21 markets, '2026 FIFA World Cup Final: Attendance')",
+    "KXWCOCUSA (Entertainment, 2 events / 20 markets, USA opening-ceremony setlists: Future, Katy Perry)",
+    "KXWCOCMEX (Entertainment, 1 event / 11 markets, Shakira Mexico opening-ceremony setlist)",
+    "KXWCOCCAN (Entertainment, 1 event / 10 markets, Michael Buble Canada opening-ceremony setlist)",
+    "KXWCVIEWERSHIP (Entertainment, 1 event / 11 markets, '2026 Soccer Cup Final: U.S. Viewership')",
+    "KXWCATTENDSWIFT (Entertainment, 1 event / 1 market, 'Taylor Swift: Attend a FIFA World Cup match?')",
+    "KXWCSONG (Entertainment, 1 event / 1 market, official anthem to reach Billboard Hot 100)",
+    "KXFIFATRAVEL (Politics, 1 event / 1 market, ~10K contracts, 'Will the travel ban end for any countries participating in the World Cup?')",
+    "KXWCHOST (Sports, 1 event / 14 markets, 'Who will host the 2038 FIFA World Cup?') - borderline: WC-brand but not the 2026 tournament",
+    "Series shells with events but 0 markets, WC-narrative, absent from inventory (zero market-row cost but series-level incompleteness): KXFIFAPEACE ('Who will win the FIFA Peace Prize?'), KXRONALDOTRUMPHANDSHAKE, KXWCUPSONG ('Who will sing the next World Cup song?')"
+  ],
+  "extra_discoveries": [
+    "KXTRUMPWORLDCUP (Politics) - Trump World Cup matches attended, 3 markets, ~482K contracts",
+    "KXFIFATRAVEL (Politics) - travel ban ending for WC-participating countries, 1 market",
+    "KXFIFAPEACE (Politics) - FIFA Peace Prize winner (event live, markets not yet opened)",
+    "KXRONALDOTRUMPHANDSHAKE (Politics) - Trump-Ronaldo handshake (event live, 0 markets)",
+    "KXPERSONATTENDTRUMP (Entertainment) - series titled 'Will Trump Attend the 2026 FIFA World Cup Final?' (0 events/markets so far)",
+    "KXMESSIWCDEAL (Financials) - 'Messi Next Brand Deal' (0 events/markets)",
+    "KXMWORLDCUP (Sports) - legacy duplicate 'Men's World Cup winner' series shell, 0 events/markets ever",
+    "Cross-category KXWC*-prefixed novelty series carrying real 2026 WC markets outside the Sports category: KXWCADS + KXWCPRICE (Financials), KXWCATTEND, KXWCFINALSONGS, KXWCOCUSA/KXWCOCMEX/KXWCOCCAN, KXWCVIEWERSHIP, KXWCATTENDSWIFT, KXWCSONG (Entertainment)",
+    "False-positive KXWC prefixes to exclude, useful for filter hygiene: KXWCPI-RU/KXWCPI-TR (inflation), KXWCCREG (West Coast Conference basketball), KXWCCODWARZONE + all KXEWC* (2025 Esports World Cup), KXCLUBWC/KXCLUBWCHOST (Club World Cup), KXT20WORLDCUP/KXWT20WORLDCUP (cricket)"
+  ],
+  "notes": "VERDICT BASIS: independently re-enumerated all 9,370 unique series across 12 categories from GET /series (9,797 rows pre-dedupe) and diffed against the 110-series inventory. The crawl missed ~22 WC-related series carrying roughly 500 markets total (~284 in Sports KXWC* series its own prefix filter should have caught, ~216 in cross-category novelty series). Highest-volume misses: KXWCGROUPBOTTOM (~872K contracts), KXWCMESSIMBAPPE (~795K), KXWCADS (~582K), KXTRUMPWORLDCUP (~482K), KXWCPRICE (~459K), KXWCMESSIRONALDO (~450K). Seven missed series are named in research/fact-base.json itself. SPOT-CHECK CAVEATS: KXWCHOSTWIN-26 is an event ticker; its market KXWCHOSTWIN-26-Y is in the inventory (counted found). KXWCFINALMATCHUP is in the inventory's series table but with 0 events/0 markets, and the live API confirms the series genuinely has no events - Kalshi lists final-matchup markets under KXWCMATCHUP-26FIN instead (present in inventory, 3 events / 360 markets) - so this spot-check failure is Kalshi's catalog structure, not a crawl gap. INTERNALS ALL CLEAN for what was crawled: 0 duplicate tickers, 0 null open_time/close_time, exactly 48 winner legs in KXMENWORLDCUP-26, 102 KXWCGAME events = 100 played (72 group + 16 R32 + 8 R16 + 4 QF) + 2 scheduled semis (KXWCGAME-26JUL14FRAESP and -26JUL15ENGARG both present; 3rd-place and final events cannot exist yet because team codes are undetermined), status mix 30,033 finalized / 1,056 active / 96 closed / 2 inactive is consistent with a semifinal-stage tournament (active concentrated in KXWCAWARD 289, KXWCSTART 104, KXWCTEAMLEADGOAL 96, semis match markets). Per-series market counts match the API exactly for all 6 series cross-checked (KXMENWORLDCUP 48, KXWCGOALLEADER 54, KXWCGAME 306, KXWCSCORE 2612, KXWCADVANCE 60, KXWCTOTALGOAL 103), so within-series coverage looks complete - the gaps are entirely missing series. FACT-BASE ~80 CLAIM: stale undercount. Live API shows 111 KXWC*-prefixed Sports-category series today (109 after excluding KXWCCODWARZONE esports and KXWCCREG basketball); the inventory covers only 99 of them. KXWC2HSCORE does not exist (404) even though KXWC1HSCORE does - real asymmetry on Kalshi, not a crawl miss. Scratch data: /private/tmp/claude-501/-Users-kushaldsouza-Documents-Thinking-fifaworldcup2026/cb9c7a0e-6d7e-4b6f-b854-d62b6af6bc3e/scratchpad/all_series.json"
+}

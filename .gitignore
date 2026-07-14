@@ -23,3 +23,7 @@ node_modules/
 # Scratch
 scratch/
 *.log
+
+# Secrets
+pipeline/.oddspapi_key
+.env
