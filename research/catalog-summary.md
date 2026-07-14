@@ -1,16 +1,67 @@
 # Kalshi 2026 World Cup Market Catalog Summary
 
-**Date:** 2026-07-13  
-**Source:** `pipeline/data/catalog/markets.parquet` (31,187 rows)
+**Date:** 2026-07-13 (v1), remediated 2026-07-13 (v2, same day — see "v2 remediation" below)
+**Source:** `pipeline/data/catalog/markets.parquet` (34,706 rows, v2)
 
-## Headline Counts
+## Headline Counts (v2, current)
 
 | Metric | Value |
 |--------|-------|
-| Series | 110 |
-| Events | 3,119 |
-| Markets | 31,187 |
-| Total Contract Volume | 11.89B |
+| Series | 138 (133 in narrative scope + 5 flagged `in_narrative_scope=False`, kept for audit trail) |
+| Events | 3,278 |
+| Markets | 34,706 (34,692 in-scope) |
+| Total Contract Volume | 12.02B |
+
+*(v1 numbers, superseded below: 110 series / 3,119 events / 31,187 markets / 11.89B contracts — the rest of this document is the original v1 write-up, left intact as the audit trail. Read "v2 remediation" first for what changed and why.)*
+
+---
+
+## v2 Remediation (2026-07-13)
+
+An adversarial audit (`research/catalog-gaps.json`) ran a few hours after v1 shipped and independently re-enumerated the live Kalshi catalog. It found v1's crawler (`pipeline/ingest/catalog.py`) had two filter bugs that caused it to miss 23 gap-list entries (25 individual series tickers, ~500 markets, ~2.9M contracts of volume) that were genuinely part of the 2026 FIFA World Cup universe on Kalshi.
+
+### What was missed
+
+25 series across 5 categories, all now confirmed present:
+
+- **Player props:** KXWCMESSIMBAPPE, KXWCMESSIRONALDO, KXWCGBOOTGOALS, KXWCMBAPPEGOALLEADER, KXWCGOALSTREAK, KXWCGOLDENBOOTCLEAT
+- **Group-stage:** KXWCGROUPBOTTOM (biggest single miss, ~872K contracts), KXWCGROUPGOALS
+- **Novelty/off-pitch (Financials):** KXWCADS ("World Cup Advertisements"), KXWCPRICE ("World Cup Ticket Prices")
+- **Novelty/off-pitch (Entertainment):** KXWCFINALSONGS, KXWCATTEND, KXWCOCUSA/KXWCOCMEX/KXWCOCCAN (opening-ceremony setlists), KXWCVIEWERSHIP, KXWCATTENDSWIFT, KXWCSONG, KXWCUPSONG (0 markets — song not yet picked)
+- **Novelty/off-pitch (Politics):** KXTRUMPWORLDCUP, KXFIFATRAVEL, KXFIFAPEACE (0 markets — event live, not yet opened), KXRONALDOTRUMPHANDSHAKE (0 markets — event live, not yet opened)
+- **Player-goal combo:** KXWCGOALCOMBO (177 markets, the largest single miss by market count)
+- **Borderline, flagged out of narrative scope:** KXWCHOST ("World Soccer Cup Host Country" — the 2038 host-selection market; WC-branded, not the 2026 tournament)
+- **Bonus finds beyond the gap list**, caught by the same fix and included via the same explicit-include mechanism: KXPERSONATTENDTRUMP (0 markets), KXMESSIWCDEAL (0 markets), plus a series the audit didn't name at all — KXWCMENTION (Mentions category, 103 events / 3,005 markets, ~129M contracts) — discovered simply by crawling every category instead of a curated list.
+
+*(KXWCFIRSTSONG was already present in v1 — Kalshi cross-lists it under both Sports and Entertainment category queries, so it slipped into the Sports-only v1 pull despite its true category being Entertainment.)*
+
+### Why: the two filter bugs
+
+**Bug 1 — Sports-only crawl.** `discover_series()` called `client.get_series_list(category="Sports")` exclusively. Kalshi's live catalog has 11,384 unique series across 18 categories; every WC-related series that Kalshi tags Financials, Entertainment, Politics, or Mentions (ads, ticket prices, opening-ceremony setlists, attendance, Trump/Messi/Ronaldo novelty props, broadcast mentions) was structurally unreachable no matter how good the title/prefix filter was.
+
+**Bug 2 — filter logic collapsed two OR-branches into one AND-gated pass.** v1's code ran the prefix strategy first, then only evaluated the secondary title-text strategy against series the prefix strategy had *already rejected*, using a curated `TEXT_MATCH_INCLUSIONS` allow-list that had to name every non-KXWC-prefixed series by hand to survive. Series that were both non-KXWC-prefixed AND not manually pre-listed (e.g. KXTRUMPWORLDCUP, KXFIFAPEACE, KXWCADS's Financials sibling KXWCPRICE) had no path into the catalog even though their titles plainly said "World Cup" or "FIFA." Two series (KXRONALDOTRUMPHANDSHAKE, KXMESSIWCDEAL) don't contain "world cup" or "fifa" in their titles at all and needed a third path — an explicit include list — that v1 didn't have.
+
+### What changed
+
+`pipeline/ingest/catalog.py` was rewritten (see the module docstring and `discover_series()`/`run()` for the full mechanics):
+
+1. **All categories, one call.** `client.get_series_list(category=None)` returns the entire live catalog (11,384 unique series, no cursor) in one page — a strict superset of even the auditor's own 12-category loop (which itself missed the Elections/Mentions/Exotics/Education categories, undercounting at 9,370).
+2. **Three independent OR-branches**, unioned before any exclusion is applied:
+   - (a) ticker prefix ∈ {`KXWC`, `KXMENWORLDCUP`}
+   - (b) title contains "world cup" or "fifa" (case-insensitive)
+   - (c) ticker ∈ an explicit include list, regex-sourced directly from `research/catalog-gaps.json`'s `missing` + `extra_discoveries` arrays (traceable to the audit, not re-transcribed by hand)
+3. **A curated exclusion denylist** is applied to the union *after* step 2, so over-inclusive sourcing in (c) is safe: `KXWCCODWARZONE` + `KXEWC*` (2025 Esports World Cup), `KXWCCREG` (West Coast Conference), `KXCLUBWC*` (FIFA Club World Cup, a different tournament), `KX*T20WORLDCUP` (cricket), `KXFIFAWGAME` (women's internationals), `KXMWORLDCUP` (dead duplicate ticker), plus two extras the all-categories crawl surfaced and the task brief didn't name but the auditor flagged for "filter hygiene": `KXWCPI-RU`/`KXWCPI-TR` (Russian/Turkish inflation gauges that happen to share the `KXWC` prefix).
+4. **Two series stay cataloged but flagged `in_narrative_scope=False`** with a `scope_note` explaining why, rather than being silently dropped: `KXWCHOST` (2038 host selection) and the four qualifying/playoff shells `KXFIFAADVANCE`/`KXFIFAGAME`/`KXFIFATOTAL`/`KXFIFASPREAD` (pre-tournament, still 0 markets, carried over unchanged from v1). Both `series.parquet` and `markets.parquet` now carry `in_narrative_scope` (bool) and `scope_note` (string) columns — retrofitted onto every pre-existing v1 row, not just the new ones.
+5. **Additive merge, nothing deleted.** `run()` loads the existing parquet files, only enumerates events/markets for the 28 series not already present, and concatenates — the full v1 audit trail (all 110 series, all 31,187 market rows) is intact inside the v2 files.
+
+### Self-verification (2026-07-13)
+
+- **All 23 `catalog-gaps.json` `missing` entries present** (25 individual tickers once the one bundled entry is expanded) — 0 still missing. 22 of 25 carry nonzero markets; 3 genuinely have 0 markets as the gap list itself predicted (`KXFIFAPEACE`, `KXRONALDOTRUMPHANDSHAKE`, `KXWCUPSONG` — events exist, markets not yet opened by Kalshi) and are recorded as such rather than treated as failures.
+- **All 32 curated exclusion tickers checked absent** from both `series.parquet` and `markets.parquet` (0 leaked rows) — the 20-member `KXEWC*` esports family, `KXWCCODWARZONE`, `KXWCCREG`, `KXCLUBWC`/`KXCLUBWCHOST`, `KXT20WORLDCUP`/`KXWT20WORLDCUP`, `KXFIFAWGAME`, `KXMWORLDCUP`, `KXAUSTINMAJOR`/`KXTORONTOULTRACHAMPIONSHIP` (esports mislabeled without an `KXEWC` prefix), `KXWCPI-RU`/`KXWCPI-TR`.
+- **No duplicate tickers** in either parquet file (series or market level).
+- **Final counts:** 138 series (5 flagged out of narrative scope), 3,278 events, 34,706 market rows (3,519 new), 12.02B total contract volume. Category breakdown of the 138 series: Sports 119, Entertainment 11, Politics 4, Financials 3, Mentions 1.
+
+---
 
 ---
 

@@ -29,6 +29,8 @@ from typing import Any, Iterator
 
 import requests
 
+from .timeutil import iso_datetime_to_epoch
+
 logger = logging.getLogger("kalshi_api")
 
 DEFAULT_BASE_URL = "https://api.elections.kalshi.com/trade-api/v2"
@@ -80,6 +82,12 @@ class KalshiClient:
         # Cumulative counters, useful for sizing/cost estimates downstream.
         self.request_count = 0
         self.retry_count = 0
+        # Cause-specific retry counters (tick_pull's heartbeat needs http_429s
+        # isolated from 5xx/connection-error retries, which retry_count lumps
+        # together).
+        self.retry_429_count = 0
+        self.retry_5xx_count = 0
+        self.retry_conn_count = 0
 
     # ------------------------------------------------------------------ #
     # Low-level request plumbing
@@ -125,6 +133,7 @@ class KalshiClient:
             except (requests.ConnectionError, requests.Timeout) as exc:
                 last_exc = exc
                 self.retry_count += 1
+                self.retry_conn_count += 1
                 logger.warning("connection error on %s: %s", url, exc)
                 if attempt < self.max_retries:
                     self._sleep_for_retry(attempt, None)
@@ -136,6 +145,10 @@ class KalshiClient:
 
             if resp.status_code == 429 or resp.status_code >= 500:
                 self.retry_count += 1
+                if resp.status_code == 429:
+                    self.retry_429_count += 1
+                else:
+                    self.retry_5xx_count += 1
                 logger.warning("HTTP %d on %s (params=%s)", resp.status_code, url, clean_params)
                 if attempt < self.max_retries:
                     self._sleep_for_retry(attempt, resp.headers.get("Retry-After"))
@@ -185,6 +198,46 @@ class KalshiClient:
             if not items:
                 # Defensive: a cursor with zero items would otherwise loop forever.
                 break
+            if max_pages is not None and pages >= max_pages:
+                break
+
+    def paginate_pages(
+        self,
+        path: str,
+        items_key: str,
+        params: dict[str, Any] | None = None,
+        cursor_param: str = "cursor",
+        cursor_key: str = "cursor",
+        start_cursor: str | None = None,
+        max_pages: int | None = None,
+    ) -> Iterator[tuple[list[dict[str, Any]], str | None, str | None]]:
+        """Page-level variant of `paginate`: yields (items, cursor_used_for_this_page,
+        next_cursor) once per page instead of flattening to individual items.
+
+        Gives callers checkpoint-level control -- e.g. tick_pull.py persists
+        `next_cursor` to a resumable ledger after each page so a crashed/
+        interrupted pull can resume mid-market instead of re-fetching from
+        scratch. `start_cursor` seeds the first page's cursor param, so a
+        resumed run can pick up exactly where a prior run left off.
+        """
+        params = dict(params or {})
+        cursor = start_cursor
+        pages = 0
+        while True:
+            page_params = dict(params)
+            if cursor:
+                page_params[cursor_param] = cursor
+            body = self.get(path, page_params)
+            items = body.get(items_key, [])
+            next_cursor = body.get(cursor_key) or None
+            yield items, cursor, next_cursor
+            pages += 1
+            if not next_cursor:
+                break
+            if not items:
+                # Defensive: a cursor with zero items would otherwise loop forever.
+                break
+            cursor = next_cursor
             if max_pages is not None and pages >= max_pages:
                 break
 
@@ -245,15 +298,59 @@ class KalshiClient:
         max_ts: int | None = None,
         limit: int = 1000,
         max_pages: int | None = None,
+        start_cursor: str | None = None,
     ) -> Iterator[dict[str, Any]]:
-        """Stream tick-level trades for one market ticker via GetTrades.
+        """Stream tick-level trades for one market ticker via GetTrades (live tier).
 
         limit is capped at 1000/page by the API (1001 is rejected). Use
         min_ts/max_ts (unix seconds) to window a pull; combine with
-        max_pages to bound a sizing probe.
+        max_pages to bound a sizing probe. Only serves trades at/after the
+        rolling historical cutoff (see get_historical_cutoff) -- trades
+        before the cutoff return empty here even if min_ts/max_ts covers
+        them; use iter_historical_trades for those.
         """
         params = {"ticker": ticker, "min_ts": min_ts, "max_ts": max_ts, "limit": limit}
-        yield from self.paginate("/markets/trades", items_key="trades", params=params, max_pages=max_pages)
+        for items, _cursor_used, _next_cursor in self.paginate_pages(
+            "/markets/trades", items_key="trades", params=params, max_pages=max_pages, start_cursor=start_cursor
+        ):
+            yield from items
+
+    def iter_historical_trades(
+        self,
+        ticker: str,
+        min_ts: int | None = None,
+        max_ts: int | None = None,
+        limit: int = 1000,
+        max_pages: int | None = None,
+        start_cursor: str | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Stream tick-level trades via GET /historical/trades (historical tier).
+
+        Same request/response shape as iter_trades (verified empirically
+        2026-07-13), but only serves trades strictly before the rolling
+        historical cutoff -- see get_historical_cutoff(). Markets settled
+        long enough ago migrate entirely off the live tier, so full-history
+        pulls need both this and iter_trades, split at the cutoff.
+        """
+        params = {"ticker": ticker, "min_ts": min_ts, "max_ts": max_ts, "limit": limit}
+        for items, _cursor_used, _next_cursor in self.paginate_pages(
+            "/historical/trades", items_key="trades", params=params, max_pages=max_pages, start_cursor=start_cursor
+        ):
+            yield from items
+
+    def get_historical_cutoff(self) -> dict[str, int | None]:
+        """GET /historical/cutoff -- the rolling boundary (currently ~2 months
+        trailing) between the live tier (/markets/trades, candlesticks) and
+        the historical tier (/historical/trades). Returns UTC epoch seconds
+        for each of the three cutoff fields Kalshi exposes (as of 2026-07-13
+        they are always equal, but callers should use the field relevant to
+        what they're pulling -- trades_created_ts for GetTrades)."""
+        body = self.get("/historical/cutoff")
+        return {
+            "market_settled_ts": iso_datetime_to_epoch(body.get("market_settled_ts")),
+            "trades_created_ts": iso_datetime_to_epoch(body.get("trades_created_ts")),
+            "orders_updated_ts": iso_datetime_to_epoch(body.get("orders_updated_ts")),
+        }
 
     def get_candlesticks(
         self,
