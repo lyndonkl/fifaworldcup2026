@@ -607,21 +607,25 @@ async function boot() {
     return;                 // page remains a readable document
   }
 
-  // 3. Engine + population tile (tier fallback chain inside).
-  status('loading the population…');
-  await bootEngine();
-
-  // 4. Scenes.
+  // 3. Rail FIRST — pure DOM + inline CSS from the static scene registry, so
+  // the scroll runway and readable prose exist immediately, independent of the
+  // (multi-second) engine + population-tile load. Without this ordering an
+  // early scroll during boot finds a zero-height rail and overshoots straight
+  // to the methods footer.
   if (!SCENES.length) {
     console.warn('[rt] no scene modules registered yet — rail is empty');
     status('');
     return;
   }
-  status('loading scene data…');
-  await loadSceneNeeds(SCENES[0]);      // S1's zoom tile is part of boot
   buildRail();
   overlaySvg.attr('viewBox', `0 0 ${view.W} ${view.H}`)
     .attr('width', view.W).attr('height', view.H);
+
+  // 4. Engine + population tile (tier fallback chain inside).
+  status('loading the population…');
+  await bootEngine();
+  status('loading scene data…');
+  await loadSceneNeeds(SCENES[0]);      // S1's zoom tile is part of boot
 
   // First paint: set, never animate the initial render (precedent rule).
   const first = BEAT_INDEX[0];
