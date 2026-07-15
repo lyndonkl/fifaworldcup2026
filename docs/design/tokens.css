@@ -1,0 +1,209 @@
+/*
+ * tokens.css -- Design system build artifact, Gate 3.
+ * "The Market Watched the World Cup" -- fifaworldcup2026
+ *
+ * Source of truth for colors/type/spacing/motion is generated in lockstep
+ * with tokens.json (WebGL layer) from one Python token table -- the two
+ * files cannot drift. See research/design-system.md for full rationale,
+ * per-scene notes, and the Gate 3 audit disposition. Regenerate via
+ * scripts referenced in that doc; do not hand-edit values in only one file.
+ *
+ * Palette: dark, near-black cold-blue ground (#0B0E13) -- additive
+ * point-sprite density needs luminance headroom; see design-system.md
+ * "Density tone-mapping" for the compression policy this drives on the
+ * WebGL side. No external imports; self-hosted fonts referenced by
+ * family name only (loaded via @font-face in the app stylesheet).
+ */
+
+:root {
+  /* ---- Color: backgrounds ---- */
+  --bg-canvas: #0B0E13;
+  --bg-card: #10151D;
+  --bg-card-composite-cap: #171C24;
+  --bg-end-matter: #0E1218;
+
+  /* ---- Color: ink (prose hierarchy) ---- */
+  --ink-hi: #E8ECF1;
+  --ink-mid: #A9B4C0;
+  --ink-low: #7C8794;
+  --ink-hero: #FFFFFF;
+
+  /* ---- Color: the one reserved annotation hue ---- */
+  --accent-annotation: #FFC94D;
+
+  /* ---- Color: side binary (YES/NO), taught at first contact in S1 ---- */
+  --side-yes: #59D2FE;
+  --side-no: #FF7A45;
+
+  /* ---- Color: venue ---- */
+  --venue-kalshi: #59D2FE;
+  --venue-polymarket: #C9A3FF;
+  --venue-pinnacle: #9AA7B8;
+  --venue-pinnacle-terminated: #6B7480;
+
+  /* ---- Color: neutral / resting field ---- */
+  --neutral-data: #9AA7B8;
+  --field-rest: #9FB6CC;
+
+  /* ---- Color: identity ramp (max 4 simultaneously live) ---- */
+  --identity-blue: #6FA8FF;
+  --identity-crimson: #F68388;
+  --identity-teal: #58C9A4;
+  --identity-lavender: #C9A3FF;
+  --identity-pink: #FF9FB2;
+  --identity-ref: #9AA7B8;
+
+  /* ---- Color: particle states ---- */
+  --state-dead: #4A5462;
+  --state-expiring: #7C8AA0;
+
+  /* ---- Typography: families ---- */
+  --font-prose: 'Source Serif 4', Georgia, 'Iowan Old Style', serif;
+  --font-apparatus: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-tape: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---- Typography: scale (see design-system.md for full weight/tracking table) ---- */
+  --type-micro-size: 12px;
+  --type-micro-weight: 500;
+  --type-micro-tracking: 0.02em;
+  --type-caption-size: clamp(13.5px, 1.3vw, 14px);
+  --type-caption-weight: 400;
+  --type-caption-leading: 1.4;
+  --type-annotation-size: 15px;
+  --type-annotation-weight: 500;
+  --type-annotation-leading: 1.3;
+  --type-tape-size: 13px;
+  --type-tape-weight: 500;
+  --type-tape-leading: 1.4;
+  --type-tape-tracking: 0.04em;
+  --type-body-size: clamp(17px, 1rem + 0.2vw, 19px);
+  --type-body-weight: 400;
+  --type-body-leading: 1.65;
+  --type-lede-size: 22px;
+  --type-lede-weight: 400;
+  --type-lede-leading: 1.5;
+  --type-kicker-size: clamp(24px, 2.5vw, 28px);
+  --type-kicker-weight: 600;
+  --type-kicker-leading: 1.2;
+  --type-act-title-size: clamp(32px, 5vw, 44px);
+  --type-act-title-weight: 600;
+  --type-act-title-leading: 1.15;
+  --type-hero-number-size: clamp(64px, 12vw, 128px);
+  --type-hero-number-weight: 600;
+  --type-hero-number-leading: 1.0;
+  --type-devig-line-size: 24px;
+  --type-devig-line-weight: 600;
+  --type-devig-line-leading: 1.2;
+
+  /* ---- Spacing (4px base scale) ---- */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --space-96: 96px;
+  --space-128: 128px;
+
+  /* ---- Motion: easing ---- */
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-fall: cubic-bezier(0.11, 0, 0.5, 0);
+
+  /* ---- Motion: durations (ms) ---- */
+  --dur-resort-per-dot: 1100ms;
+  --dur-resort-stagger-max: 600ms;
+  --dur-resort-total-target: 1700ms;
+  --dur-resort-hard-cap: 1800ms;
+  --dur-ceremonial-max: 2600ms;
+  --dur-recolor-min: 500ms;
+  --dur-recolor-max: 600ms;
+  --dur-emission-fade-in: 150ms;
+  --dur-settlement-pour-min: 900ms;
+  --dur-overlay-draw-in: 400ms;
+  --dur-overlay-stagger: 40ms;
+  --dur-annotation-fade-rise: 400ms;
+  --dur-counter-count-up-max: 1200ms;
+  --dur-chip-pulse: 1200ms;
+  --dur-scrub-lerp-smoothing: 120ms;
+  --dur-ui-chrome-fade-up: 800ms;
+
+  /* ---- Motion: misc ---- */
+  --motion-overlay-max-sequenced-elements: 10;
+  --motion-annotation-fade-rise-px: 8;
+  --motion-step-trigger-viewport-pct: 55;
+  --motion-step-trigger-hysteresis-pct: 10;
+
+  /* ---- Layout ---- */
+  --layout-card-width-desktop-px: 480px;
+  --layout-card-inset-desktop-px: 48px;
+  --layout-card-max-height-mobile-vh: 38vh;
+  --layout-stage-margin-pct: 8%;
+  --layout-stage-width-pct-desktop: 64%;
+  --layout-safe-area-desktop-px: 24px;
+  --layout-safe-area-mobile-px: 16px;
+  --layout-annotation-leader-standoff-px: 8px;
+  --layout-annotation-leader-weight-px: 1.5px;
+  --layout-max-annotations-per-step: 2;
+  --layout-max-pinned-captions-per-step: 1;
+
+  /* ---- Population scaling (grain plate) ---- */
+  --pop-desktop-grain-usd-per-dot: 75000;
+  --pop-desktop-dot-count-approx: 164000;
+  --pop-mobile-grain-usd-per-dot: 250000;
+  --pop-mobile-dot-count-approx: 49000;
+
+  /* ---- Density tone-mapping (WebGL luminance-compression policy) ---- */
+  --density-gamma: 0.35;
+  --density-tile-luminance-cap: 0.92;
+  --density-bloom-radius-px-1x: 3;
+  --density-bloom-radius-px-2x: 4.5;
+  --density-text-route-threshold-x: 75;
+
+  /* ---- Dot geometry & state opacity (engineering defaults; see design-system.md) ---- */
+  --dot-radius-base-px: 2.0px;
+  --dot-radius-annotated-core-px: 5.0px;
+  --dot-radius-annotated-halo-px: 9.0px;
+  --dot-halo-stroke-px: 1.5px;
+  --dot-opacity-alive: 1.0;
+  --dot-opacity-rest: 0.35;
+  --dot-opacity-dimmed-field-min: 0.25;
+  --dot-opacity-dimmed-field-max: 0.4;
+  --dot-opacity-dead: 0.55;
+  --dot-opacity-expiring: 0.55;
+
+  /* ---- Z-stack ---- */
+  --z-canvas: 0;
+  --z-field-dim-scrim: 1;
+  --z-d3-overlay: 2;
+  --z-prose-card: 3;
+  --z-chip-and-grain-plate: 4;
+  --z-skip-controls: 5;
+}
+
+/* Contrast floors this file must keep satisfying (validated by
+   pipeline/.venv scripts against research/design-system.md targets):
+   ink-hi/ink-mid sustained text >= AAA 7:1; ink-low >= AA 4.5:1;
+   any non-text mark >= AA 3:1 EXCEPT state-dead, which is an
+   intentional WCAG 1.4.11 "inactive component" exception (2.5:1),
+   mandatory-paired with an ink-mid text label. */
+
+/* prefers-reduced-motion: durations collapse to crossfades at the app
+   layer per design-system.md; tokens above remain the source of truth
+   for the FULL-motion mode. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-reduced-crossfade: 400ms;
+  }
+}
+
+:root[data-theme] {
+  /* This piece ships one deliberate dark register by design (see
+     design-system.md "background_regime"): additive point-sprite
+     density requires a near-black ground and is not light-mode-safe.
+     data-theme is accepted for host-shell compatibility but both
+     values resolve to the same dark tokens above. */
+}
+
