@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Dev harness for docs/js/engine.js (CONTRACT §3). Same no-external-
+       resource discipline as index.html; everything same-origin. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'">
+  <title>engine-test — Regulation Time</title>
+  <link rel="stylesheet" href="../design/tokens.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg-canvas); color: var(--ink-hi);
+      font-family: var(--font-apparatus); font-size: 13px; overflow: hidden; }
+    #c { position: absolute; inset: 0; }
+    #panel {
+      position: absolute; top: 12px; left: 12px; width: 320px; max-height: calc(100% - 24px);
+      overflow-y: auto; background: var(--bg-card); border: 1px solid var(--state-dead);
+      border-radius: 6px; padding: 12px; z-index: 10; opacity: 0.96;
+    }
+    #panel h1 { font-size: 14px; margin-bottom: 8px; color: var(--accent-annotation); }
+    #panel .row { margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    #panel button {
+      background: var(--bg-card-composite-cap); color: var(--ink-hi);
+      border: 1px solid var(--ink-low); border-radius: 4px; padding: 4px 8px;
+      font: inherit; cursor: pointer;
+    }
+    #panel button:hover { border-color: var(--accent-annotation); }
+    #panel label { color: var(--ink-mid); }
+    #panel input[type=range] { width: 140px; }
+    #meta { font-family: var(--font-tape); color: var(--ink-mid); white-space: pre; line-height: 1.5; }
+    #results { font-family: var(--font-tape); margin-top: 8px; line-height: 1.5; white-space: pre-wrap; }
+    #results .pass { color: var(--identity-teal); }
+    #results .fail { color: var(--side-no); }
+    a { color: var(--side-yes); }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>engine-test</h1>
+  <div id="meta">booting…</div>
+  <div class="row">
+    <button data-state="field">field</button>
+    <button data-state="columns">columns</button>
+    <button data-state="ring">ring</button>
+    <button data-state="recolor">recolor (kind)</button>
+    <button data-state="pour">pour (ease.fall)</button>
+    <button data-state="burst">burst (cap test)</button>
+  </div>
+  <div class="row">
+    <button id="interrupt">interrupt test</button>
+    <button id="pauseresume">pause/resume</button>
+    <button id="loselose">lose context</button>
+  </div>
+  <div class="row">
+    <label>scrub field→columns</label>
+    <input type="range" id="scrub" min="0" max="1000" value="0">
+  </div>
+  <div class="row">
+    <label>zoom channel (emitOrder)</label>
+    <input type="range" id="zoom" min="0" max="1000" value="0">
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="rm"> reduced motion</label>
+  </div>
+  <div class="row">
+    <label>N:</label>
+    <a href="?n=164213">164k</a> <a href="?n=49264">49k</a> <a href="?n=20000">20k</a>
+    <a href="?gl=1">force webgl1</a> <a href="?auto=1">auto suite</a>
+  </div>
+  <div id="results"></div>
+</div>
+
+<script type="module">
+import { createEngine } from '../js/engine.js';
+
+/* ------------------------------------------------------------------ */
+const q = new URLSearchParams(location.search);
+const AUTO = q.get('auto') === '1';
+const N = Math.max(parseInt(q.get('n') || (AUTO ? '20000' : '164213'), 10), 100);
+const FORCE_GL1 = q.get('gl') === '1';
+
+const metaEl = document.getElementById('meta');
+const resEl = document.getElementById('results');
+const canvas = document.getElementById('c');
+
+const results = [];
+function report(name, ok, detail = '') {
+  results.push({ name, ok });
+  const line = document.createElement('div');
+  line.className = ok ? 'pass' : 'fail';
+  line.textContent = `${ok ? 'PASS' : 'FAIL'} — ${name}${detail ? ` (${detail})` : ''}`;
+  resEl.appendChild(line);
+  console[ok ? 'log' : 'error'](`[engine-test] ${line.textContent}`);
+}
+function summarize() {
+  const fails = results.filter((r) => !r.ok).length;
+  const verdict = fails === 0 ? 'PASS' : `FAIL (${fails})`;
+  document.title = `ENGINE-TEST ${verdict}`;
+  const line = document.createElement('div');
+  line.className = fails === 0 ? 'pass' : 'fail';
+  line.textContent = `== ${verdict}: ${results.length - fails}/${results.length} checks ==`;
+  resEl.appendChild(line);
+}
+
+/* Deterministic PRNG so every run and every reverse scrub is identical. */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const tokens = await (await fetch('../design/tokens.json')).json();
+const colorOf = (name, alpha) => {
+  const c = tokens.colors[name].rgba;
+  return [c[0], c[1], c[2], alpha === undefined ? c[3] : alpha];
+};
+const stateRgba = (name) => tokens.particle_states[name].rgba;
+const DOT = tokens.dot['radius-base-px'] * 2;   // DotState.size is diameter
+
+function makeState(n) {
+  return {
+    x: new Float32Array(n), y: new Float32Array(n),
+    color: new Float32Array(n * 4), size: new Float32Array(n),
+  };
+}
+function fill(state, i, x, y, rgba, size = DOT) {
+  state.x[i] = x; state.y[i] = y; state.size[i] = size;
+  state.color.set(rgba, i * 4);
+}
+
+/* ---- layouts (test doubles for scene layout() output) ---- */
+const W = () => window.innerWidth, H = () => window.innerHeight;
+
+function buildStates() {
+  const rand = mulberry32(20260719);
+  const rest = stateRgba('rest');
+  const dim = stateRgba('dimmed-field-min');
+  const yes = colorOf('side-yes');
+  const no = colorOf('side-no');
+  const dead = stateRgba('dead');
+  const hero = colorOf('ink-hero');
+  const ids = ['identity-blue', 'identity-crimson', 'identity-teal',
+    'identity-lavender', 'identity-pink', 'identity-ref'].map((n) => colorOf(n));
+  const w = W(), h = H();
+
+  const field = makeState(N);
+  for (let i = 0; i < N; i++) {
+    fill(field, i, 60 + rand() * (w - 120), 60 + rand() * (h - 120), rest);
+  }
+
+  const columns = makeState(N);
+  const nCols = 9;
+  for (let i = 0; i < N; i++) {
+    const c = i % nCols;
+    const x0 = w * 0.12 + (c + 0.5) * (w * 0.76 / nCols);
+    const yFrac = (i / nCols | 0) / (N / nCols);
+    fill(columns, i, x0 + (rand() - 0.5) * w * 0.05,
+      h * 0.9 - yFrac * h * 0.75, ids[c % ids.length]);
+  }
+
+  const ring = makeState(N);
+  const R = Math.min(w, h) * 0.34;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const r = R * (0.92 + rand() * 0.16);
+    fill(ring, i, w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r,
+      i % 2 ? yes : no);
+  }
+
+  const recolor = makeState(N);   // field positions, side colors (recolor kind)
+  for (let i = 0; i < N; i++) {
+    fill(recolor, i, field.x[i], field.y[i], i % 2 ? yes : no);
+  }
+
+  const pour = makeState(N);      // settlement pour: to the zero line, dead hue
+  for (let i = 0; i < N; i++) {
+    fill(pour, i, field.x[i], h * 0.92 + rand() * 6, dead);
+  }
+
+  const burst = makeState(N);     // every dot on one point: luminance-cap test
+  for (let i = 0; i < N; i++) {
+    fill(burst, i, w / 2, h / 2, [hero[0], hero[1], hero[2], 1]);
+  }
+
+  /* Zoom channel: first M dots are the "tagged" sub-population; they fly
+   * to a tick-stream lane in trade order (emitOrder ramp) while the rest
+   * of the field rests dimmed (A === B for untagged dots). */
+  const M = Math.min(8000, Math.floor(N * 0.05));
+  const zoomA = makeState(N);
+  const zoomB = makeState(N);
+  let price = 0.5;
+  for (let i = 0; i < N; i++) {
+    if (i < M) {
+      fill(zoomA, i, field.x[i], field.y[i], [rest[0], rest[1], rest[2], 0]);
+      price = Math.min(Math.max(price + (rand() - 0.5) * 0.02, 0.05), 0.95);
+      fill(zoomB, i, w * 0.1 + (i / M) * w * 0.8,
+        h * 0.2 + price * h * 0.6, i % 2 ? yes : no);
+    } else {
+      fill(zoomA, i, field.x[i], field.y[i], dim);
+      fill(zoomB, i, field.x[i], field.y[i], dim);
+    }
+  }
+  const emitOrder = new Float32Array(N);
+  for (let i = 0; i < M; i++) emitOrder[i] = i / M;
+
+  return { field, columns, ring, recolor, pour, burst, zoomA, zoomB, emitOrder, M };
+}
+
+/* ---- boot ---- */
+let S = buildStates();
+const engine = createEngine(canvas, {
+  count: N, tokens, reducedMotion: false, dprCap: 2,
+  _forceMode: FORCE_GL1 ? 'webgl1' : undefined,
+});
+
+if (!engine) {
+  metaEl.textContent = 'createEngine returned null: no WebGL context';
+  report('boot: engine created', false, 'no WebGL');
+  summarize();
+} else {
+  engine.resize(W(), H());
+  engine.setState(S.field);
+  window.__engine = engine;   // console poking
+
+  const dur = (name) => tokens.motion.durations_ms[name];
+
+  let meterTimer = setInterval(() => {
+    metaEl.textContent =
+      `mode         ${engine.mode}\n` +
+      `accum        ${engine.__debug.accumFormat}\n` +
+      `N            ${engine.N.toLocaleString()}\n` +
+      `frameCost    ${engine.frameCost().toFixed(2)} ms\n` +
+      `frames       ${engine.__debug.frameCount}\n` +
+      `t            ${engine.__debug.t.toFixed(3)}` +
+      `${engine.__debug.animating ? '  (tweening)' : ''}` +
+      `${engine.__debug.fading ? '  (fading)' : ''}`;
+  }, 250);
+
+  /* ---- manual controls ---- */
+  const kindOpts = {
+    field: { duration: dur('resort-total-target') },
+    columns: { duration: dur('resort-total-target') },
+    ring: { duration: dur('resort-total-target'), easing: 'ease.arrive' },
+    recolor: { duration: (dur('recolor-min') + dur('recolor-max')) / 2, stagger: 0 },
+    pour: { duration: dur('settlement-pour-min'), stagger: 0.2, easing: 'ease.fall' },
+    burst: { duration: dur('ceremonial-max'), easing: 'ease.arrive', ceremonial: true },
+  };
+  document.querySelectorAll('[data-state]').forEach((b) => {
+    b.addEventListener('click', () => {
+      engine.tween(S[b.dataset.state], kindOpts[b.dataset.state] || {});
+    });
+  });
+
+  let scrubArmed = false;
+  document.getElementById('scrub').addEventListener('input', (e) => {
+    if (!scrubArmed) { engine.scrubBetween(S.field, S.columns, { stagger: 0 }); scrubArmed = true; zoomArmed = false; }
+    engine.setScrub(e.target.value / 1000);
+  });
+  let zoomArmed = false;
+  document.getElementById('zoom').addEventListener('input', (e) => {
+    if (!zoomArmed) {
+      engine.scrubBetween(S.zoomA, S.zoomB, { stagger: 0.9, emitOrder: S.emitOrder });
+      zoomArmed = true; scrubArmed = false;
+    }
+    engine.setScrub(e.target.value / 1000);
+  });
+
+  document.getElementById('rm').addEventListener('change', (e) => {
+    engine.setReducedMotion(e.target.checked);
+  });
+  document.getElementById('interrupt').addEventListener('click', () => {
+    engine.tween(S.columns, { duration: dur('resort-total-target') });
+    setTimeout(() => engine.tween(S.ring, { duration: dur('resort-total-target') }),
+      dur('resort-total-target') * 0.4);
+  });
+  let pausedNow = false;
+  document.getElementById('pauseresume').addEventListener('click', () => {
+    pausedNow = !pausedNow;
+    if (pausedNow) engine.pause(); else engine.resume();
+  });
+  document.getElementById('loselose').addEventListener('click', () => {
+    // context-loss/restore drill (CONTRACT §3.6)
+    const dbg = canvas.getContext(engine.mode === 'webgl2' ? 'webgl2' : 'webgl');
+    const ext = dbg && dbg.getExtension('WEBGL_lose_context');
+    if (ext) { ext.loseContext(); setTimeout(() => ext.restoreContext(), 800); }
+  });
+  window.addEventListener('resize', () => {
+    engine.resize(W(), H());
+    S = buildStates();          // layouts are viewport functions
+    engine.setState(S.field);
+    scrubArmed = zoomArmed = false;
+  });
+
+  /* ---------------------------------------------------------------- */
+  /* Automated suite (?auto=1): exercises boot, tween, interrupt,      */
+  /* scrub, zoom channel, reduced motion, pause, cap, frameCost.       */
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  /* Frame-driven waits: robust under real time AND headless virtual time
+   * (virtual-time budgets advance timers without pumping rAF, so wall-clock
+   * sleeps can outrun the render loop). */
+  const until = async (cond, maxFrames = 3000) => {
+    let i = 0;
+    while (!cond() && i++ < maxFrames) await frame();
+    return cond();
+  };
+  const near = (a, b, eps) => Math.abs(a - b) <= eps;
+  const LUMA = (p) => 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+  const bg = tokens.colors['bg-canvas'].rgba.map((v) => v * 255);
+
+  async function autoSuite() {
+    report('boot: engine created', true, `mode=${engine.mode} accum=${engine.__debug.accumFormat} N=${N}`);
+    report('boot: mode reported', engine.mode === (FORCE_GL1 ? 'webgl1' : engine.mode), engine.mode);
+
+    // 1. setState renders dots (frame texture shows light at a dot).
+    engine.setState(S.burst);            // all dots at center: guaranteed light
+    engine.redraw(); await frame(); await frame();
+    let px = engine.__debug.readPixel(W() / 2, H() / 2);
+    report('setState: draws to the frame', !!px && LUMA(px) > LUMA(bg) + 8, `px=${px}`);
+
+    // 2. luminance cap: N dots on one point must not out-shine the cap.
+    const capY = tokens.density_tone_mapping['tile-luminance-cap'] * 255;
+    report('tone-map: luminance cap holds', !!px && (LUMA(px) - LUMA(bg)) <= capY + 3,
+      `Y=${px ? (LUMA(px) - LUMA(bg)).toFixed(1) : '—'} cap=${capY.toFixed(1)}`);
+
+    // 3. tween runs and completes with onDone.
+    engine.setState(S.field);
+    let doneFired = false;
+    engine.tween(S.columns, { duration: 800, onDone: () => { doneFired = true; } });
+    await until(() => engine.__debug.t > 0.35 || !engine.__debug.animating);
+    const inFlight = engine.__debug.animating && engine.__debug.t < 1;
+    const mid = engine.__debug.posOf(0);
+    const movedOff = !near(mid[0], S.field.x[0], 0.5) || !near(mid[1], S.field.y[0], 0.5);
+    const notArrived = !near(mid[0], S.columns.x[0], 0.5) || !near(mid[1], S.columns.y[0], 0.5);
+    report('tween: in flight between A and B', inFlight && movedOff && notArrived,
+      `t=${engine.__debug.t.toFixed(3)}`);
+    await until(() => doneFired); await frame();
+    const end = engine.__debug.posOf(0);
+    report('tween: arrives at B, onDone fires',
+      doneFired && near(end[0], S.columns.x[0], 0.5) && near(end[1], S.columns.y[0], 0.5));
+
+    // 4. interrupt retargets from CURRENT interpolated values (no snap).
+    engine.tween(S.ring, { duration: 800 });
+    await until(() => engine.__debug.t > 0.25);
+    const before = engine.__debug.posOf(7);
+    engine.tween(S.field, { duration: 400 });   // interrupt mid-flight
+    const after = engine.__debug.posOf(7);      // t=0 → returns baked A
+    report('interrupt: retargets from current values (bake)',
+      near(before[0], after[0], 1.0) && near(before[1], after[1], 1.0),
+      `Δ=${Math.hypot(before[0] - after[0], before[1] - after[1]).toFixed(3)}px`);
+    const offOldB = !near(after[0], S.ring.x[7], 1.0) || !near(after[1], S.ring.y[7], 1.0);
+    report('interrupt: not from the stale start state', offOldB);
+    await until(() => !engine.__debug.animating);
+
+    // 5. duration clamping (hard cap vs ceremonial cap), asserted on the
+    // engine's own clamped timer — no wall-clock flakiness.
+    const hardCap = tokens.motion.durations_ms['resort-hard-cap'];
+    const cereCap = tokens.motion.durations_ms['ceremonial-max'];
+    engine.tween(S.columns, { duration: 99999 });
+    report('tween: hard cap clamps duration',
+      engine.__debug.animDuration === hardCap, `→${engine.__debug.animDuration}ms`);
+    engine.tween(S.ring, { duration: 99999, ceremonial: true, easing: 'ease.arrive' });
+    report('tween: ceremonial unlocks its own cap',
+      engine.__debug.animDuration === cereCap, `→${engine.__debug.animDuration}ms`);
+    await until(() => !engine.__debug.animating);
+
+    // 6. scrub pair: linear midpoint at t=0.5 with stagger 0.
+    engine.scrubBetween(S.field, S.columns, { stagger: 0 });
+    engine.setScrub(0.5); await frame();
+    const p = engine.__debug.posOf(11);
+    const mx = (S.field.x[11] + S.columns.x[11]) / 2;
+    const my = (S.field.y[11] + S.columns.y[11]) / 2;
+    report('scrub: t=0.5 is the linear midpoint', near(p[0], mx, 0.05) && near(p[1], my, 0.05));
+    engine.setScrub(1); await frame();
+    const pe = engine.__debug.posOf(11);
+    report('scrub: t=1 lands on B', near(pe[0], S.columns.x[11], 0.01));
+
+    // 7. zoom sub-population channel: emitOrder streams tagged dots in order.
+    engine.scrubBetween(S.zoomA, S.zoomB, { stagger: 0.9, emitOrder: S.emitOrder });
+    engine.setScrub(0.05); await frame();
+    const early = engine.__debug.posOf(0);              // phase 0 → half-way in
+    const late = engine.__debug.posOf(S.M - 1);         // phase ~0.9 → not started
+    const earlyMoved = !near(early[0], S.zoomA.x[0], 0.5) || !near(early[1], S.zoomA.y[0], 0.5);
+    const lateHolds = near(late[0], S.zoomA.x[S.M - 1], 0.01) && near(late[1], S.zoomA.y[S.M - 1], 0.01);
+    const fieldHolds = (() => {
+      const j = S.M + 5;
+      const f = engine.__debug.posOf(j);
+      return near(f[0], S.zoomA.x[j], 0.01) && near(f[1], S.zoomA.y[j], 0.01);
+    })();
+    report('zoom channel: emitOrder streams in trade order', earlyMoved && lateHolds,
+      `early moved=${earlyMoved} late holds=${lateHolds}`);
+    report('zoom channel: untagged population rests', fieldHolds);
+    engine.setScrub(1); await frame();
+    const zEnd = engine.__debug.posOf(S.M - 1);
+    report('zoom channel: scrub end completes the stream',
+      near(zEnd[0], S.zoomB.x[S.M - 1], 0.01));
+
+    // 8. reduced motion: instant apply + crossfade, no positional interpolation.
+    engine.setReducedMotion(true);
+    engine.tween(S.field, { duration: 9999 });
+    const rmNow = engine.__debug.posOf(4);
+    report('reduced motion: target applies instantly',
+      near(rmNow[0], S.field.x[4], 0.01) && !engine.__debug.animating && engine.__debug.t >= 1);
+    report('reduced motion: canvas crossfade active', engine.__debug.fading);
+    // the driver re-snaps the same keyframe on every scroll frame: repeated
+    // same-state calls MID-FADE must not restart the fade (it would stall)
+    const fadeProbe = engine.__debug.fading;
+    engine.tween(S.field, { duration: 0 });
+    engine.tween(S.field, { duration: 0 });
+    const fadeCompletes = await until(() => !engine.__debug.fading, 300);
+    report('reduced motion: mid-fade same-state re-snap does not stall the fade',
+      fadeProbe && fadeCompletes);
+    report('reduced motion: crossfade completes', !engine.__debug.fading);
+    // repeated snap to the same state must not restart the fade
+    engine.tween(S.field, { duration: 0 });
+    report('reduced motion: same-state snap is a no-op', !engine.__debug.fading);
+    engine.setReducedMotion(false);
+
+    // 9. pause freezes in-flight timing; resume continues.
+    engine.tween(S.ring, { duration: 800 });
+    await until(() => engine.__debug.t > 0.15);
+    engine.pause();
+    const frozen = engine.__debug.posOf(9);
+    const framesAtPause = engine.__debug.frameCount;
+    await sleep(250);   // real timers tick while the engine loop is stopped
+    const still = engine.__debug.posOf(9);
+    report('pause: tween timing freezes',
+      near(frozen[0], still[0], 0.01) && engine.__debug.frameCount === framesAtPause);
+    engine.resume();
+    await until(() => !engine.__debug.animating); await frame();
+    const resumed = engine.__debug.posOf(9);
+    report('resume: tween completes', near(resumed[0], S.ring.x[9], 0.5));
+
+    // 10. frameCost probe returns a number.
+    const fc = engine.frameCost();
+    report('frameCost: probe returns ms', Number.isFinite(fc) && fc >= 0, `${fc.toFixed(2)}ms`);
+
+    // 11. resize + redraw without error.
+    try {
+      engine.resize(W(), H());
+      engine.redraw(); await frame();
+      report('resize: reallocates cleanly', true);
+    } catch (err) {
+      report('resize: reallocates cleanly', false, String(err));
+    }
+
+    // 12. bad state shape throws loudly (population constancy is structural).
+    let threw = false;
+    try { engine.setState(makeState(N - 1)); } catch (err) { threw = true; }
+    report('constancy: wrong-N state throws', threw);
+
+    summarize();
+    // leave the engine on the field for eyeballing after the suite
+    engine.setState(S.field);
+  }
+
+  if (AUTO) {
+    autoSuite().catch((err) => {
+      report('suite crashed', false, String(err && err.stack || err));
+      summarize();
+    });
+  } else {
+    resEl.textContent = 'manual mode — add ?auto=1 for the assertion suite';
+  }
+}
+</script>
+</body>
+</html>

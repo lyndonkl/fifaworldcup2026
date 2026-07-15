@@ -1,0 +1,1 @@
+{"_provenance":{"sources":["build_tiles.py: zoom[gerpar] regulation-leg decay recompute (class A)"],"generated":"2026-07-15T16:13:05.943633+00:00"},"regulation_decay_window_s":[1782770912,1782772232],"regulation_decay_cents_per_min":1.955,"goal_jump_reference_c":[19,25],"goal_jump_reference_window_s":30,"advance_settle_ts":1782775782,"regulation_settle_ts":1782772232}

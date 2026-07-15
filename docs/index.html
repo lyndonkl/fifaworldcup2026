@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- NO-EXTERNAL-RESOURCE rule (CONTRACT §1.2): everything same-origin.
+       This CSP is the enforcement; do not weaken it. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'">
+  <meta name="theme-color" content="#0B0E13">
+  <title>Regulation Time</title>
+  <meta name="description" content="How the market priced the goals, the upsets, and the favorite that died in ninety minutes. The 2026 World Cup, retold through 71.8 million trades on a twelve billion dollar market.">
+  <!-- OG image rule (storyboard S12 / CONTRACT §10.10): the share frame is
+       always a RESOLVED frame, never a naive one. TODO(build): docs/og.png -->
+  <meta property="og:title" content="Regulation Time">
+  <meta property="og:description" content="How the market priced the goals, the upsets, and the favorite that died in ninety minutes.">
+  <meta property="og:image" content="og.png">
+
+  <link rel="stylesheet" href="design/tokens.css">
+
+  <style>
+    /* ============================================================
+       App stylesheet. Tokens are law: every color/size/duration
+       below is a var(--…) from design/tokens.css. Extract to
+       css/main.css when it grows (CONTRACT §2).
+       ============================================================ */
+
+    /* ---- Self-hosted fonts (CONTRACT §1.2). TODO(build): drop the
+       WOFF2 files into docs/fonts/; ~220KB budget, font-display: swap. */
+    @font-face {
+      font-family: 'Source Serif 4';
+      src: url('fonts/SourceSerif4-Variable.woff2') format('woff2');
+      font-weight: 400 700; font-display: swap;
+    }
+    @font-face {
+      font-family: 'Inter';
+      src: url('fonts/Inter-Variable.woff2') format('woff2');
+      font-weight: 400 700; font-display: swap;
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      src: url('fonts/IBMPlexMono-Regular.woff2') format('woff2');
+      font-weight: 400; font-display: swap;
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      src: url('fonts/IBMPlexMono-Medium.woff2') format('woff2');
+      font-weight: 500; font-display: swap;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: auto; } /* motion is the engine's channel, not the browser's */
+
+    body {
+      background: var(--bg-canvas);
+      color: var(--ink-hi);
+      font-family: var(--font-prose);
+      font-size: var(--type-body-size);
+      font-weight: var(--type-body-weight);
+      line-height: var(--type-body-leading);
+      font-variant-numeric: tabular-nums lining-nums;
+      overflow-x: hidden;
+    }
+
+    /* ---- Stage: fixed full-viewport layer stack (CONTRACT §8.1) ---- */
+    #stage {
+      position: fixed; inset: 0;
+      z-index: var(--z-canvas);
+      pointer-events: none;
+    }
+    #gl-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #dim-scrim {
+      position: absolute; inset: 0;
+      z-index: var(--z-field-dim-scrim);
+      background: transparent;           /* scenes drive this via inline style */
+      transition: background 600ms linear;
+    }
+    #overlay {
+      position: absolute; inset: 0;
+      z-index: var(--z-d3-overlay);
+      width: 100%; height: 100%;
+      overflow: visible;
+    }
+    #html-overlay {
+      position: absolute; inset: 0;
+      z-index: var(--z-skip-controls);
+      pointer-events: none;              /* interactives opt in per element */
+    }
+    #html-overlay .interactive { pointer-events: auto; }
+
+    /* ---- Micro-legend chip + grain plate (CONTRACT §7) ---- */
+    #chip {
+      position: fixed; right: var(--space-24); bottom: var(--space-24);
+      z-index: var(--z-chip-and-grain-plate);
+      font-family: var(--font-apparatus);
+      font-size: var(--type-micro-size);
+      font-weight: var(--type-micro-weight);
+      letter-spacing: var(--type-micro-tracking);
+      color: var(--ink-mid);
+      background: rgba(16, 21, 29, 0.82); /* bg-card @ composite-capped alpha */
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid rgba(124, 135, 148, 0.25);
+      border-radius: var(--space-4);
+      padding: var(--space-4) var(--space-8);
+      visibility: hidden;                 /* debuts in S1; never disappears after */
+    }
+    #chip.pulse { animation: chip-pulse var(--dur-chip-pulse) ease-out 1; }
+    @keyframes chip-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 201, 77, 0.55); }
+      100% { box-shadow: 0 0 0 12px rgba(255, 201, 77, 0); }
+    }
+
+    #grain-plate {
+      position: fixed; left: var(--space-24); top: var(--space-24);
+      z-index: var(--z-chip-and-grain-plate);
+      font-family: var(--font-tape);
+      font-size: var(--type-tape-size);
+      font-weight: var(--type-tape-weight);
+      letter-spacing: var(--type-tape-tracking);
+      color: var(--ink-mid);
+      background: rgba(16, 21, 29, 0.82);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid rgba(124, 135, 148, 0.25);
+      border-radius: var(--space-4);
+      padding: var(--space-8) var(--space-12);
+      max-width: min(72ch, calc(100vw - 2 * var(--space-24)));
+      visibility: hidden;                 /* main.js shows it at the S1 pre-title */
+    }
+
+    /* ---- Skip control (accessibility; z 5) ---- */
+    .skip {
+      position: fixed; left: var(--space-24); bottom: var(--space-24);
+      z-index: var(--z-skip-controls);
+      font-family: var(--font-apparatus);
+      font-size: var(--type-micro-size);
+      color: var(--ink-low);
+      background: rgba(16, 21, 29, 0.82);
+      border: 1px solid rgba(124, 135, 148, 0.25);
+      border-radius: var(--space-4);
+      padding: var(--space-4) var(--space-8);
+      text-decoration: none;
+    }
+    .skip:focus, .skip:hover { color: var(--ink-hi); outline: 2px solid var(--side-yes); }
+
+    /* ---- Title screen (S1 pre-title text layer, CONTRACT §8.2) ---- */
+    #title-screen {
+      position: relative;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: var(--space-48) var(--space-24);
+      gap: var(--space-24);
+    }
+    #title-screen .pretitle {
+      font-family: var(--font-tape);
+      font-size: var(--type-tape-size);
+      letter-spacing: var(--type-tape-tracking);
+      color: var(--ink-mid);
+      max-width: 62ch;
+    }
+    #title-screen h1 {
+      font-family: var(--font-prose);
+      font-size: var(--type-act-title-size);
+      font-weight: var(--type-act-title-weight);
+      line-height: var(--type-act-title-leading);
+      color: var(--ink-hi);
+    }
+    #title-screen .deck {
+      font-family: var(--font-prose);
+      font-size: var(--type-lede-size);
+      line-height: var(--type-lede-leading);
+      color: var(--ink-mid);
+      max-width: 46ch;
+    }
+    #title-screen .boot-status {
+      font-family: var(--font-apparatus);
+      font-size: var(--type-micro-size);
+      letter-spacing: var(--type-micro-tracking);
+      color: var(--ink-low);
+      min-height: 1.5em;
+    }
+    #title-screen .scroll-cue {
+      font-family: var(--font-apparatus);
+      font-size: var(--type-micro-size);
+      letter-spacing: var(--type-micro-tracking);
+      color: var(--ink-low);
+    }
+
+    /* ---- Prose rail (CONTRACT §6.3): left rail desktop / bottom sheet mobile ---- */
+    #rail { position: relative; z-index: var(--z-prose-card); }
+
+    #rail section.scene { position: relative; }
+
+    #rail .beat {
+      min-height: 100vh;
+      display: flex; align-items: center;
+    }
+    #rail .scrub-track { position: relative; }
+    #rail .scrub-track .beat-pin {
+      position: sticky; top: 0;
+      min-height: 100vh;
+      display: flex; align-items: center;
+    }
+
+    .card {
+      width: var(--layout-card-width-desktop-px);
+      margin-left: var(--layout-card-inset-desktop-px);
+      background: rgba(16, 21, 29, 0.82);   /* translucent bg-card; worst-case
+                                               composite capped by tokens */
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid rgba(124, 135, 148, 0.18);
+      border-radius: var(--space-8);
+      padding: var(--space-24) var(--space-32);
+    }
+    .card .kicker {
+      font-family: var(--font-apparatus);
+      font-size: var(--type-micro-size);
+      font-weight: var(--type-micro-weight);
+      letter-spacing: var(--type-micro-tracking);
+      text-transform: uppercase;
+      color: var(--ink-low);
+      margin-bottom: var(--space-12);
+    }
+    .card p { max-width: 60ch; }
+    .card p + p { margin-top: var(--space-16); }
+    .card sup a { color: var(--ink-low); text-decoration: none; }
+
+    @media (max-width: 900px) {
+      /* Mobile: fixed canvas behind, stage top ~62vh, prose as bottom-sheet
+         cards (max-height 38vh) with a scrim gradient enforcing the
+         composite cap (design-system §4). */
+      #rail .beat, #rail .scrub-track .beat-pin {
+        align-items: flex-end;
+        padding-bottom: env(safe-area-inset-bottom, 0);
+      }
+      .card {
+        width: 100%;
+        margin: 0;
+        max-height: var(--layout-card-max-height-mobile-vh);
+        overflow-y: auto;
+        border-radius: var(--space-8) var(--space-8) 0 0;
+        border-bottom: none;
+        padding: var(--space-16) var(--space-16);
+      }
+      #chip { right: var(--space-16); bottom: calc(var(--layout-card-max-height-mobile-vh) + var(--space-8)); }
+      #grain-plate { left: var(--space-16); top: var(--space-16); }
+    }
+
+    /* ---- Coda + end matter ---- */
+    #coda {
+      position: relative; z-index: var(--z-prose-card);
+      min-height: 60vh;
+      padding: var(--space-96) var(--space-24);
+    }
+
+    #methods {
+      position: relative; z-index: var(--z-prose-card);
+      background: var(--bg-end-matter);   /* opaque: the piece has ended */
+      padding: var(--space-96) var(--space-24) var(--space-128);
+    }
+    #methods .inner { max-width: 68ch; margin: 0 auto; }
+    #methods h2 {
+      font-family: var(--font-prose);
+      font-size: var(--type-act-title-size);
+      font-weight: var(--type-act-title-weight);
+      line-height: var(--type-act-title-leading);
+      margin-bottom: var(--space-32);
+    }
+    #methods h3 {
+      font-family: var(--font-apparatus);
+      font-size: var(--type-kicker-size);
+      font-weight: var(--type-kicker-weight);
+      line-height: var(--type-kicker-leading);
+      margin: var(--space-48) 0 var(--space-16);
+    }
+    #methods p, #methods li {
+      color: var(--ink-mid);
+      font-size: var(--type-caption-size);
+      font-family: var(--font-apparatus);
+      line-height: 1.6;
+    }
+    #methods p + p { margin-top: var(--space-12); }
+    #methods ol { padding-left: var(--space-24); }
+    #methods ol li { margin-bottom: var(--space-8); }
+    #methods .provenance {
+      font-family: var(--font-tape);
+      font-size: var(--type-tape-size);
+      letter-spacing: var(--type-tape-tracking);
+      color: var(--ink-low);
+    }
+
+    /* ---- No-JS / no-WebGL fallbacks ---- */
+    .fallback-note {
+      font-family: var(--font-apparatus);
+      color: var(--ink-mid);
+      font-size: var(--type-caption-size);
+      max-width: 60ch;
+      margin: var(--space-24) auto;
+      text-align: center;
+    }
+    body.no-webgl #stage { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      #chip.pulse { animation: none; }
+      #dim-scrim { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <a class="skip" href="#methods">Skip to methods ↓</a>
+
+  <!-- ============ Layer stack (CONTRACT §8.1): engine + overlays ============ -->
+  <div id="stage" aria-hidden="true">
+    <canvas id="gl-canvas"></canvas>
+    <div id="dim-scrim"></div>
+    <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="html-overlay"></div>
+  </div>
+
+  <!-- Driver-owned chrome (CONTRACT §7). main.js reveals, fills, pulses. -->
+  <div id="grain-plate" role="note">
+    <!-- refrozen at deploy -->
+    1 dot = <span data-slot="population.desktop.grain_usd" data-format="usd">$75,000</span> of matched volume
+  </div>
+  <div id="chip" role="note">color: —</div>
+
+  <!-- ============ Title screen: the S1 pre-title frame (CONTRACT §8.2) ============ -->
+  <header id="title-screen" data-scene="s01">
+    <p class="pretitle">
+      <!-- Storyboard S1 pre-title caption; numbers refrozen at deploy -->
+      every dot on this screen is
+      <span data-slot="population.desktop.grain_usd" data-format="usd">$75,000</span>
+      that actually changed hands on the 2026 World Cup ·
+      <span data-slot="population.desktop.dots" data-format="count">164,000</span> dots ·
+      <span data-slot="census.total_usd" data-format="usd">$12.3B</span> ·
+      thirteen months
+    </p>
+    <h1>Regulation Time</h1>
+    <p class="deck">How the market priced the goals, the upsets, and the favorite
+      that died in ninety minutes.</p>
+    <p class="boot-status" id="boot-status" role="status"></p>
+    <p class="scroll-cue" aria-hidden="true">scroll ↓</p>
+  </header>
+
+  <!-- ============ The prose rail ============
+       Built at boot by main.js from the scene registry (CONTRACT §6.3):
+       one <section class="scene" data-scene="sNN"> per scene, beats as
+       .beat / .scrub-track blocks, prose from each scene module's beats[].
+       Empty until scene modules land. -->
+  <main id="rail">
+    <noscript>
+      <p class="fallback-note">
+        Regulation Time is a data-driven visual essay. With JavaScript off you
+        are reading its methods edition: the full prose and footnotes are in
+        the methods section below. Every figure was frozen and timestamped at
+        the deploy-morning pipeline run.
+      </p>
+    </noscript>
+  </main>
+
+  <!-- ============ Coda (S18): the rail releases ============ -->
+  <section id="coda" data-scene="s18" hidden>
+    <!-- Scene 18 mounts the market picker + replay transport here
+         (bounded interactive block per DECISIONS #16; fade-up entry). -->
+  </section>
+
+  <!-- ============ Methods + footnotes (stub; prose builders fill) ============ -->
+  <footer id="methods">
+    <div class="inner">
+      <h2>Methods &amp; footnotes</h2>
+
+      <p class="provenance">
+        <!-- refrozen at deploy -->
+        all figures frozen at pipeline run
+        <span data-slot="frozen_at" data-format="iso">2026-07-__T__:__Z</span> ·
+        tape total <span data-slot="census.total_usd" data-format="usd">$—</span> ·
+        <span data-slot="census.total_trades" data-format="count">—</span> trades
+      </p>
+
+      <h3>The unit</h3>
+      <p>One dot is money that actually moved: a fixed grain of matched notional
+        at population scale, one trade at zoom scale. Grain changes are narrated
+        on screen, never silent. Dots never stand for scores, statistics, or
+        probabilities; derived quantities are drawn as outline marks above the
+        population. <!-- TODO(prose): full unit statement from storyboard §0 --></p>
+
+      <h3>Data</h3>
+      <p>Tick-level trade history and one-minute candlesticks for every
+        World Cup-related Kalshi market, via the public API; benchmarks from
+        Polymarket minute history, a professional book, published poll waves,
+        and published simulation snapshots. Raw store and reproducible pipeline
+        described in the repository. <!-- TODO(prose): sources, R-rules, G-gaps --></p>
+
+      <h3>Honest limits</h3>
+      <p><!-- TODO(prose): $0-budget coverage gaps (no independent attention
+        series); 28-match knockout panel (effective n of 28); no external goal
+        clock; sub-minute cross-venue ordering unresolvable by construction
+        (R23); settlement semantics rule R4. --></p>
+
+      <h3>Footnotes</h3>
+      <ol id="footnotes">
+        <!-- TODO(prose): numbered footnotes [1]..[24] per storyboard
+             bibliography; scene beats link here via <sup><a href="#fn-N"> -->
+        <li id="fn-1">…</li>
+      </ol>
+
+      <p class="provenance">Built as a fully static page: no server, no external
+        requests, vendored libraries, self-hosted fonts. The number at the end
+        of the piece was frozen on the morning of the final and does not update.</p>
+    </div>
+  </footer>
+
+  <!-- ============ Script wiring (CONTRACT §2): vendored D3 as a classic
+       script (global `d3`), then the ES-module app. ============ -->
+  <script src="js/vendor/d3.v7.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
