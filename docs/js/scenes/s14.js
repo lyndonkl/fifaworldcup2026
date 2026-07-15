@@ -407,6 +407,94 @@ const s14 = {
    * (CONTRACT §3.5) — "a crossfade between the two weightings" per the
    * storyboard, with no scene-level state substitution needed. */
   reducedMotion: { states: {} },
+
+  anchors: {
+    /* L2 recap for S16's lens carousel (CONTRACT §4 `anchors?`): the
+     * dollar-weighted calibration curve, recomputed live from the population
+     * itself. Each dot sits at its own implied price (pop.price_band) on x
+     * and its price bucket's realized settlement rate (pop.fate) on y.
+     * Because one dot is one equal grain of money, a dot-level curve IS the
+     * dollar-weighted reading the lens wants, and S5's Lorenz-tail dots
+     * re-light amber via the tile's own LORENZ_TAIL flag. Self-sufficient:
+     * reads only data.pop, data.manifest, and data.flagBit, builds fresh
+     * local scales, and needs no scene JSON (the live scene's bucket tables
+     * are not loaded under S16). S16 spotlights the tail dots; this only has
+     * to place the curve. */
+    curve(data, view, rect) {
+      const { pop, manifest } = data;
+      const N = pop.count;
+      const state = makeState(N);
+      const yesIdx = manifest.enums.fate.indexOf('settled_yes');
+      const noIdx = manifest.enums.fate.indexOf('settled_no');
+      const tailBit = data.flagBit('LORENZ_TAIL');
+      const NB = 20;
+      const bucketOf = (c) => Math.max(0, Math.min(NB - 1, Math.floor(c / (100 / NB))));
+
+      const yesCt = new Float64Array(NB);
+      const totCt = new Float64Array(NB);
+      for (let i = 0; i < N; i++) {
+        const c = pop.price_band[i];
+        if (c === 255) continue;
+        if (pop.fate[i] === yesIdx) { const b = bucketOf(c); yesCt[b] += 1; totCt[b] += 1; }
+        else if (pop.fate[i] === noIdx) { totCt[bucketOf(c)] += 1; }
+      }
+      const realized = new Float64Array(NB);
+      for (let b = 0; b < NB; b++) realized[b] = totCt[b] > 0 ? (100 * yesCt[b] / totCt[b]) : -1;
+
+      const x = d3.scaleLinear().domain([0, 100]).range([rect.x + 8, rect.x + rect.w - 8]);
+      const y = d3.scaleLinear().domain([0, 100]).range([rect.y + rect.h - 8, rect.y + 8]);
+      const rest = view.state('dimmed-field-min');
+      const neutral = view.color('neutral-data', 0.85);
+      const tail = view.color('accent-annotation', 0.95);
+      const baseSize = view.tokens.dot['radius-base-px'];
+
+      for (let i = 0; i < N; i++) {
+        const c = pop.price_band[i];
+        const isTail = (pop.flags[i] & tailBit) !== 0;
+        const settled = pop.fate[i] === yesIdx || pop.fate[i] === noIdx;
+        if (c !== 255 && settled && realized[bucketOf(c)] >= 0) {
+          state.x[i] = x(c) + (hash01(i, 0x11) - 0.5) * 6;
+          state.y[i] = y(realized[bucketOf(c)]) + (hash01(i, 0x22) - 0.5) * 6;
+          setColor(state.color, i, isTail ? tail : neutral);
+        } else {
+          state.x[i] = rect.x + rect.w * (0.06 + 0.88 * hash01(i, 0x33));
+          state.y[i] = rect.y + rect.h * (0.06 + 0.88 * hash01(i, 0x44));
+          setColor(state.color, i, isTail ? tail : rest);
+        }
+        state.size[i] = baseSize;
+      }
+
+      return {
+        state,
+        drawAxes(g) {
+          const ax = g.append('g').attr('class', 's14-anchor-axes');
+          ax.append('line')
+            .attr('x1', x(0)).attr('y1', y(0)).attr('x2', x(100)).attr('y2', y(100))
+            .attr('stroke', view.css('ink-hi')).attr('stroke-width', 1).attr('opacity', 0.5);
+          ax.append('g')
+            .attr('transform', `translate(0,${rect.y + rect.h})`)
+            .call(d3.axisBottom(x).ticks(4).tickFormat((d) => `${d}c`))
+            .call((s) => {
+              s.selectAll('text').attr('fill', view.css('ink-low'))
+                .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+              s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+            });
+          ax.append('g')
+            .attr('transform', `translate(${rect.x},0)`)
+            .call(d3.axisLeft(y).ticks(4).tickFormat((d) => `${d}%`))
+            .call((s) => {
+              s.selectAll('text').attr('fill', view.css('ink-low'))
+                .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+              s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+            });
+          ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
+            .attr('fill', view.css('ink-mid'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))
+            .text('implied vs realized, weighted by dollars');
+        },
+      };
+    },
+  },
 };
 
 export default s14;

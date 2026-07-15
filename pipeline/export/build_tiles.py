@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import struct
 import sys
 import time
@@ -129,6 +130,31 @@ TEAM_KEYED_SERIES = {
     "KXWC3RDPLACE", "KXWCWINGROUP",
 }
 NON_TEAM_SUFFIXES = {"TIE", "YES", "NO", "OVER", "UNDER"}
+
+# Polymarket YES-token ids for the Norway-Brazil goal window (R3/R22 vehicle).
+# Shared by build_norbra_zoom() (the zoom tile) and build_s07_scene() (the
+# scene-JSON reaction lanes) so both read the exact same token per leg.
+NORBRA_PM_TOKENS = {
+    "BRA": "105654713241167797590254709131417748215287316658191010694033065067279349239377",
+    "TIE": "20802374126416843639334054489053876827939271763615197682043793548486789042986",
+    "NOR": "19270630777558640544547501118520831346147002509997851493750997099589698621398",
+}
+
+# Dossier R9 (post-upset drift), verbatim class-B pop multiples: cited
+# exactly as pipeline/data/analysis/bias-forensics/post_upset_drift.parquet's
+# own price series shows each beneficiary's live pop (verified against the
+# raw series at build-review time), not re-derived by a second code path.
+POP_MULTIPLE_BY_TEAM = {"PAR": 5.0, "NOR": 3.6, "BEL": 2.0}
+
+# S12 Golden Boot ladder: the four lanes the storyboard names (Haaland is
+# the eliminated reference lane). Ticker suffixes confirmed against
+# docs/data/markets.json's KXWCGOALLEADER rows.
+GOLDEN_BOOT_PLAYERS = [
+    {"key": "mbappe", "label": "Mbappe", "ticker": "KXWCGOALLEADER-26-KMBA", "reference": False},
+    {"key": "messi", "label": "Messi", "ticker": "KXWCGOALLEADER-26-LMES", "reference": False},
+    {"key": "kane", "label": "Kane", "ticker": "KXWCGOALLEADER-26-HKAN", "reference": False},
+    {"key": "haaland", "label": "Haaland", "ticker": "KXWCGOALLEADER-26-EHAA", "reference": True},
+]
 
 t_start = time.time()
 LOG = []
@@ -544,6 +570,7 @@ def build_population(con, market_meta, market_totals):
         "markets_json": markets_json,
         "census": census,
         "finalists": finalists,
+        "ticker_to_idx": ticker_to_idx,
     }
 
 
@@ -795,7 +822,16 @@ def read_pinnacle_ftr(con, fixture_id):
         return df
     df = df[df["price_decimal"] >= 1.01]  # R2
     df = df[df["overround_at_ts"].fillna(0) != 0]  # R2 (0 sentinel -> NaN/drop)
-    df["created_ts_ms"] = pd.to_datetime(df["created_at"], utc=True).astype("int64") // 1_000_000
+    # Bug fix (data-layer parity pass): pandas >=2 infers a non-nanosecond
+    # datetime64 resolution (here, [us]) from these ISO strings, so a plain
+    # `.astype("int64") // 1_000_000` silently assumed nanoseconds and
+    # produced SECONDS-since-epoch values 1000x too small (verified: every
+    # downstream consumer of created_ts_ms -- build_norbra_zoom's Pinnacle
+    # lane, build_braid's Pinnacle series, and the S7 scene JSON's pinnacle
+    # quotes -- was silently filtering to an empty result on this store's
+    # pandas version). Casting through datetime64[ms] explicitly is robust
+    # to whatever resolution to_datetime() happened to infer.
+    df["created_ts_ms"] = df["created_at"].pipe(pd.to_datetime, utc=True).values.astype("datetime64[ms]").astype("int64")
     df = df.sort_values(["outcome_id", "created_ts_ms"]).drop_duplicates(
         subset=["outcome_id", "created_ts_ms"], keep="last")  # R1
     out = []
@@ -1178,6 +1214,701 @@ def build_braid(con):
     return sections, summary
 
 
+# --------------------------------------------------------------------------
+# 6b. Scene-JSON field-parity rebuilds (data-layer mismatch fix pass)
+# --------------------------------------------------------------------------
+#
+# Every function below targets the EXACT read-set of its scene module
+# (docs/js/scenes/sNN.js), enumerated by reading each module's layout()/
+# overlay()/scales() bodies and its own DATA_REQUEST / DATA CONTRACT
+# ASSUMPTIONS header comment. Every number is grounded in pipeline/data/ (a
+# raw trade-tape recompute, a Phase-2 analysis table repacked verbatim, or a
+# dossier-cited class-B constant reused the same way press_floor_usd already
+# is elsewhere in this file) -- nothing here is invented. Where a live
+# recompute lands a little off a dossier-verbatim figure (e.g. s05's
+# core-series share), that is documented inline, the same convention TILES.md
+# sec 5 already uses for the braid's 0.74pp-vs-1.21pp class A/B gap.
+
+def build_s03_cutoffs():
+    """s03.js reads day1_end / crossover_end / press_floor -- grounded in
+    family_crossover.json's own day-level and cumulative crossover fields
+    (R18/R1). day1_end closes 'day one' (the day per-day match volume first
+    exceeds futures, per day_level_flip_first_day_match_gt_futures);
+    crossover_end closes 'day two' (the day CUMULATIVE match volume first
+    exceeds cumulative futures stock, per cumulative_crossover_day)."""
+    crossover = _read_json_safe(os.path.join(ANALYSIS, "volume-anatomy", "family_crossover.json"))
+
+    def end_of_day_iso(date_str, fallback):
+        if not date_str:
+            return fallback
+        d = pd.Timestamp(date_str, tz="UTC").normalize() + pd.Timedelta(days=1)
+        return d.isoformat().replace("+00:00", "Z")
+
+    return {
+        "day1_end": end_of_day_iso(crossover.get("day_level_flip_first_day_match_gt_futures"), "2026-06-12T00:00:00Z"),
+        "crossover_end": end_of_day_iso(crossover.get("cumulative_crossover_day"), "2026-06-13T00:00:00Z"),
+        "press_floor": {
+            "usd": 7_400_000_000,
+            "as_of": "2026-06-30T00:00:00Z",
+            "label": "press floor, ~one week stale",
+        },
+    }
+
+
+def build_s04_scene(con):
+    """s04.js reads grid.{day0,days}, in_window[day][hour], kickoff_hist.hours,
+    rest_days[], waking_band. All schedule facts (never per-dot properties,
+    per the scene's own header note), built from match_windows.parquet (R11)
+    converted to US Eastern -- the storyboard's own axis unit ('ET hour')."""
+    mw = _read_parquet_safe(os.path.join(ANALYSIS, "volume-anatomy", "match_windows.parquet"))
+    tz = "America/New_York"
+    day0 = pd.Timestamp("2026-06-11T00:00:00", tz=tz)  # tournament kickoff day, ET midnight
+    grid_end = pd.Timestamp("2026-07-20T00:00:00", tz=tz)  # one day past the final: settlement tail
+    tournament_end = pd.Timestamp("2026-07-19T23:59:59", tz=tz)
+    days = int((grid_end - day0).days)
+
+    in_window = [[0] * 24 for _ in range(days)]
+    kickoff_hours = [0] * 24
+    match_days = set()
+
+    for _, r in mw.iterrows():
+        try:
+            ko = pd.Timestamp(r["kickoff"]).tz_convert(tz)
+            lo = pd.Timestamp(r["win_start"]).tz_convert(tz)
+            hi = pd.Timestamp(r["win_end"]).tz_convert(tz)
+        except Exception:
+            continue
+        if 0 <= ko.hour < 24:
+            kickoff_hours[ko.hour] += 1
+        match_days.add(ko.normalize())
+        cur = lo.floor("h")
+        while cur < hi:
+            day_idx = int((cur.normalize() - day0).days)
+            if 0 <= day_idx < days:
+                in_window[day_idx][int(cur.hour)] = 1
+            cur += pd.Timedelta(hours=1)
+
+    rest_days = []
+    d = day0
+    while d <= tournament_end:
+        if d.normalize() not in match_days:
+            rest_days.append(d.tz_convert("UTC").isoformat().replace("+00:00", "Z"))
+        d += pd.Timedelta(days=1)
+
+    return {
+        "grid": {"day0": day0.tz_convert("UTC").isoformat().replace("+00:00", "Z"), "days": days},
+        "in_window": in_window,
+        "kickoff_hist": {"hours": kickoff_hours},
+        "rest_days": rest_days,
+        # Documented convention (also the shape s04.js's own header comment
+        # ships as its example): US waking hours, 8am-11pm ET.
+        "waking_band": {"start_hour": 8, "end_hour": 23},
+    }
+
+
+def build_s05_scene(market_totals, market_meta, ticker_to_idx, lorenz):
+    """s05.js reads total_markets, core_series.{legs,share_pct},
+    tail.{markets,share_pct}, gini_pooled, gini_within_family, lorenz_curve[]
+    (optional), trump_market.{market_index,ticker,rank,contracts,
+    family_size,expected_rank_at_base_rate}. below_grain is read from
+    manifest.census directly (s05.js's own header note), not from this file.
+    core_series/gini_within_family are computed live (class A, matching this
+    file's existing treatment of every other Lorenz field) off the same
+    market_totals x market_meta join build_lorenz() uses; live recompute
+    lands at ~63.3%/0.438 against the dossier's cited ~63.5%/0.44 (R15),
+    the same small class-A/class-B drift TILES.md already documents for
+    the S10 braid gap."""
+    novelty = _read_json_safe(os.path.join(ANALYSIS, "volume-anatomy", "novelty_vs_sports.json"))
+    concentration = _read_json_safe(os.path.join(ANALYSIS, "volume-anatomy", "concentration_summary.json"))
+
+    tot_by_ticker = dict(zip(market_totals["ticker"], market_totals["total_dollars"]))
+    grand_total = float(market_totals["total_dollars"].sum())
+    series_by_ticker = market_meta.set_index("ticker")["series_ticker"].to_dict()
+
+    series_dollars = {}
+    for t, d in tot_by_ticker.items():
+        st = series_by_ticker.get(t)
+        if st:
+            series_dollars[st] = series_dollars.get(st, 0.0) + d
+    top3_series = set(sorted(series_dollars, key=lambda s: -series_dollars[s])[:3])
+    top3_dollars = sum(v for s, v in series_dollars.items() if s in top3_series)
+    top3_legs = sum(1 for t in tot_by_ticker if series_by_ticker.get(t) in top3_series)
+    core_share_pct = round(top3_dollars / grand_total * 100, 2) if grand_total else None
+
+    within_vals = np.sort(np.array([
+        tot_by_ticker[t] for t in tot_by_ticker if series_by_ticker.get(t) in top3_series
+    ]))
+    gini_within = None
+    if len(within_vals):
+        cum = np.cumsum(within_vals)
+        tot = cum[-1]
+        cpv = cum / tot
+        cpm = np.arange(1, len(within_vals) + 1) / len(within_vals)
+        trapz = getattr(np, "trapezoid", None) or np.trapz
+        gini_within = round(float(1.0 - 2.0 * trapz(cpv, cpm)), 4)
+
+    trump_ticker = novelty.get("ticker")
+    trump_family_size = None
+    trump_expected_rank = None
+    if trump_ticker:
+        fam_prefix = trump_ticker.split("-")[0]
+        n_family = int((market_meta["series_ticker"] == fam_prefix).sum())
+        trump_family_size = n_family or None
+        n_traded = novelty.get("n_traded_markets")
+        if trump_family_size and n_traded:
+            trump_expected_rank = round(n_traded / (trump_family_size + 1))
+
+    lorenz_curve_pts = [
+        {"market_frac": round(mf, 6), "value_frac": round(vf, 9)}
+        for mf, vf in zip(lorenz["cum_pct_markets"][::3], lorenz["cum_pct_volume"][::3])
+    ]
+
+    combined = concentration.get("combined_never_traded_plus_bottom_half_traded") or {}
+    return {
+        "total_markets": novelty.get("n_traded_markets") or concentration.get("n_traded_markets"),
+        "core_series": {"legs": top3_legs, "share_pct": core_share_pct},
+        "tail": {
+            "markets": combined.get("n_markets"),
+            "share_pct": round(combined.get("pct_of_total_volume", 0.0), 3),
+        },
+        "gini_pooled": lorenz["gini"],
+        "gini_within_family": gini_within,
+        "lorenz_curve": lorenz_curve_pts,
+        "trump_market": {
+            "market_index": ticker_to_idx.get(trump_ticker),
+            "ticker": trump_ticker,
+            "rank": novelty.get("rank_out_of_traded_markets"),
+            "contracts": novelty.get("contracts"),
+            "family_size": trump_family_size,
+            "expected_rank_at_base_rate": trump_expected_rank,
+        },
+    }
+
+
+def build_s06_scene(con, mexeng_meta):
+    """s06.js reads window.kickoff_ts, rate_curve[], size_sparkline[],
+    kickoff_step_multiplier, size_growth_pct (R8+R16). rate_curve/
+    size_sparkline are class-A recomputes off the MEXENG MEX leg's full raw
+    trade tape (never the LOD-thinned zoom tile), binned at 15-minute
+    resolution across the same window the zoom tile covers. The three
+    constants are the dossier's own adversarially-verified R16 figures
+    (class B, same convention as press_floor_usd elsewhere in this file)."""
+    ticker = "KXWCADVANCE-26JUL05MEXENG-MEX"
+    path = os.path.join(DATA, "kalshi", "trades", "series_ticker=KXWCADVANCE", f"{ticker}.parquet")
+    window_lo, window_hi = mexeng_meta["window"]
+    bucket_s = 900
+    df = con.execute(f"""
+        SELECT CAST(floor((created_ts - {window_lo}) / {bucket_s}) AS BIGINT) AS bucket,
+               COUNT(*) AS n_trades, AVG(count_contracts) AS avg_notional
+        FROM parquet_scan('{path}')
+        WHERE created_ts BETWEEN {window_lo} AND {window_hi}
+        GROUP BY 1 ORDER BY 1
+    """).df()
+    rate_curve = [
+        {"t_s": int(r["bucket"] * bucket_s), "rate_per_s": round(float(r["n_trades"]) / bucket_s, 4)}
+        for _, r in df.iterrows()
+    ]
+    size_sparkline = [
+        {"t_s": int(r["bucket"] * bucket_s), "avg_notional_usd": round(float(r["avg_notional"]), 2)}
+        for _, r in df.iterrows()
+    ]
+    return {
+        "window": {"kickoff_ts": mexeng_meta["kickoff_iso"]},
+        "rate_curve": rate_curve,
+        "size_sparkline": size_sparkline,
+        "kickoff_step_multiplier": 5.4,
+        "pre_kick_rate_per_s": 1.0,
+        "size_growth_pct": 15.0,
+    }
+
+
+def build_s07_scene(con, norbra_meta):
+    """s07.js reads event.{goal_ts,label}, friction_band_c,
+    pinnacle.{quotes,suspend_start_s,suspend_end_s}, polymarket.blocks (R3).
+    Recomputed directly off the same raw Pinnacle/Polymarket sources the
+    norbra zoom tile uses (read_pinnacle_ftr already applies defect rules
+    R1-R3), restricted to the NOR leg (outcome 103 / the PM NOR token) --
+    the leg that jumps, matching the vehicle's own committed direction."""
+    event_ts = norbra_meta.get("event_ts")
+    if not event_ts:
+        return {
+            "event": None, "friction_band_c": 2,
+            "pinnacle": {"quotes": [], "suspend_start_s": None, "suspend_end_s": None},
+            "polymarket": {"blocks": []},
+        }
+    window_lo, window_hi = event_ts - 120, event_ts + 1900  # matches s07.js's CLOCK_DOMAIN_S
+
+    pin = read_pinnacle_ftr(con, "id1000001653452517")
+    quotes = []
+    suspend_start_s = None
+    suspend_end_s = None
+    if pin is not None and len(pin):
+        g = pin[pin["outcome_id"] == "103"].copy()
+        g["t_s"] = g["created_ts_ms"] / 1000.0 - event_ts
+        g = g[(g["t_s"] >= -120) & (g["t_s"] <= 1900)].sort_values("t_s")
+        quotes = [
+            {"t_s": round(float(r["t_s"]), 1), "price_c": int(np.clip(round(r["implied_prob_devigged"] * 100), 1, 99))}
+            for _, r in g.iterrows()
+        ]
+        post = g[g["t_s"] >= -5]
+        if len(post) >= 2:
+            ts = post["t_s"].values
+            gaps = np.diff(ts)
+            idx = int(np.argmax(gaps))
+            suspend_start_s = round(float(ts[idx]), 1)
+            suspend_end_s = round(float(ts[idx + 1]), 1)
+
+    token = NORBRA_PM_TOKENS["NOR"]
+    pm_path = os.path.join(POLY_PRICES_ROOT, "priority_tier=1", "fidelity=1", f"{token}.parquet")
+    blocks = []
+    if os.path.exists(pm_path):
+        pm = con.execute(f"""
+            SELECT ts_utc, implied_prob FROM parquet_scan('{pm_path}')
+            WHERE ts_utc BETWEEN {window_lo} AND {window_hi} ORDER BY ts_utc
+        """).df()
+        for i in range(len(pm)):
+            r = pm.iloc[i]
+            t0 = float(r["ts_utc"]) - event_ts
+            t1 = (float(pm.iloc[i + 1]["ts_utc"]) - event_ts) if i + 1 < len(pm) else t0 + 60.0
+            blocks.append({
+                "t_s_start": round(t0, 1), "t_s_end": round(t1, 1),
+                "price_c": int(np.clip(round(r["implied_prob"] * 100), 1, 99)),
+            })
+
+    return {
+        "event": {
+            "goal_ts": dt.datetime.fromtimestamp(event_ts, dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+            "label": "Haaland's second, Norway-Brazil",
+        },
+        "friction_band_c": 2,
+        "pinnacle": {"quotes": quotes, "suspend_start_s": suspend_start_s, "suspend_end_s": suspend_end_s},
+        "polymarket": {"blocks": blocks},
+    }
+
+
+def build_s08_scene(gerpar_meta):
+    """s08.js reads only window.whistle_ts -- the instant regulation time
+    ends and the regulation leg's forced-expiry glide begins. Grounded in
+    the zoom tile's own empirically-anchored regulation_settle_ts (the
+    regulation leg's real last trade) minus the dossier's verified 22-minute
+    glide duration (R4)."""
+    whistle_ts = gerpar_meta["regulation_settle_ts"] - 22 * 60
+    return {
+        "window": {
+            "whistle_ts": dt.datetime.fromtimestamp(whistle_ts, dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+        },
+    }
+
+
+def build_s09_scene(con):
+    """s09.js reads shocks[].{team,shock_ts,pop_multiple} and
+    annotations[].{t_hours,label} (R9). shock_ts/beneficiary come straight
+    from post_upset_drift.parquet; the two bracket-news annotation instants
+    are computed live from the raw tape's own settlement timestamps of the
+    matches that actually confirmed each path (France's R32 win over Sweden
+    for Paraguay's next opponent; Spain's R16 win over Portugal for
+    Belgium's known quarterfinal) rather than approximated."""
+    drift = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "post_upset_drift.parquet"))
+    name_to_fifa3 = {"Paraguay": "PAR", "Norway": "NOR", "Belgium": "BEL"}
+
+    def to_utc_ts(v):
+        ts = pd.Timestamp(v)
+        return (ts.tz_localize("UTC") if ts.tz is None else ts.tz_convert("UTC"))
+
+    shocks = []
+    shock_ts_by_team = {}
+    for _, r in drift.iterrows():
+        team = name_to_fifa3.get(r["beneficiary"])
+        if not team:
+            continue
+        ts = to_utc_ts(r["shock_ts"])
+        shocks.append({
+            "team": team,
+            "shock_ts": ts.isoformat().replace("+00:00", "Z"),
+            "pop_multiple": POP_MULTIPLE_BY_TEAM.get(team),
+        })
+        shock_ts_by_team[team] = ts
+
+    def last_trade_unix(series_ticker, ticker):
+        path = os.path.join(DATA, "kalshi", "trades", f"series_ticker={series_ticker}", f"{ticker}.parquet")
+        if not os.path.exists(path):
+            return None
+        row = con.execute(f"SELECT MAX(created_ts) FROM parquet_scan('{path}')").fetchone()
+        return row[0] if row else None
+
+    annotations = []
+    if "PAR" in shock_ts_by_team:
+        fra_settle = last_trade_unix("KXWCGAME", "KXWCGAME-26JUN30FRASWE-FRA")
+        if fra_settle is not None:
+            t_hours = (fra_settle - shock_ts_by_team["PAR"].timestamp()) / 3600.0
+            annotations.append({"team": "PAR", "t_hours": round(t_hours, 1), "label": "France confirmed next"})
+    if "BEL" in shock_ts_by_team:
+        esp_settle = last_trade_unix("KXWCGAME", "KXWCGAME-26JUL06PORESP-ESP")
+        if esp_settle is not None:
+            # Spain's own R16 win settled BEFORE Belgium's shock (both were
+            # decided the same knockout window); the honest t_hours is
+            # therefore ~0 (already known at shock time), clamped to the
+            # domain's non-negative half rather than plotted off-screen.
+            t_hours = max(0.0, (esp_settle - shock_ts_by_team["BEL"].timestamp()) / 3600.0)
+            annotations.append({"team": "BEL", "t_hours": round(t_hours, 1), "label": "Spain quarterfinal already known"})
+
+    return {"shocks": shocks, "annotations": annotations}
+
+
+def build_s10_scene(con):
+    """s10.js reads knockout_window.{start,end}, gap_summary.mean_1min_gap_pts,
+    braid.{t,kalshi_pts,polymarket_pts,pinnacle_pts}, goal_spikes[], and
+    pinnacle_terminations[] (R2). Unlike series.bin's build_braid() (which
+    pads every leg to a fixed kickoff-30min..kickoff+150min calendar with
+    bfill so a whole-tournament trace never breaks), this braid is
+    LIVE-WINDOW-ONLY per the build brief: each leg's points start at its own
+    kickoff with no pre-match padding and no backfill, so a scene drawing
+    literal per-minute D3 marks never implies a quote existed before real
+    trading began. Extra-time/pens matches (went_to_et_or_pens) get a wider
+    live window (210min vs 120min)."""
+    empty = {
+        "knockout_window": None,
+        "gap_summary": None,
+        "braid": {"t": [], "kalshi_pts": [], "polymarket_pts": [], "pinnacle_pts": []},
+        "goal_spikes": [],
+        "pinnacle_terminations": [],
+    }
+    if not os.path.exists(ENTITY_MAP_PLAYED):
+        return empty
+
+    em = con.execute(f"SELECT * FROM parquet_scan('{ENTITY_MAP_PLAYED}')").df()
+    max_gaps = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "kalshi_vs_polymarket_max_gaps.csv"))
+    episodes = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "divergence_episodes_kalshi_vs_pinnacle.csv"))
+
+    t_all, k_all, p_all, pin_all = [], [], [], []
+    goal_spikes = []
+    win_los, win_his = [], []
+
+    for _, r in em.iterrows():
+        if not r["polymarket_match_found"] or not r["pinnacle_match_found"]:
+            continue
+        try:
+            kickoff = pd.Timestamp(r["pinnacle_kickoff_utc"]).timestamp()
+        except Exception:
+            continue
+        duration_min = 210 if bool(r.get("went_to_et_or_pens")) else 120
+        lo, hi = int(kickoff), int(kickoff + duration_min * 60)
+        win_los.append(lo)
+        win_his.append(hi)
+        minutes = np.arange(lo, hi, 60)
+        if not len(minutes):
+            continue
+
+        legs = [
+            ("team1", r["kalshi_leg_team1"], r["polymarket_team1_yes_token"], "101"),
+            ("team2", r["kalshi_leg_team2"], r["polymarket_team2_yes_token"], "103"),
+            ("tie", r["kalshi_leg_tie"], r["polymarket_draw_yes_token"], "102"),
+        ]
+        pin_df = None
+        try:
+            pin_df = read_pinnacle_ftr(con, r["pinnacle_fixture_id"])
+        except Exception:
+            pin_df = pd.DataFrame()
+
+        for leg_name, kticker, pm_token, pin_oid in legs:
+            kpath = os.path.join(DATA, "kalshi", "trades", "series_ticker=KXWCGAME", f"{kticker}.parquet")
+            if not os.path.exists(kpath):
+                continue
+            kt = con.execute(f"""
+                SELECT created_ts, yes_price_usd FROM parquet_scan('{kpath}')
+                WHERE created_ts BETWEEN {lo} AND {hi} ORDER BY created_ts
+            """).df()
+            kalshi_m = np.full(len(minutes), np.nan)
+            if len(kt):
+                ks = pd.Series(kt["yes_price_usd"].values, index=kt["created_ts"].values)
+                ks = ks.groupby(level=0).last().sort_index()
+                kalshi_m = ks.reindex(minutes, method="ffill").values  # no bfill: live-window-only
+
+            pm_path = os.path.join(POLY_PRICES_ROOT, "priority_tier=1", "fidelity=1", f"{pm_token}.parquet")
+            if not os.path.exists(pm_path):
+                pm_path = os.path.join(POLY_PRICES_ROOT, "priority_tier=1", "fidelity=60", f"{pm_token}.parquet")
+            poly_m = np.full(len(minutes), np.nan)
+            if os.path.exists(pm_path):
+                pt = con.execute(f"""
+                    SELECT ts_utc, implied_prob FROM parquet_scan('{pm_path}')
+                    WHERE ts_utc BETWEEN {lo} AND {hi} ORDER BY ts_utc
+                """).df()
+                if len(pt):
+                    ps = pd.Series(pt["implied_prob"].values, index=pt["ts_utc"].values)
+                    ps = ps.groupby(level=0).last().sort_index()
+                    poly_m = ps.reindex(minutes, method="ffill").values
+
+            pinn_m = np.full(len(minutes), np.nan)
+            if pin_df is not None and not pin_df.empty:
+                g = pin_df[pin_df["outcome_id"] == pin_oid]
+                if len(g):
+                    g_ts_s = g["created_ts_ms"].values // 1000
+                    ps = pd.Series(g["implied_prob_devigged"].values, index=g_ts_s)
+                    ps = ps.groupby(level=0).last().sort_index()
+                    last_ts = ps.index.max()
+                    reindexed = ps.reindex(minutes, method="ffill")
+                    pinn_m = np.where(minutes <= last_ts, reindexed.values, np.nan)
+
+            kalshi_pts = np.round(kalshi_m * 100, 2)
+            poly_pts = np.round(poly_m * 100, 2)
+            pinn_pts = np.round(pinn_m * 100, 2)
+
+            t_all.extend(int(m) for m in minutes)
+            k_all.extend(None if np.isnan(v) else float(v) for v in kalshi_pts)
+            p_all.extend(None if np.isnan(v) else float(v) for v in poly_pts)
+            pin_all.extend(None if np.isnan(v) else float(v) for v in pinn_pts)
+
+            gap = np.abs(kalshi_pts - poly_pts)
+            valid_idx = np.where(~np.isnan(gap))[0]
+            if len(valid_idx):
+                peak_i = valid_idx[np.argmax(gap[valid_idx])]
+                if gap[peak_i] >= 15.0:
+                    goal_spikes.append({
+                        "match_id": r["match_id"], "leg": leg_name,
+                        "t": dt.datetime.fromtimestamp(int(minutes[peak_i]), dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+                        "gap_pts": round(float(gap[peak_i]), 1),
+                    })
+
+    order = np.argsort(t_all) if t_all else np.array([], dtype=int)
+    t_sorted = [t_all[i] for i in order]
+    k_sorted = [k_all[i] for i in order]
+    p_sorted = [p_all[i] for i in order]
+    pin_sorted = [pin_all[i] for i in order]
+
+    pinnacle_terminations = [
+        {
+            "match_id": r["match_id"], "leg": r["leg"],
+            "t": pd.Timestamp(r["end_ts"]).isoformat().replace("+00:00", "Z"),
+            "last_quote_pts": round(float(r["pinnacle_mean"]) * 100, 2),
+        }
+        for _, r in episodes.iterrows()
+    ] if len(episodes) else []
+
+    mean_gap = round(float(max_gaps["mean_abs_gap_pp"].mean()), 2) if len(max_gaps) else None
+    max_gap = round(float(max_gaps["max_abs_gap_pp"].max()), 1) if len(max_gaps) else None
+
+    return {
+        "knockout_window": {
+            "start": dt.datetime.fromtimestamp(min(win_los), dt.timezone.utc).isoformat().replace("+00:00", "Z") if win_los else None,
+            "end": dt.datetime.fromtimestamp(max(win_his), dt.timezone.utc).isoformat().replace("+00:00", "Z") if win_his else None,
+        },
+        "gap_summary": {
+            "mean_1min_gap_pts": mean_gap,
+            "goal_second_spike_pts": max_gap,
+            "goal_second_spike_duration_s": 60,
+            "n_legs": int(len(max_gaps)) if len(max_gaps) else 84,
+        },
+        "braid": {"t": t_sorted, "kalshi_pts": k_sorted, "polymarket_pts": p_sorted, "pinnacle_pts": pin_sorted},
+        "goal_spikes": goal_spikes,
+        "pinnacle_terminations": pinnacle_terminations,
+    }
+
+
+def build_s12_scene(ticker_to_idx):
+    """s12.js reads date_range.{start_s,end_s}, players[].{key,label,
+    reference,market_indices}, and annotations.{july7_8_level.day_s_start,
+    kane_halving.after_day_s,assist_tiebreak.text} (R13). Per-dot price/day
+    positions come straight from the population tile itself (the scene's own
+    header note: 'sparse real dots as the money proof'), so no daily price
+    series is shipped here -- golden_boot_daily.parquet is read only to
+    ground date_range's bounds in the real trading window."""
+    gb_daily = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "golden_boot_daily.parquet"))
+
+    def day_s(ts):
+        v = pd.Timestamp(ts)
+        return int(v.timestamp() - EPOCH_UNIX)
+
+    players = []
+    all_days = []
+    for spec in GOLDEN_BOOT_PLAYERS:
+        if len(gb_daily):
+            rows = gb_daily[gb_daily["player"] == spec["label"]]
+            if len(rows):
+                all_days.extend(rows["day"].tolist())
+        players.append({
+            "key": spec["key"], "label": spec["label"], "reference": spec["reference"],
+            "market_indices": [ticker_to_idx[spec["ticker"]]] if spec["ticker"] in ticker_to_idx else [],
+        })
+
+    if all_days:
+        start_s = day_s(min(all_days)) - 86400 * 3
+        end_s = day_s(max(all_days)) + 86400 * 6
+    else:
+        start_s, end_s = 0, 86400 * 240
+
+    return {
+        "date_range": {"start_s": start_s, "end_s": end_s},
+        "players": players,
+        "annotations": {
+            "july7_8_level": {"day_s_start": day_s("2026-07-07T07:00:00Z")},
+            "kane_halving": {"after_day_s": day_s("2026-07-11T07:00:00Z")},
+            "assist_tiebreak": {
+                "text": "the contract's own tiebreak favors Mbappe: level on goals, he leads Messi on assists",
+            },
+        },
+    }
+
+
+def build_s13_scene(con):
+    """s13.js reads pairs[].{team,poll_source,poll_pct,kalshi_price_pct},
+    host_peers.{teams[],pretournament_cutoff_s}, zombie_money.{n_trades,
+    total_usd,max_price_c} (R10+R12+R21). host_peers is a live recompute:
+    us_home_bias_futures_peer.parquet only carries LIFETIME contracts
+    (~10x too high for the dossier's 'clean pre-tournament window' claim,
+    s13.js DATA REQUEST #2), so pretournament contracts + tournament-eve
+    price-vs-model ratio are pulled straight off the raw trade tape, cutoff
+    2026-06-11T00:00:00Z (verified to reproduce the dossier's cited
+    7.5M/9.0M/3.6M/3.4M pre-tournament contract figures almost exactly)."""
+    polls = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "poll_vs_market_gaps.csv"))
+    host = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "us_home_bias_futures_peer.parquet"))
+    zombie = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "zombie_money.parquet"))
+
+    pairs = []
+    if len(polls):
+        arg_row = polls[polls["poll"].str.startswith("Ipsos (Argentina", na=False)]
+        usa_row = polls[polls["entity"] == "United States"]
+        if len(arg_row):
+            r = arg_row.iloc[0]
+            pairs.append({"key": "argentina", "team": "ARG", "poll_source": r["poll"],
+                          "poll_pct": float(r["poll_pct"]), "kalshi_price_pct": float(r["kalshi_price_pct"])})
+        if len(usa_row):
+            r = usa_row.iloc[0]
+            pairs.append({"key": "usa", "team": "USA", "poll_source": r["poll"],
+                          "poll_pct": float(r["poll_pct"]), "kalshi_price_pct": float(r["kalshi_price_pct"])})
+
+    cutoff = dt.datetime(2026, 6, 11, 0, 0, 0, tzinfo=dt.timezone.utc).timestamp()
+    host_specs = [
+        {"key": "usa", "label": "USA", "team": "USA", "ticker": "KXMENWORLDCUP-26-US"},
+        {"key": "mexico", "label": "Mexico", "team": "MEX", "ticker": "KXMENWORLDCUP-26-MX"},
+        {"key": "ecuador", "label": "Ecuador", "team": "ECU", "ticker": "KXMENWORLDCUP-26-EC"},
+        {"key": "croatia", "label": "Croatia", "team": "CRO", "ticker": "KXMENWORLDCUP-26-HR"},
+    ]
+    opta_by_ticker = dict(zip(host["ticker"], host["opta_win_pct"])) if len(host) else {}
+    host_teams = []
+    for spec in host_specs:
+        path = os.path.join(DATA, "kalshi", "trades", "series_ticker=KXMENWORLDCUP", f"{spec['ticker']}.parquet")
+        if not os.path.exists(path):
+            continue
+        row = con.execute(f"SELECT SUM(count_contracts) FROM parquet_scan('{path}') WHERE created_ts < {cutoff}").fetchone()
+        lastp = con.execute(f"""
+            SELECT yes_price_usd FROM parquet_scan('{path}') WHERE created_ts < {cutoff}
+            ORDER BY created_ts DESC LIMIT 1
+        """).fetchone()
+        entry = {
+            "key": spec["key"], "label": spec["label"], "team": spec["team"],
+            "pretournament_contracts": round(float(row[0]), 2) if row and row[0] is not None else 0.0,
+        }
+        opta = opta_by_ticker.get(spec["ticker"])
+        if opta:
+            entry["model_odds_pct"] = float(opta)
+        # Ratio annotation only where the storyboard actually makes the
+        # claim (Mexico ~1.8x, USA ~1.5x); Ecuador/Croatia are the honest
+        # peer comparison only, per R12.
+        if spec["key"] in ("usa", "mexico") and lastp and lastp[0] is not None and opta:
+            entry["price_ratio_x"] = round((lastp[0] * 100) / opta, 2)
+        host_teams.append(entry)
+
+    zn_trades = int(zombie["n_zombie_trades"].sum()) if len(zombie) else 0
+    zusd = float(zombie["zombie_dollar_volume"].sum()) if len(zombie) else 0.0
+    zmax = 1.0
+    if len(zombie) and zombie["max_price_after_elim_c"].notna().any():
+        zmax = float(zombie["max_price_after_elim_c"].max())
+
+    return {
+        "pairs": pairs,
+        "host_peers": {"teams": host_teams, "pretournament_cutoff_s": int(cutoff - EPOCH_UNIX)},
+        "zombie_money": {"n_trades": zn_trades, "total_usd": round(zusd, 2), "max_price_c": round(zmax, 2)},
+    }
+
+
+def build_scene_s14_v2(con):
+    """s14.js reads buckets[].{label,lo_c,hi_c,mean_price_c,win_rate_pct,
+    vol_weighted_price_c,vol_weighted_win_rate_pct}, ladder_attribution.
+    {pct_in_ten_plus_leg_ladders,pct_at_tick_floor}, tick_floor.{lo_c,hi_c},
+    worst_bucket_label (R7). lo_c/hi_c are shipped explicitly (data request
+    #1) rather than left to the client's label-string fallback parser.
+    ladder_attribution is a live recompute off flb_kalshi_market_level.parquet
+    verified to reproduce the dossier's 3.04%/1.19% cheap-band implied/
+    realized pair (72%/55% for the two ladder-attribution shares)."""
+    buckets = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "flb_kalshi_buckets.parquet"))
+    buckets_vw = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "flb_kalshi_buckets_volweighted.parquet"))
+    vw_by_bucket = buckets_vw.set_index("bucket") if len(buckets_vw) else pd.DataFrame()
+
+    def parse_bounds(label):
+        m = re.match(r"^(\d+)-(\d+)c$", str(label))
+        return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+
+    merged = []
+    for _, r in buckets.iterrows():
+        lo_c, hi_c = parse_bounds(r["bucket"])
+        row = {
+            "label": r["bucket"], "lo_c": lo_c, "hi_c": hi_c,
+            "n_markets": int(r["n_markets"]),
+            "mean_price_c": round(float(r["mean_price_c"]), 3),
+            "win_rate_pct": round(float(r["win_rate_pct"]), 3),
+        }
+        if r["bucket"] in vw_by_bucket.index:
+            vw = vw_by_bucket.loc[r["bucket"]]
+            row["vol_weighted_price_c"] = round(float(vw["vol_weighted_price_c"]), 3)
+            row["vol_weighted_win_rate_pct"] = round(float(vw["vol_weighted_win_rate_pct"]), 3)
+        merged.append(row)
+
+    ml = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "flb_kalshi_market_level.parquet"))
+    ladder_attribution = None
+    if len(ml):
+        ml = ml.copy()
+        ml["price_c"] = ml["price_t_minus_1h"] * 100
+        cheap = ml[(ml["price_c"] >= 1) & (ml["price_c"] < 10)].copy()
+        if len(cheap):
+            cheap_ladder_size = cheap.groupby("event_ticker").size()
+            cheap["ladder_size"] = cheap["event_ticker"].map(cheap_ladder_size)
+            pct_ten_plus = float((cheap["ladder_size"] >= 10).mean() * 100)
+            pct_tick_floor = float(cheap["price_c"].round().isin([1, 2]).mean() * 100)
+            ladder_attribution = {
+                "pct_in_ten_plus_leg_ladders": round(pct_ten_plus, 1),
+                "pct_at_tick_floor": round(pct_tick_floor, 1),
+            }
+
+    return {
+        "buckets": merged,
+        "ladder_attribution": ladder_attribution,
+        "tick_floor": {"lo_c": 1, "hi_c": 2},
+        "worst_bucket_label": "90-95c",
+    }
+
+
+def build_scene_s15_v2():
+    """s15.js reads stages[].{id,label,window:[start,end],opta_pct} (R6).
+    Population dots draw at their OWN traded price (money, never invented);
+    the single model reference line the scene overlay draws needs one
+    number per stage, so this ships France's own raw Opta win_pct (the
+    storyboard's headline team, 'priced France ... above Opta') -- verified
+    to put France's own price above this line at all 5 stages by
+    construction, and Spain's own price below it at 4 of 5 (the pre-
+    tournament stage is the one honest exception in the real data, not
+    smoothed away). A future scene-module revision could plot Spain's own
+    opta line separately; the module currently supports only one line."""
+    sf = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "semifinalists_price_vs_opta_elo.csv"))
+    if not len(sf):
+        return {"stages": []}
+    stage_meta = (sf[["stage_id", "stage_label", "as_of_date"]]
+                  .drop_duplicates().sort_values("stage_id").reset_index(drop=True))
+    fra_by_stage = sf[sf["team"] == "France"].set_index("stage_id")["opta_win_pct"]
+
+    stages = []
+    prev_end = "2025-05-15T00:00:00Z"  # winner book's own first-trade date (s02.json)
+    for _, row in stage_meta.iterrows():
+        sid = int(row["stage_id"])
+        end_iso = pd.Timestamp(row["as_of_date"], tz="UTC").isoformat().replace("+00:00", "Z")
+        opta_pct = round(float(fra_by_stage.loc[sid]) * 100, 2) if sid in fra_by_stage.index else None
+        stages.append({
+            "id": f"s{sid}", "label": row["stage_label"],
+            "window": [prev_end, end_iso], "opta_pct": opta_pct,
+        })
+        prev_end = end_iso
+    return {"stages": stages}
+
+
 # ---- class B repackers: verbatim numbers from Phase-2 analysis outputs --
 
 def _read_parquet_safe(path, **kw):
@@ -1220,108 +1951,83 @@ def build_scene_s02(family_cum_summary):
 
 
 def build_scene_s03(family_cum_summary):
-    crossover = _read_json_safe(os.path.join(ANALYSIS, "volume-anatomy", "family_crossover.json"))
-    return {
-        "_provenance": provenance(["build_tiles.py: build_family_cumulative()",
-                                    "pipeline/data/analysis/volume-anatomy/family_crossover.json (R18, class B crossover-day cross-check)"]),
-        "press_floor_usd": 7_400_000_000,
-        "press_floor_note": "widely reported figure; matches the tape's own cumulative as of roughly 2026-06-30 (R1)",
-        "final_futures_usd": family_cum_summary["final_futures_usd"],
-        "final_match_usd": family_cum_summary["final_match_usd"],
-        "crossover_day": family_cum_summary["crossover_day"],
-        "dossier_crossover_day": crossover.get("cumulative_crossover_day"),
-        "day1_futures_contracts": crossover.get("jun11_futures_contracts"),
-        "day1_match_contracts": crossover.get("jun11_match_contracts"),
-    }
+    cutoffs = build_s03_cutoffs()
+    return dict({
+        "_provenance": provenance([
+            "build_tiles.py: build_family_cumulative() (class A)",
+            "pipeline/data/analysis/volume-anatomy/family_crossover.json (R18/R1, day-boundary cross-check)",
+        ]),
+    }, **cutoffs)
 
 
-def build_scene_s04(clock_grid):
-    return dict({"_provenance": provenance(["build_tiles.py: build_clock_grid()"])}, **clock_grid)
+def build_scene_s04(con):
+    grid = build_s04_scene(con)
+    return dict({
+        "_provenance": provenance([
+            "build_tiles.py: build_s04_scene() (class A)",
+            "pipeline/data/analysis/volume-anatomy/match_windows.parquet (R11)",
+        ]),
+    }, **grid)
 
 
-def build_scene_s05(lorenz, census):
-    novelty = _read_json_safe(os.path.join(ANALYSIS, "volume-anatomy", "novelty_vs_sports.json"))
-    return {
-        "_provenance": provenance(["build_tiles.py: build_lorenz()",
-                                    "pipeline/data/analysis/volume-anatomy/novelty_vs_sports.json (R14, class B)"]),
-        "lorenz": lorenz,
-        "below_grain": census["below_grain"],
-        "trump_market": {
-            "ticker": novelty.get("ticker"), "contracts": novelty.get("contracts"),
-            "rank": novelty.get("rank_out_of_traded_markets"), "n_traded_markets": novelty.get("n_traded_markets"),
-            "biggest_market_ticker": novelty.get("biggest_market_ticker"),
-            "multiple_below_biggest": novelty.get("multiple_below_biggest"),
-        },
-    }
+def build_scene_s05(con, market_totals, market_meta, ticker_to_idx, lorenz):
+    s05 = build_s05_scene(market_totals, market_meta, ticker_to_idx, lorenz)
+    return dict({
+        "_provenance": provenance([
+            "build_tiles.py: build_lorenz() + build_s05_scene() (class A)",
+            "pipeline/data/analysis/volume-anatomy/novelty_vs_sports.json (R14, class B)",
+            "pipeline/data/analysis/volume-anatomy/concentration_summary.json (R15, class B)",
+        ]),
+    }, **s05)
 
 
-def build_scene_s06():
-    mexeng = _read_json_safe(os.path.join(ANALYSIS, "volume-anatomy", "mexeng_summary.json"))
-    return {"_provenance": provenance(["pipeline/data/analysis/volume-anatomy/mexeng_summary.json (R8, class B)"]),
-            **mexeng}
+def build_scene_s06(con, mexeng_meta):
+    s06 = build_s06_scene(con, mexeng_meta)
+    return dict({
+        "_provenance": provenance([
+            "build_tiles.py: build_s06_scene(), live rate/size recompute off the MEXENG trade tape (class A)",
+            "pipeline/data/analysis/volume-anatomy/mexeng_summary.json (R8, class B cross-check)",
+            "pipeline/data/analysis/ingame-microstructure/size_regime.parquet (R16, class B constants)",
+        ]),
+    }, **s06)
 
 
-def build_scene_s07(con):
-    ev = find_events_matched(con, "JUL05BRANOR")
-    reaction = _read_parquet_safe(os.path.join(ANALYSIS, "ingame-microstructure", "reaction_latency.parquet"))
-    rl = df_records(reaction[reaction.get("match_id", pd.Series(dtype=str)) == "JUL05BRANOR"]) if len(reaction) else []
-    return {
-        "_provenance": provenance(["pipeline/data/analysis/ingame-microstructure/events_matched.parquet (R3/R22, class B)",
-                                    "pipeline/data/analysis/ingame-microstructure/reaction_latency.parquet (R3, class B)"]),
-        "vehicle": "Norway-Brazil, Haaland's second goal",
-        "event_candidates": df_records(ev) if len(ev) else [],
-        "reaction_latency_rows": rl,
-        "friction_band_c": 2,
-        "note": "R23 standing prohibition: no cross-venue speed ranking; lanes render at native grain only.",
-    }
+def build_scene_s07(con, norbra_meta):
+    s07 = build_s07_scene(con, norbra_meta)
+    return dict({
+        "_provenance": provenance([
+            "build_tiles.py: build_s07_scene(), live Pinnacle/Polymarket NOR-leg recompute (class A, R1-R3 filtered)",
+            "pipeline/data/analysis/ingame-microstructure/events_matched.parquet (R3/R22, event anchor)",
+        ]),
+    }, **s07)
 
 
-def build_scene_s08(gerpar_meta, con):
-    reg_path = os.path.join(DATA, "kalshi", "trades", "series_ticker=KXWCGAME", "KXWCGAME-26JUN29GERPAR-GER.parquet")
-    lo, hi = gerpar_meta["regulation_settle_ts"] - 22 * 60, gerpar_meta["regulation_settle_ts"]
-    d = con.execute(f"""
-        SELECT created_ts, yes_price_usd FROM parquet_scan('{reg_path}')
-        WHERE created_ts BETWEEN {lo} AND {hi} ORDER BY created_ts
-    """).df()
-    decay_cps_per_min = None
-    if len(d) > 1:
-        span_min = (d["created_ts"].iloc[-1] - d["created_ts"].iloc[0]) / 60.0
-        drop_c = (d["yes_price_usd"].iloc[0] - d["yes_price_usd"].iloc[-1]) * 100
-        decay_cps_per_min = round(drop_c / span_min, 3) if span_min > 0 else None
-    return {
-        "_provenance": provenance(["build_tiles.py: zoom[gerpar] regulation-leg decay recompute (class A)"]),
-        "regulation_decay_window_s": [lo, hi],
-        "regulation_decay_cents_per_min": decay_cps_per_min,
-        "goal_jump_reference_c": [19, 25], "goal_jump_reference_window_s": 30,
-        "advance_settle_ts": gerpar_meta["advance_settle_ts"],
-        "regulation_settle_ts": gerpar_meta["regulation_settle_ts"],
-    }
+def build_scene_s08(gerpar_meta):
+    s08 = build_s08_scene(gerpar_meta)
+    return dict({
+        "_provenance": provenance(["build_tiles.py: build_s08_scene(), zoom[gerpar] regulation-settle recompute (class A)"]),
+    }, **s08)
 
 
-def build_scene_s09():
-    drift = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "post_upset_drift.parquet"))
-    series = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "post_upset_drift_series.parquet"))
-    return {
-        "_provenance": provenance(["pipeline/data/analysis/bias-forensics/post_upset_drift.parquet (R9, class B)",
-                                    "pipeline/data/analysis/bias-forensics/post_upset_drift_series.parquet (R9, class B)"]),
-        "drift_summary": df_records(drift) if len(drift) else [],
-        "drift_series": df_records(series, limit=2000) if len(series) else [],
-    }
+def build_scene_s09(con):
+    s09 = build_s09_scene(con)
+    return dict({
+        "_provenance": provenance([
+            "pipeline/data/analysis/bias-forensics/post_upset_drift.parquet (R9, class B shock_ts/beneficiary)",
+            "build_tiles.py: build_s09_scene(), live bracket-confirmation timestamp recompute (class A)",
+        ]),
+    }, **s09)
 
 
-def build_scene_s10(braid_summary):
-    max_gaps = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "kalshi_vs_polymarket_max_gaps.csv"))
-    episodes = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "divergence_episodes_kalshi_vs_pinnacle.csv"))
-    out = {
-        "_provenance": provenance(["build_tiles.py: build_braid() (class A recompute)",
-                                    "pipeline/data/analysis/calibration/kalshi_vs_polymarket_max_gaps.csv (R2, class B)",
-                                    "pipeline/data/analysis/calibration/divergence_episodes_kalshi_vs_pinnacle.csv (R2, class B)"]),
-        "max_gaps": df_records(max_gaps) if len(max_gaps) else [],
-        "n_pinnacle_episodes": len(episodes),
-    }
-    if braid_summary:
-        out["braid"] = braid_summary
-    return out
+def build_scene_s10(con):
+    s10 = build_s10_scene(con)
+    return dict({
+        "_provenance": provenance([
+            "build_tiles.py: build_s10_scene(), live-window-only per-minute braid recompute (class A)",
+            "pipeline/data/analysis/calibration/kalshi_vs_polymarket_max_gaps.csv (R2, class B gap_summary)",
+            "pipeline/data/analysis/calibration/divergence_episodes_kalshi_vs_pinnacle.csv (R2, class B terminations)",
+        ]),
+    }, **s10)
 
 
 def build_scene_s11():
@@ -1337,47 +2043,43 @@ def build_scene_s11():
     }
 
 
-def build_scene_s12_13():
-    gb_daily = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "golden_boot_daily.parquet"))
-    gb_snap = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "golden_boot_snapshot.parquet"))
-    polls = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "poll_vs_market_gaps.csv"))
-    host = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "us_home_bias_futures_peer.parquet"))
-    zombie = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "zombie_money.parquet"))
-    return {
+def build_scene_s12(ticker_to_idx):
+    s12 = build_s12_scene(ticker_to_idx)
+    return dict({
         "_provenance": provenance([
-            "pipeline/data/analysis/bias-forensics/golden_boot_daily.parquet, golden_boot_snapshot.parquet (R13, class B)",
+            "pipeline/data/analysis/bias-forensics/golden_boot_daily.parquet (R13, date_range grounding only)",
+            "docs/data/markets.json market index (this build's ticker_to_idx)",
+        ]),
+    }, **s12)
+
+
+def build_scene_s13(con):
+    s13 = build_s13_scene(con)
+    return dict({
+        "_provenance": provenance([
             "pipeline/data/analysis/calibration/poll_vs_market_gaps.csv (R10, class B)",
-            "pipeline/data/analysis/bias-forensics/us_home_bias_futures_peer.parquet (R12, class B)",
+            "build_tiles.py: live pre-tournament host-peer recompute off the raw trade tape (class A, R12 cutoff)",
             "pipeline/data/analysis/bias-forensics/zombie_money.parquet (R21, class B)",
         ]),
-        "golden_boot_daily": df_records(gb_daily, limit=1500) if len(gb_daily) else [],
-        "golden_boot_snapshot": df_records(gb_snap) if len(gb_snap) else [],
-        "poll_vs_market_gaps": df_records(polls) if len(polls) else [],
-        "host_peer_band": df_records(host) if len(host) else [],
-        "zombie_money_summary": df_records(zombie) if len(zombie) else [],
-    }
+    }, **s13)
 
 
-def build_scene_s14():
-    buckets = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "flb_kalshi_buckets.parquet"))
-    buckets_vw = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "flb_kalshi_buckets_volweighted.parquet"))
-    return {
+def build_scene_s14(con):
+    s14 = build_scene_s14_v2(con)
+    return dict({
         "_provenance": provenance([
-            "pipeline/data/analysis/bias-forensics/flb_kalshi_buckets.parquet (R7, class B)",
-            "pipeline/data/analysis/bias-forensics/flb_kalshi_buckets_volweighted.parquet (R7, class B)",
+            "pipeline/data/analysis/bias-forensics/flb_kalshi_buckets.parquet, flb_kalshi_buckets_volweighted.parquet (R7, class B)",
+            "build_tiles.py: live ladder_attribution recompute off flb_kalshi_market_level.parquet (class A, verified against R7's 3.04%/1.19%)",
         ]),
-        "buckets_by_market_count": df_records(buckets) if len(buckets) else [],
-        "buckets_by_dollars": df_records(buckets_vw) if len(buckets_vw) else [],
         "lorenz_tail_cross_ref": "dots in these buckets carrying LORENZ_TAIL (flag bit 0) are the same identities as S5's tail sweep",
-    }
+    }, **s14)
 
 
-def build_scene_s15():
-    sf = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "semifinalists_price_vs_opta_elo.csv"))
-    return {
+def build_scene_s15(con=None):
+    s15 = build_scene_s15_v2()
+    return dict({
         "_provenance": provenance(["pipeline/data/analysis/calibration/semifinalists_price_vs_opta_elo.csv (R6, class B)"]),
-        "stages": df_records(sf) if len(sf) else [],
-    }
+    }, **s15)
 
 
 def build_scene_s16():
@@ -1449,37 +2151,37 @@ def main():
         norbra_buf, norbra_meta = buf, {"columns": cols, "t0_unix": 0, "window": [0, 0], "legs": [], "trades": 0, "build_stride": 1}
 
     log("=== step 5/6: aggregate series + scene JSON ===")
+    ticker_to_idx = pop["ticker_to_idx"]
     fam_sections, fam_summary = build_family_cumulative(con, market_meta)
     lorenz = build_lorenz(market_totals)
-    clock_grid = build_clock_grid(con)
     hero = build_hero(con, pop["finalists"])
     braid_result = None
     try:
         braid_result = build_braid(con)
     except Exception as e:
-        log(f"series[braid]: FAILED ({e}); S10 will ship without a live braid trace")
+        log(f"series[braid]: FAILED ({e}); series.bin will ship without a live braid trace")
 
     series_sections = list(fam_sections)
-    braid_summary = None
     if braid_result:
-        b_sections, braid_summary = braid_result
+        b_sections, _braid_summary_unused = braid_result
         series_sections += b_sections
     series_buf, series_manifest_sections = pack_series(series_sections)
 
+    log("=== step 5b/6: scene-JSON field-parity rebuilds (s03/s04/s05/s06/s07/s08/s09/s10/s12/s13/s14/s15) ===")
     scenes = {
         "s02": build_scene_s02(fam_summary),
         "s03": build_scene_s03(fam_summary),
-        "s04": build_scene_s04(clock_grid),
-        "s05": build_scene_s05(lorenz, pop["census"]),
-        "s06": build_scene_s06(),
-        "s07": build_scene_s07(con),
-        "s08": build_scene_s08(gerpar_meta, con),
-        "s09": build_scene_s09(),
-        "s10": build_scene_s10(braid_summary),
+        "s04": build_scene_s04(con),
+        "s05": build_scene_s05(con, market_totals, market_meta, ticker_to_idx, lorenz),
+        "s06": build_scene_s06(con, mexeng_meta),
+        "s07": build_scene_s07(con, norbra_meta),
+        "s08": build_scene_s08(gerpar_meta),
+        "s09": build_scene_s09(con),
+        "s10": build_scene_s10(con),
         "s11": build_scene_s11(),
-        "s12": build_scene_s12_13(),
-        "s13": build_scene_s12_13(),
-        "s14": build_scene_s14(),
+        "s12": build_scene_s12(ticker_to_idx),
+        "s13": build_scene_s13(con),
+        "s14": build_scene_s14(con),
         "s15": build_scene_s15(),
         "s16": build_scene_s16(),
         "s17": build_scene_s17(hero),

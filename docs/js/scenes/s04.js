@@ -210,7 +210,7 @@ export default {
       .attr('x', stripRect.x).attr('y', stripRect.y - 4)
       .attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-caption-size) var(--font-apparatus)`)
-      .text('scheduled kickoffs, by ET hour — the market’s pulse is the schedule');
+      .text('scheduled kickoffs, by ET hour; the market’s pulse is the schedule');
 
     // "US waking hours" band.
     const wb = sj.waking_band;

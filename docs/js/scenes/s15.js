@@ -292,7 +292,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>For thirteen months the market held one opinion the model never talked it out of. At all five published simulation snapshots it priced France three to five points above Opta and Spain at or below the line, near-symmetric, robust across venues,</p>',
+      html: '<p>For thirteen months the market held one opinion the model never talked it out of. At all five published simulation snapshots, the devigged price put France three to five points above Opta and Spain at or below the line, near-symmetric and robust across venues.<sup class="fn"><a href="#fn-21">21</a></sup></p>',
       trigger: 'step',
       state: 'assemble',
       kind: 'resort',
@@ -301,7 +301,7 @@ export default {
     },
     {
       id: 'b2',
-      html: '<p>one persistent level disagreement read five times rather than five confirmations.<sup class="fn"><a href="#fn-21">21</a></sup></p>',
+      html: '<p>That is one persistent level disagreement read five times, not five confirmations.</p>',
       trigger: 'step',
       // no state: dots hold; this step is the pinned-caption beat only
       overlayStep: 'b2',
@@ -345,13 +345,12 @@ export default {
   },
 };
 
-/* NOTE (data_requests / coordination — see this build's returned
- * summary): design-system.md §8 FIX #3 requires the word "devigged" to
- * appear in S15's *beat copy*, not only in overlay annotation text; the
- * storyboard's verbatim S15 Beat prose (research/storyboard.md) does not
- * contain that word (only "three to five points above Opta"). Per this
- * build's instructions ("beats[] with the storyboard's drafted prose
- * VERBATIM ... do not rewrite"), the prose above is kept exactly as
- * drafted; the overlay's devig annotation (`s15-devig` text, step b3)
- * already carries the qualifier. Flagged for the prose-integration /
- * editorial pass to reconcile the two authorities. */
+/* NOTE (resolved in the prose-polish pass): design-system.md §8 FIX #3
+ * requires the word "devigged" in S15's beat copy, not only in the overlay
+ * annotation. Beat b1 now carries it ("the devigged price put France three
+ * to five points above Opta"), so the two authorities agree; the footnote
+ * marker also moved onto b1, where the statistic actually lives, and b1/b2
+ * are now each a complete sentence. The numbers stay storyboard-verbatim
+ * ("three to five points"); only the framing gained the required qualifier.
+ * The overlay's `s15-devig` annotation (step b3) still carries the same
+ * qualifier, which is now a reinforcement rather than the sole disclosure. */

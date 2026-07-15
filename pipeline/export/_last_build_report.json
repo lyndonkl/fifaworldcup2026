@@ -22,7 +22,7 @@
     },
     {
       "name": "scenes",
-      "bytes": 329926
+      "bytes": 393357
     },
     {
       "name": "series.bin",
@@ -42,11 +42,11 @@
     },
     {
       "name": "zoom/norbra.bin",
-      "bytes": 516740
+      "bytes": 523920
     }
   ],
-  "total_bytes": 16729960,
-  "total_mb": 16.73,
+  "total_bytes": 16800571,
+  "total_mb": 16.801,
   "manifest_path": "/Users/kushaldsouza/Documents/Thinking/fifaworldcup2026/docs/data/manifest.json",
   "all_caps_ok": true,
   "population_dots_desktop": 159809,

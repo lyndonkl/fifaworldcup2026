@@ -63,14 +63,22 @@ const SIBLING_SERIES = Array.from(new Set([
 
 /* Opponent resolution: the storyboard names the two live candidates
  * explicitly ("the final is Spain against England or Argentina, July 19"
- * — research/storyboard.md line 3). manifest.hero.legs[1].label carries
- * the resolved name after the G3 refresh (CONTRACT §5.1); before that it
- * reads the "OPPONENT" placeholder and this resolves to null. */
+ * — research/storyboard.md line 3). The resolved opponent lands after the
+ * England-Argentina semifinal settles and the G3 refresh rewrites
+ * manifest.hero. The hero leg label may arrive as a full country name or
+ * as a FIFA trigram (ENG/GB/GBR/ARG), so match both forms; an unresolved
+ * or three-candidate provisional snapshot returns null and the opponent
+ * highlight stays inert (no crash, no fallback banner). */
 function opponentCode(manifest) {
-  const label = (manifest.hero && manifest.hero.legs && manifest.hero.legs[1]
-    && manifest.hero.legs[1].label || '').toUpperCase();
-  if (label.includes('ENGLAND')) return 'ENG';
-  if (label.includes('ARGENTINA')) return 'ARG';
+  const legs = (manifest.hero && manifest.hero.legs) || [];
+  // Prefer an explicitly-resolved opponent leg; fall back to legs[1].
+  const labels = legs.map(l => (l && l.label || '').toUpperCase());
+  const has = (...needles) => labels.some(lb => needles.some(n => lb === n || lb.includes(n)));
+  // A resolved final has exactly two legs (Spain + opponent); a provisional
+  // three-leg pair (ESP/ENG/ARG) is not yet resolved.
+  const resolved = legs.length <= 2;
+  if (resolved && has('ENGLAND', 'ENG', 'GB', 'GBR')) return 'ENG';
+  if (resolved && has('ARGENTINA', 'ARG')) return 'ARG';
   return null;
 }
 function isArgentinaOpponent(manifest) {
@@ -315,7 +323,7 @@ export default {
     },
     {
       id: 'l5',
-      html: '<p>One habit is still an open bet. The market kept France above the model for thirteen months and Spain below it, and Spain is the team still standing.<sup class="fn"><a href="#fn-21">21</a></sup> Whether that discount was information or attachment is the one question the tape could not settle. The piece stakes it here: the epilogue will return to this number and say which it was.</p>',
+      html: '<p>One habit is still an open bet. Once the vig is stripped, the market kept France above the model for thirteen months and Spain below it, and Spain is the team still standing.<sup class="fn"><a href="#fn-21">21</a></sup> Whether that discount was information or attachment is the one question the tape could not settle. The piece stakes it here: the epilogue will return to this number and say which it was.</p>',
       trigger: 'step', state: 'lens4', kind: 'resort',
       chip: 'color: team (France vs. Spain, opponent lit)', overlayStep: 'l5',
     },

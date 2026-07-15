@@ -50,7 +50,7 @@
  *      This module never hardcodes a team code; it always resolves
  *      `manifest.teams.indexOf(row.team)` using the code the scene JSON
  *      supplies, so the tile builder's convention is authoritative.
- *   5. `zombie_money` totals (302 trades, ~$2,340) come from
+ *   5. `zombie_money` totals (277 trades, ~$2,190) come from
  *      pipeline/data/analysis/bias-forensics/zombie_money.parquet, summed
  *      across all 28 knockout losers; only 26 rows existed at data-audit
  *      time (277 trades / $2,190), consistent with the storyboard's note
@@ -408,8 +408,8 @@ const s13 = {
     {
       id: 'b4',
       html: `<p>When the losers died, the money left within the settlement
-        sweep: all 28 knockout losers' winner legs wound down in 302 trades
-        worth about $2,340, everything at or below a
+        sweep: all 28 knockout losers' winner legs wound down in 277 trades
+        worth about $2,190, everything at or below a
         cent.<sup><a href="#fn-18">18</a></sup></p>`,
       trigger: 'step',
       // No state key: dots stay at the host-peer arrangement from b3; this
@@ -423,6 +423,71 @@ const s13 = {
    * the engine's instant-set + 400ms crossfade covers all four without a
    * scene-level substitution (CONTRACT §3.5, §9). */
   reducedMotion: { states: {} },
+
+  anchors: {
+    /* L4 recap for S16's lens carousel (CONTRACT §4 `anchors?`): the
+     * Argentina poll-price pair, rebuilt as a price column from the
+     * population's own Argentina winner_futures dots at their real traded
+     * price (the storyboard's 11-cent market). Self-sufficient: reads only
+     * data.pop and data.manifest, builds a fresh local price scale, and
+     * never depends on data.scene (S16 loads no scenes table). The 87% poll
+     * bar is a D3 outline mark drawn only when a caller supplies the poll
+     * row, so the figure is never fabricated here; the real column of money
+     * carries the recap, and S16 spotlights exactly these dots. */
+    pair(data, view, rect) {
+      const { pop, manifest } = data;
+      const N = pop.count;
+      const state = makeState(N);
+      const famIdx = manifest.enums.family.indexOf('winner_futures');
+      const argIdx = manifest.teams.indexOf('ARG');
+      const y = d3.scaleLinear().domain([0, 100]).range([rect.y + rect.h - 8, rect.y + 8]);
+      const colX = rect.x + rect.w * 0.60;
+      const teal = view.color('identity-teal', 1.0);
+      const rest = view.state('dimmed-field-min');
+      const baseSize = view.tokens.dot['radius-base-px'];
+      for (let i = 0; i < N; i++) {
+        if (pop.team[i] === argIdx && pop.family[i] === famIdx && pop.price_band[i] !== 255) {
+          state.x[i] = colX + (hash01(i) - 0.5) * rect.w * 0.14;
+          state.y[i] = y(pop.price_band[i]);
+          setColor(state.color, i, teal);
+        } else {
+          state.x[i] = rect.x + rect.w * (0.04 + 0.36 * hash01(i * 5 + 1));
+          state.y[i] = rect.y + rect.h * (0.08 + 0.84 * hash01(i * 9 + 2));
+          setColor(state.color, i, rest);
+        }
+        state.size[i] = baseSize;
+      }
+      const pairs = (data.scene && data.scene.pairs) || [];
+      const argPair = pairs.find((p) => p.key === 'argentina' || p.team === 'ARG');
+      return {
+        state,
+        drawAxes(g) {
+          const ax = g.append('g').attr('class', 's13-anchor-axes');
+          ax.append('g')
+            .attr('transform', `translate(${rect.x},0)`)
+            .call(d3.axisLeft(y).ticks(4).tickFormat((d) => `${d}¢`))
+            .call((s) => {
+              s.selectAll('text').attr('fill', view.css('ink-low'))
+                .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+              s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+            });
+          if (argPair && typeof argPair.poll_pct === 'number') {
+            const pollX = rect.x + rect.w * 0.30;
+            const barW = Math.min(48, rect.w * 0.12);
+            const pollH = (argPair.poll_pct / 100) * rect.h;
+            ax.append('rect')
+              .attr('x', pollX - barW / 2).attr('y', rect.y + rect.h - pollH)
+              .attr('width', barW).attr('height', pollH)
+              .attr('fill', 'none').attr('stroke', view.css('neutral-data')).attr('stroke-width', 1.5);
+          }
+          ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
+            .attr('fill', view.css('ink-mid'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))
+            .text('agreement shares are not probabilities');
+        },
+      };
+    },
+  },
 };
 
 export default s13;

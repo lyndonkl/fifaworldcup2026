@@ -53,7 +53,7 @@
 
 import { registry, particleState, makeState, setColor } from '../shared.js';
 
-const FN = (n) => `<sup>${n}</sup>`;
+const FN = (n) => `<sup class="fn"><a href="#fn-${n}">${n}</a></sup>`;
 
 /* Mirrors s10.js's restField() exactly — see that file's header for why
  * this is duplicated rather than imported (CONTRACT §2 module import
@@ -251,7 +251,7 @@ export default {
         .attr('x', scales.x('T-5min')).attr('y', view.region.y - leaderStandoff)
         .attr('fill', view.css('accent-annotation'))
         .style('font', '15px var(--font-apparatus)')
-        .text('scores a closed book against a live market — not a fair fight');
+        .text('scores a closed book against a live market, not a fair fight');
 
       receipt.html(
         `<div>three arms, one artifact:</div>`

@@ -277,7 +277,7 @@ export default {
 
     const decayCaption = pinnedCaption(
       container,
-      'regulation leg decay: no more than 7¢/min · a real goal jumps 19–25¢ in 30s — this is expiry, not news',
+      'regulation leg decay: no more than 7¢/min · a real goal jumps 19–25¢ in 30s · this is expiry, not news',
       's08-decay-caption',
     ).style('left', `${view.region.x}px`).style('top', `${laneTop.reg + laneH + 8}px`);
 

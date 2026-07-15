@@ -281,4 +281,70 @@ export default {
     // static-readable; the engine's own §3.5 instant-apply + 400ms
     // crossfade covers reduced motion without a per-beat substitution.
   },
+
+  anchors: {
+    /* L3 recap for S16's lens carousel (CONTRACT §4 `anchors?`): the
+     * Norway-Argentina winner-leg mirror, rebuilt from the population's own
+     * winner_futures dots (birth time on x, traded price on y). Norway's leg
+     * climbs while Argentina's falls; that coincidence is the mirror. This
+     * function is self-sufficient by design: it reads only data.pop and
+     * data.manifest, builds fresh local scales rather than the registry
+     * (this scene's own keys are cleared on exit, CONTRACT §6.1), and never
+     * touches data.scene (S16 loads no scenes table, so the live scene's
+     * shock timestamps are unavailable here; raw birth time still tells the
+     * mirror). S16 dims everything but the NOR/ARG dots via its own
+     * spotlight, so this only has to place them truthfully. */
+    mirror(data, view, rect) {
+      const { pop, manifest } = data;
+      const N = pop.count;
+      const state = makeState(N);
+      const epochMs = new Date(manifest.epoch).getTime();
+      const endMs = new Date(manifest.frozen_at || manifest.generated).getTime();
+      const famIdx = manifest.enums.family.indexOf('winner_futures');
+      const norIdx = manifest.teams.indexOf('NOR');
+      const argIdx = manifest.teams.indexOf('ARG');
+      const x = d3.scaleUtc().domain([epochMs, endMs]).range([rect.x + 8, rect.x + rect.w - 8]);
+      const y = d3.scaleLinear().domain([0, 100]).range([rect.y + rect.h - 8, rect.y + 8]);
+      const rest = particleState(view.tokens, 'dimmed-field-min');
+      const norRgba = colorOf(view.tokens, 'identity-blue');
+      const argRgba = colorOf(view.tokens, 'identity-lavender');
+      const baseSize = view.tokens.dot['radius-base-px'];
+      for (let i = 0; i < N; i++) {
+        const isNor = pop.team[i] === norIdx && pop.family[i] === famIdx;
+        const isArg = pop.team[i] === argIdx && pop.family[i] === famIdx;
+        if ((isNor || isArg) && pop.price_band[i] !== 255) {
+          state.x[i] = x(epochMs + pop.birth_ts[i] * 1000);
+          state.y[i] = y(pop.price_band[i]);
+          setColor(state.color, i, isNor ? norRgba : argRgba);
+        } else {
+          state.x[i] = rect.x + rect.w * (0.08 + 0.84 * hash01(i * 3 + 1));
+          state.y[i] = rect.y + rect.h * (0.08 + 0.84 * hash01(i * 7 + 2));
+          setColor(state.color, i, rest);
+        }
+        state.size[i] = baseSize;
+      }
+      return {
+        state,
+        drawAxes(g) {
+          const ax = g.append('g').attr('class', 's09-anchor-axes');
+          ax.append('g')
+            .attr('transform', `translate(0,${rect.y + rect.h})`)
+            .call(d3.axisBottom(x).ticks(4))
+            .call((s) => {
+              s.selectAll('text').attr('fill', view.css('ink-low'))
+                .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+              s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+            });
+          ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
+            .attr('fill', view.css('identity-blue'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-annotation-size'))
+            .text('Norway');
+          ax.append('text').attr('x', rect.x + 76).attr('y', rect.y - 6)
+            .attr('fill', view.css('identity-lavender'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-annotation-size'))
+            .text('Argentina');
+        },
+      };
+    },
+  },
 };

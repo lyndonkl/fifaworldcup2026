@@ -67,7 +67,7 @@
 
 import { registry, particleState, makeState, setColor } from '../shared.js';
 
-const FN = (n) => `<sup>${n}</sup>`;
+const FN = (n) => `<sup class="fn"><a href="#fn-${n}">${n}</a></sup>`;
 
 /* Deterministic per-index hash (no Math.random: replays and reverse
  * scrubs must be identical, per CONTRACT §3.2). */
@@ -375,6 +375,66 @@ export default {
       overlayStep: 'b3',
     },
   ],
+
+  anchors: {
+    /* L1 recap for S16's lens carousel (CONTRACT §4 `anchors?`): S10's braid
+     * frame with the population at rest. S10 never re-sorts its own dots.
+     * The braid is a pair of D3 per-minute price traces above a resting
+     * field (storyboard S10 Units), and those traces live in this scene's
+     * JSON, which S16 does not load. The honest recap is therefore the
+     * resting population under the braid's time frame plus the two-venue
+     * legend, never a fabricated price line. Self-sufficient: reads only
+     * data.pop and data.manifest, builds a fresh local time scale (the
+     * registry key this scene owned is cleared on exit, CONTRACT §6.1). S16
+     * applies no dot spotlight to L1, matching "the braid is D3-only, the
+     * population rests." */
+    braid(data, view, rect) {
+      const { pop, manifest } = data;
+      const N = pop.count;
+      const state = makeState(N);
+      const rest = particleState(view.tokens, 'dimmed-field-min');
+      const baseSize = view.tokens.dot['radius-base-px'];
+      const epochMs = new Date(manifest.epoch).getTime();
+      const endMs = new Date(manifest.frozen_at || manifest.generated).getTime();
+      const time = d3.scaleUtc().domain([epochMs, endMs]).range([rect.x + 8, rect.x + rect.w - 8]);
+      const birth = pop.birth_ts;
+      for (let i = 0; i < N; i++) {
+        // Tight central band: the two venues braided into one line. No price
+        // axis is drawn for L1, so the band's vertical position carries no
+        // price claim; it reads as the single braided line at rest.
+        state.x[i] = time(epochMs + birth[i] * 1000);
+        state.y[i] = rect.y + rect.h * (0.42 + 0.16 * hash01(i));
+        setColor(state.color, i, rest);
+        state.size[i] = baseSize;
+      }
+      return {
+        state,
+        drawAxes(g) {
+          const ax = g.append('g').attr('class', 's10-anchor-axes');
+          ax.append('g')
+            .attr('transform', `translate(0,${rect.y + rect.h})`)
+            .call(d3.axisBottom(time).ticks(4))
+            .call((s) => {
+              s.selectAll('text').attr('fill', view.css('ink-low'))
+                .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+              s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+            });
+          ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
+            .attr('fill', view.css('venue-kalshi'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-annotation-size'))
+            .text('Kalshi');
+          ax.append('text').attr('x', rect.x + 64).attr('y', rect.y - 6)
+            .attr('fill', view.css('venue-polymarket'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-annotation-size'))
+            .text('Polymarket');
+          ax.append('text').attr('x', rect.x + 168).attr('y', rect.y - 6)
+            .attr('fill', view.css('ink-mid'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))
+            .text('one price, two venues');
+        },
+      };
+    },
+  },
 
   // Defaults suffice: the engine-level reduced-motion mode already turns
   // the single 'rest' state's entry into an instant crossfade (CONTRACT

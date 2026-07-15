@@ -263,7 +263,7 @@ export default {
           .attr('x', cx + 94).attr('y', cy - 46)
           .attr('fill', view.css('ink-mid'))
           .style('font', `var(--type-caption-size) var(--font-apparatus)`)
-          .text("small — lit up because it's surprising, not because it's big.");
+          .text("small, lit up because it's surprising, not because it's big.");
         trumpG.append('text')
           .attr('x', region.x + bandW + 8).attr('y', region.y + region.h - bandH - 40)
           .attr('fill', view.css('ink-low'))
@@ -298,7 +298,7 @@ export default {
       trigger: 'step',
       state: 'sweep',
       kind: 'resort',
-      chip: 'color: neutral — position is market size',
+      chip: 'color: neutral; position is market size',
     },
     {
       id: 'b2',

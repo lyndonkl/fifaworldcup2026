@@ -512,7 +512,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>France arrived in Arlington priced near forty cents to win the World Cup, the market's favorite for thirteen months.<sup><a href="#fn-2">2</a></sup> Ninety minutes later the contract was worth nothing. The lit dots fly forward and unpack, narrated: down here, one dot is one trade. Every dot on this screen is one real trade from that night, money changing hands as a belief died in regulation time.<sup><a href="#fn-1">1</a></sup> Before asking whether the market saw it coming, it is worth asking what this market actually is. The answer starts fourteen months earlier.</p>`,
+      html: `<p>France arrived in Arlington priced near forty cents to win the World Cup, the market's favorite for thirteen months.<sup><a href="#fn-2">2</a></sup> Ninety minutes later the contract was worth nothing. Down here, one dot is one trade: every dot on this screen is one real trade from that night, money changing hands as a belief died in regulation time.<sup><a href="#fn-1">1</a></sup> Before asking whether the market saw it coming, it is worth asking what this market actually is. The answer starts fourteen months earlier.</p>`,
       // Hard budget (storyboard): the whole of S1, pre-title included,
       // occupies at most 6 viewport-heights. The static title header
       // (CONTRACT §8.2) already spends 1; this scrub spends the remaining 5.
