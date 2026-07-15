@@ -78,6 +78,11 @@ export default {
     // underline"). "60% amber" per design-system.md §9 S17 — colorOf()
     // accepts an explicit alpha override (shared.js), sanctioned by that
     // design note rather than an invented literal.
+    // ENCODING (perception-brief §9b): 0.6 lands intentionally in the
+    // unclassified 0.42-0.90 band — the underline is a ceremonial glyph, not a
+    // mover, so it neither boosts (active-tier) nor recedes (rest-tier); it
+    // reads as steady amber against the quiet 0.25 field, which the engine
+    // dims. "Nothing moves last except the population settling" (design §9 S17).
     const amber = view.color('accent-annotation', 0.6);
     const underlineY = view.H * 0.62;
     const spread = Math.min(view.W * 0.4, Math.max(120, finalIdx.length * 3));
@@ -178,7 +183,7 @@ export default {
       trigger: 'step',
       state: 'settle',
       kind: 'ceremonial',
-      chip: "color: the final's contracts",
+      chip: 'amber: the final’s own contracts',
       overlayStep: 'b1',
     },
   ],

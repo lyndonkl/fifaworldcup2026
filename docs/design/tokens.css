@@ -13,6 +13,28 @@
  * "Density tone-mapping" for the compression policy this drives on the
  * WebGL side. No external imports; self-hosted fonts referenced by
  * family name only (loaded via @font-face in the app stylesheet).
+ *
+ * REVISION (post-Gate-3, research/revision/perception-brief.md): two
+ * global legibility bugs closed here. (a) accent.annotation amber
+ * collided with ink.hi prose (1.29:1) and with bloomed dense clusters at
+ * the density-tile-luminance-cap (1.41:1) -- darkened at constant
+ * hue/saturation to #CCA13E, trading some headroom above the 7:1 AAA
+ * floor (now 8.04:1 canvas / 7.62:1 card, was 12.6/12.0) for real
+ * separation from ink.hi (2.03:1, was 1.29:1) and dense clusters (2.22:1,
+ * was 1.41:1). (b) the ACTIVE/moving subset was carrying its distinction on
+ * hue alone against field.rest -- every identity/side token measured
+ * <=1.24:1 against field.rest at swatch level (isoluminant by
+ * construction; luminance is the channel motion perception actually
+ * uses, per the brief's magnocellular-pathway literature, not hue). No
+ * swatch-hex change can buy real separation there (field.rest's own
+ * luminance is already high enough that even white clears only ~2.1:1),
+ * so the fix is engine-side: FRAG_POINTS/VERT_POINTS now classify each
+ * dot by its OWN alpha every frame (opacity-rest-classify-max /
+ * opacity-active-classify-min below) and apply emphasis-rest-dim /
+ * emphasis-active-boost to its contributed premultiplied energy, plus a
+ * brief onset pulse (emphasis-pulse-*) on any dot whose color is
+ * actually changing in the current transition. See engine.js's own
+ * header note and docs/design/tokens.json for the numeric contract.
  */
 
 :root {
@@ -28,8 +50,12 @@
   --ink-low: #7C8794;
   --ink-hero: #FFFFFF;
 
-  /* ---- Color: the one reserved annotation hue ---- */
-  --accent-annotation: #FFC94D;
+  /* ---- Color: the one reserved annotation hue ----
+     REVISION: darkened at constant hue/saturation (0.80x uniform RGB
+     scale from #FFC94D) to buy ink.hi/dense-cluster separation; still
+     clears the AAA 7:1 floor with margin (8.04:1 canvas / 7.62:1 card).
+     See file header + research/revision/perception-brief.md §9a, §10.5. */
+  --accent-annotation: #CCA13E;
 
   /* ---- Color: side binary (YES/NO), taught at first contact in S1 ---- */
   --side-yes: #59D2FE;
@@ -173,6 +199,39 @@
   --dot-opacity-dimmed-field-max: 0.4;
   --dot-opacity-dead: 0.55;
   --dot-opacity-expiring: 0.55;
+
+  /* ---- Emphasis: resting-field-dim / active-subset-boost ----
+     REVISION (perception-brief §9b, §10.1-2): the ACTIVE/REST distinction
+     was carried by hue alone, which the motion-perception literature says
+     is close to inert for a "did that just change" judgment -- every
+     identity/side token measures <=1.24:1 against field.rest at swatch
+     level, and raising a swatch's own luminance cannot buy the
+     recommended 3:1 there (field.rest's luminance is already high enough
+     that even white clears only ~2.1:1). The fix runs in the fragment/
+     vertex shaders (engine.js), classified every frame by each dot's OWN
+     alpha -- no scene-file changes required, this is genuinely global.
+     Rest-tier (alpha <= classify-max) energy is dimmed; active-tier
+     (alpha >= classify-min) energy is boosted; the 0.42-0.90 band (dead
+     0.55 / expiring 0.55, both already-audited receding states, FIX #1)
+     is deliberately left untouched by this classification. */
+  --dot-opacity-rest-classify-max: 0.42;
+  --dot-opacity-active-classify-min: 0.9;
+  --emphasis-rest-dim: 0.6;
+  --emphasis-active-boost: 1.15;
+
+  /* Onset pulse (perception-brief §7, §10.2): one extra keyframe -- a
+     brief radius/luminance overshoot, then settle -- fired only on dots
+     whose color is actually changing in the CURRENT transition (per-dot
+     aColA vs aColB delta, re-evaluated on every tween(), including
+     interrupts). The change-blindness countermeasure the chip pulse
+     already uses, extended to the population itself. Window is a
+     fraction of each dot's own post-stagger progress, so it is scrub-safe
+     (driven by position-in-transition, not wall-clock time) and a no-op
+     under prefers-reduced-motion (A===B there, so no color ever changes). */
+  --emphasis-pulse-window: 0.25;
+  --emphasis-pulse-size-gain: 0.35;
+  --emphasis-pulse-luminance-gain: 0.5;
+  --emphasis-pulse-color-epsilon: 0.05;
 
   /* ---- Z-stack ---- */
   --z-canvas: 0;

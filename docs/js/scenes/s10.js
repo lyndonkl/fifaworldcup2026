@@ -138,6 +138,14 @@ export default {
   },
 
   layout(data, view) {
+    // Figure/ground per research/revision/perception-brief.md §4, §9b: this
+    // scene has NO active PARTICLE subset — by unit discipline the movers are
+    // D3 marks (the braid), not dots. So the whole population is the dimmed
+    // GROUND, assigned 'dimmed-field-min' (alpha 0.25 <= opacity-rest-classify-max
+    // 0.42), which the engine's emphasis-rest-dim recedes further every frame.
+    // The FIGURE that pops is the D3 braid in bright venue hues (venue-kalshi /
+    // venue-polymarket / venue-pinnacle, all AAA vs canvas), now direct-labeled
+    // by drawVenueLegend() so the reader knows WHICH price each colour is.
     return { states: { rest: restField(data, view) } };
   },
 
@@ -160,6 +168,7 @@ export default {
     const lineLayer = g.append('g').attr('class', 's10-lines');
     const spikeLayer = g.append('g').attr('class', 's10-spikes');
     const termLayer = g.append('g').attr('class', 's10-terms');
+    const legendLayer = g.append('g').attr('class', 's10-venue-key');
 
     const captionDiv = html.append('div').attr('class', 's10-caption')
       .style('font', '13px var(--font-tape)').style('color', view.css('ink-mid'));
@@ -216,6 +225,34 @@ export default {
       .style('font', '12px var(--font-apparatus)')
       .text('price (points)');
 
+    // Direct-labeled venue key (design-system.md §1 "teach-on-first-contact
+    // labeling with no standing legends; direct-labeled at the mark on debut").
+    // Names each braid colour so the movers are legible: this is the on-screen
+    // half of the color-encoding revision (research/revision/perception-brief.md
+    // §1 — hue is the piece's weakest channel, so it must be captioned, not
+    // guessed). Right-aligned along the top so it clears the 'price (points)'
+    // axis label at top-left. Colours read straight off the venue tokens.
+    function drawVenueLegend() {
+      legendLayer.selectAll('*').remove();
+      const yTop = view.region.y - leaderStandoff;
+      const items = [
+        { label: 'Kalshi', token: 'venue-kalshi' },
+        { label: 'Polymarket', token: 'venue-polymarket' },
+        { label: 'Pinnacle', token: 'venue-pinnacle' },
+      ];
+      let x = view.region.x + view.region.w;
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        const t = legendLayer.append('text')
+          .attr('x', x).attr('y', yTop)
+          .attr('text-anchor', 'end')
+          .attr('fill', view.css(it.token))
+          .style('font', '12px var(--font-apparatus)')
+          .text(it.label);
+        x -= t.node().getComputedTextLength() + spacing[3];
+      }
+    }
+
     function drawLines() {
       lineLayer.selectAll('path.venue-line').remove();
       lineLayer.append('path').datum(kalshiPts).attr('class', 'venue-line kalshi')
@@ -257,14 +294,14 @@ export default {
     function resolveGapMeter() {
       if (!alive || meanGap === null || meanGap === undefined) return;
       if (view.reducedMotion) {
-        gapMeter.text(`running 1-min mean: ${meanGap.toFixed(2)} points`);
+        gapMeter.text(`running 1-min Kalshi-Polymarket gap: ${meanGap.toFixed(2)} points`);
         return;
       }
       const t0 = performance.now();
       const tick = (now) => {
         if (!alive) return;
         const p = Math.min(1, (now - t0) / countUpMax);
-        gapMeter.text(`running 1-min mean: ${(meanGap * p).toFixed(2)} points`);
+        gapMeter.text(`running 1-min Kalshi-Polymarket gap: ${(meanGap * p).toFixed(2)} points`);
         if (p < 1) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
@@ -326,8 +363,9 @@ export default {
         if (beatId === 'b1') {
           drawLines();
           drawPinnacleLive();
+          drawVenueLegend();
           captionDiv.text('for this scene and the next, the dots rest; one mark here is one minute of matched price');
-          gapMeter.text('running 1-min mean: —');
+          gapMeter.text('running 1-min Kalshi-Polymarket gap: —');
           countChip.text('');
         } else if (beatId === 'b2') {
           flashSpikes();
@@ -348,11 +386,11 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>For the entire knockout stage the two retail venues were effectively one market. Across 84 three-way legs, Kalshi and Polymarket never sustained a five-point gap for thirty minutes; the mean one-minute gap is 0.74 points, and the 41.6-point goal-second spikes last exactly one minute.${FN(15)}</p>`,
+      html: `<p>For the entire knockout stage the two retail venues were effectively one market. A three-way is the match's win, draw, or lose market, its three legs the only three ways ninety minutes can end. A point here is one cent of price, so a five-point gap is five cents, about five percentage points of implied chance. Across 84 three-way legs, Kalshi and Polymarket never sustained a five-point gap for thirty minutes; the mean one-minute gap is 0.74 points, and the 41.6-point goal-second spikes last exactly one minute.${FN(15)}</p>`,
       trigger: 'step',
       state: 'rest',
       kind: 'resort',
-      chip: 'color: venue',
+      chip: 'color: venue (Kalshi cyan, Polymarket lavender, Pinnacle grey)',
       grain: {
         text: 'for this scene and the next, the dots rest; one mark here is one minute of matched price',
         variant: 'debut',

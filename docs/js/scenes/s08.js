@@ -230,10 +230,10 @@ export default {
 
     g.append('text').attr('x', view.region.x).attr('y', laneTop.reg - 6)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
-      .attr('fill', 'var(--ink-low)').text('REGULATION (GER leg)');
+      .attr('fill', 'var(--ink-low)').text('REGULATION (GER leg) · slate-grey, settling out');
     g.append('text').attr('x', view.region.x).attr('y', laneTop.adv - 6)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
-      .attr('fill', 'var(--ink-low)').text('ADVANCEMENT');
+      .attr('fill', 'var(--ink-low)').text('ADVANCEMENT · cyan, still trading');
 
     const whistleTs = data.scene && data.scene.window && data.scene.window.whistle_ts
       ? new Date(data.scene.window.whistle_ts).getTime() : null;
@@ -335,7 +335,7 @@ export default {
       trigger: { type: 'scrub', span: 6 },
       state: 'k0',
       kind: 'resort',
-      chip: 'color: contract status',
+      chip: 'color: contract status · cyan still trading, slate-grey settling out',
       overlayStep: 'b1',
     },
   ],

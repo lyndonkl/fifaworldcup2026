@@ -109,7 +109,14 @@ function layout(data, view) {
   const x = registry.get('s14.x');
   const y = registry.get('s14.y');
   const baseSize = view.tokens.dot['radius-base-px'];
-  const restRgba = view.state('rest');
+  // Resting field (the mixed-price dots that never join the curve) uses the
+  // dimmed-field tint (dimmed-field-min, 0.25 alpha), not the standard rest
+  // tint, so the field recedes and the curve reads as figure. That low alpha
+  // lands in the engine's rest-classify tier, so the shader dims it while
+  // boosting the amber tail (alpha 0.9 = active-classify-min)
+  // (research/revision/perception-brief.md §9b, §10.1); matches this scene's
+  // own S16 curve anchor, which already dims to dimmed-field-min.
+  const restRgba = view.state('dimmed-field-min');
   const neutral = view.color('neutral-data', 0.6);
   const tail = view.color('accent-annotation', 0.9);
   const tailBit = data.flagBit('LORENZ_TAIL');
@@ -362,19 +369,27 @@ const s14 = {
   beats: [
     {
       id: 'b1',
-      html: `<p>One sin survived verification, and it lives where the
-        money was not. Cheap yes-legs underperformed their price, an
+      html: `<p>One sin survived verification, and it lives where the money
+        was not. A price is well calibrated when the things it prices at
+        thirty cents happen about thirty percent of the time, so the
+        diagonal on screen is the calibrated line and dots that fall below
+        it were overpriced. Cheap yes-legs underperformed their price, an
         implied 3.04% paying 1.19% at an hour
         out.<sup><a href="#fn-20">20</a></sup></p>`,
       trigger: 'step',
       state: 'assemble-markets',
       kind: 'resort',
+      chip: 'amber: the cheap longshots that underpay',
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>72% of those observations sit in prop ladders with ten or
-        more legs and 55% sit at the one-to-two-cent tick
+      html: `<p>A prop is a side bet on something other than the result,
+        such as the first scorer or the exact final score, and a prop ladder
+        stacks many of them together. The tick is the smallest legal price
+        step, one cent, and it is the floor these longshots pile up against.
+        72% of those observations sit in prop ladders with ten or more legs,
+        and 55% sit at the one-to-two-cent tick
         floor.<sup><a href="#fn-20">20</a></sup></p>`,
       trigger: 'step',
       overlayStep: 'b2',

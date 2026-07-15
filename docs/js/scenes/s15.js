@@ -109,9 +109,17 @@ function computeStripState(data, view, region, { drained }) {
       ? windowedStages[0].id : windowedStages[windowedStages.length - 1].id;
   }
 
-  const restRgba = view.state('dimmed-field-min'); // field.rest tint, low alpha (§0: rest is narrated, never removed)
-  const blue = view.color('identity-blue');   // France
-  const crimson = view.color('identity-crimson'); // Spain
+  // ENCODING (perception-brief §9b/§10.1): the ACTIVE subset must pop against a
+  // dimmed resting field, and that pop is carried by LUMINANCE, not hue — the
+  // engine classifies each dot every frame by its OWN alpha and boosts
+  // active-tier (alpha >= dot.opacity-active-classify-min 0.9) while dimming
+  // rest-tier (alpha <= dot.opacity-rest-classify-max 0.42). So the resting
+  // field is pinned to dimmed-field-min (alpha 0.25 -> rest-tier, dimmed) while
+  // France/Spain wear their identity hue at full alpha 1.0 (-> active-tier,
+  // boosted). No hardcoded alphas: the two tiers ride the token opacities.
+  const restRgba = view.state('dimmed-field-min'); // rest-tier: dimmed by the engine; rest is narrated, never removed (§0)
+  const blue = view.color('identity-blue');   // France's money — active-tier (alpha 1.0)
+  const crimson = view.color('identity-crimson'); // Spain's money — active-tier (alpha 1.0)
   const dead = view.state('dead');
 
   const birth = pop.birth_ts, team = pop.team, family = pop.family, priceBand = pop.price_band, flags = pop.flags;
@@ -232,11 +240,11 @@ export default {
       .attr('d', stages.length ? modelLine(stages) : null);
 
     const labelFrance = g.append('text').attr('class', 's15-label-france')
-      .text('France').attr('fill', view.css('identity-blue'))
+      .text('France’s money').attr('fill', view.css('identity-blue'))
       .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-annotation-size'))
       .attr('opacity', 0);
     const labelSpain = g.append('text').attr('class', 's15-label-spain')
-      .text('Spain').attr('fill', view.css('identity-crimson'))
+      .text('Spain’s money').attr('fill', view.css('identity-crimson'))
       .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-annotation-size'))
       .attr('opacity', 0);
     if (stages.length) {
@@ -296,7 +304,7 @@ export default {
       trigger: 'step',
       state: 'assemble',
       kind: 'resort',
-      chip: 'color: team (France vs. Spain)',
+      chip: 'blue = France’s money · red = Spain’s money',
       overlayStep: 'b1',
     },
     {

@@ -187,7 +187,7 @@ export default {
     shell.append('p').attr('class', 's18-intro')
       .style('font-family', view.css('font-prose')).style('font-size', view.css('type-lede-size'))
       .style('color', view.css('ink-hi')).style('max-width', '60ch')
-      .html('The story is told; every dot above is still yours to open. Pick a contract and scrub its price life from listing to settlement; open a zoom match and step through it tick by tick. Nothing here is a simulation. Every dot is money that moved.');
+      .html('The story is told; every dot above is still yours to open. Pick a contract and scrub its price life from listing, when the market opens, to settlement; open a zoom match and step through it tick by tick. Nothing here is a simulation. Every dot is money that moved.');
 
     /* -------- Market picker -------- */
     const pickerWrap = shell.append('div').attr('class', 's18-picker interactive')
@@ -265,8 +265,14 @@ export default {
           const rowIdx = marketRows.findIndex((m) => m.ticker === row.ticker);
           if (rowIdx >= 0) {
             const N = data.pop.count;
+            // ENCODING (perception-brief §9b/§10.1): the selected market's dots
+            // are the ACTIVE subset and must pop against the dimmed resting
+            // field. computeRestingField() lays every dot at rest-tier (state
+            // 'rest', alpha 0.35 <= classify-max -> engine dims it); the lifted
+            // dots take accent-annotation at full alpha 1.0 (>= classify-min ->
+            // engine boosts them), so lifting reads as luminance, not just hue.
             const lifted = computeRestingField(data, view); // start from the resting field
-            const amber = view.color('accent-annotation');
+            const amber = view.color('accent-annotation'); // full alpha 1.0 -> active-tier
             const idxs = [];
             for (let i = 0; i < N; i++) if (data.pop.market[i] === rowIdx) idxs.push(i);
             idxs.forEach((i, k) => {
@@ -278,6 +284,10 @@ export default {
               lifted.size[i] = view.tokens.dot['radius-base-px'];
             });
             liftedRows = idxs;
+            // Name what the lit dots are, so the reader reads amber as this
+            // market's money and not a bare color (chip is driver-owned; s18
+            // owns it past the coda handoff — see setChipDirect note above).
+            setChipDirect('amber: this contract’s money');
             engine.tween(lifted, { duration: 1200, stagger: 0.3, easing: 'ease.move' });
           }
         }
@@ -382,7 +392,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>The story is told; every dot above is still yours to open. Pick a contract and scrub its price life from listing to settlement; open a zoom match and step through it tick by tick. Nothing here is a simulation. Every dot is money that moved.</p>',
+      html: '<p>The story is told; every dot above is still yours to open. Pick a contract and scrub its price life from listing, when the market opens, to settlement; open a zoom match and step through it tick by tick. Nothing here is a simulation. Every dot is money that moved.</p>',
       trigger: 'step',
       state: 'rest',
       kind: 'resort',

@@ -244,13 +244,28 @@ export default {
     );
 
     const BASE_PX = view.tokens.dot['radius-base-px'] * 2; // radius -> diameter
-    const restColor = view.state('rest');
-    const amber = view.color('accent-annotation', 0.85);
-    const dimColor = view.state('dimmed-field-max');
-    const yesColor = view.color('side-yes', 1.0);
-    const noColor = view.color('side-no', 1.0);
-    const waitColor = view.color('field-rest', 0.10);
-    const deadColor = view.state('dead');
+    // ACTIVE/REST luminance encoding (REVISION, perception-brief §9b, §10.1-2):
+    // the pop between "tonight's trades" and the resting field is bought here
+    // purely by which ALPHA BAND each dot lands in, not by hue. The engine
+    // (FRAG_POINTS/VERT_POINTS) dims any dot whose own alpha is <=
+    // opacity-rest-classify-max (0.42) and boosts + onset-pulses any dot whose
+    // alpha is >= opacity-active-classify-min (0.90); the brief showed every
+    // identity/side hue reads ~isoluminant against field.rest (<=1.24:1), so a
+    // hue swap alone is close to inert for a "did that just change" judgment.
+    // Dot SIZE is never touched (unit grammar: one trade = one dot), so the
+    // whole encoding rides on alpha here and luminance in the shader.
+    const ACTIVE_A = view.tokens.dot['opacity-alive']; // 1.0 -> active-tier (boosted)
+    const restColor = view.state('rest');              // 0.35 -> rest-tier (dimmed)
+    // Tonight's FRA-ESP subset, lifted into the active band so it pops against
+    // the dimmed resting field (was 0.85, which fell in the unclassified
+    // 0.42-0.90 gap and did not pop). Amber = the reserved "story points here"
+    // hue naming tonight's match.
+    const amber = view.color('accent-annotation', ACTIVE_A);
+    const dimColor = view.state('dimmed-field-max');   // 0.40 -> rest-tier (dimmed)
+    const yesColor = view.color('side-yes', ACTIVE_A); // real ticks: active-tier
+    const noColor = view.color('side-no', ACTIVE_A);
+    const waitColor = view.color('field-rest', 0.10);  // staged/not-yet-arrived: below rest band
+    const deadColor = view.state('dead');              // 0.55 -> unclassified receding state, engine leaves it
 
     const stageX = clockX(0) - 14; // "not yet arrived" staging point
     const stageY = priceY(50);
@@ -300,6 +315,10 @@ export default {
           const base = zoomTile.side[t] === YES_IDX ? yesColor : noColor;
           s.x[i] = clockX(minute);
           s.y[i] = priceY(zoomTile.price_c[t]);
+          // Hero France-winner leg stays active-tier (base alpha 1.0, boosted);
+          // the 3-way companion legs drop to 0.5, which lands in the engine's
+          // unclassified mid-band -- brighter than the dimmed rest field, but
+          // subordinate to the boosted hero stream. A deliberate three-tier read.
           setColor(s.color, i, faint ? [base[0], base[1], base[2], base[3] * 0.5] : base);
         } else {
           s.x[i] = stageX; s.y[i] = stageY;
@@ -401,7 +420,9 @@ export default {
       .attr('fill', view.css('ink-mid'))
       .style('font-family', view.css('font-tape'))
       .style('font-size', view.css('type-tape-size'))
-      .text('down here, one dot is one trade')
+      // Names what the lit/active movers ARE (tonight's match) so the pop has a
+      // referent, and keeps the unit statement at first contact.
+      .text('the lit dots: tonight, France–Spain · one dot is one trade')
       .style('opacity', 0);
 
     // Amber singleton protocol (design-system §6 emphasis stack: luminance
@@ -512,7 +533,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>France arrived in Arlington priced near forty cents to win the World Cup, the market's favorite for thirteen months.<sup><a href="#fn-2">2</a></sup> Ninety minutes later the contract was worth nothing. Down here, one dot is one trade: every dot on this screen is one real trade from that night, money changing hands as a belief died in regulation time.<sup><a href="#fn-1">1</a></sup> Before asking whether the market saw it coming, it is worth asking what this market actually is. The answer starts fourteen months earlier.</p>`,
+      html: `<p>France arrived in Arlington priced near forty cents to win the World Cup, the market's favorite for thirteen months.<sup><a href="#fn-2">2</a></sup> A contract here pays one dollar if its outcome happens and nothing if it does not, so a price of forty cents is simply the market's odds written as money: a roughly forty percent chance. Ninety minutes later the contract was worth nothing. Down here, one dot is one trade: every dot on this screen is one real trade from that night, money changing hands as a belief died in regulation time.<sup><a href="#fn-1">1</a></sup> Every trade has two sides, a buyer of yes and a buyer of no, and color marks which side took the offered price. When the whistle settles the outcome, the exchange pays a dollar to every winning contract and zero to every losing one, and the contract stops trading for good. That is the pour to the floor on screen. Before asking whether the market saw it coming, it is worth asking what this market actually is. The answer starts fourteen months earlier.</p>`,
       // Hard budget (storyboard): the whole of S1, pre-title included,
       // occupies at most 6 viewport-heights. The static title header
       // (CONTRACT §8.2) already spends 1; this scrub spends the remaining 5.
@@ -524,7 +545,10 @@ export default {
       // The fine-grained scrub motion itself is driven by
       // scrubBetween/setScrub over layout().keyframes, not by `kind`.
       kind: 'instant',
-      chip: 'color: taker side',
+      // Micro-legend names the two colors the movers wear, in the plain terms
+      // the beat's own gloss just grounded ("a buyer of yes and a buyer of no"),
+      // rather than the untaught "taker side".
+      chip: 'cyan: yes buyer · vermillion: no buyer',
       grain: {
         // Storyboard-verbatim template (CONTRACT §4.2/§4.3 zoom.grainText
         // format); {n}/{count} are filled by the driver's narrated-sampling

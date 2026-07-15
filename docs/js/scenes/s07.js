@@ -188,9 +188,9 @@ export default {
       .attr('font-size', 'var(--type-micro-size)')
       .attr('fill', 'var(--ink-low)')
       .text(text);
-    laneLabel('KALSHI · tick dots', laneTop.K);
-    laneLabel('PINNACLE · requote dashes', laneTop.P);
-    laneLabel('POLYMARKET · 60s native blocks', laneTop.M);
+    laneLabel('KALSHI · cyan tick dots', laneTop.K);
+    laneLabel('PINNACLE · grey requote dashes', laneTop.P);
+    laneLabel('POLYMARKET · lavender 60s blocks', laneTop.M);
 
     g.append('line').attr('x1', x(0)).attr('x2', x(0))
       .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
@@ -322,21 +322,28 @@ export default {
     {
       id: 'b1',
       html: `<p>A goal reaches three venues as three different mechanisms, and
-        the differences are policy rather than intelligence. The vehicle is
-        the goal the reader will meet again: Haaland's second against
-        Brazil, from the finalized tape. Kalshi's book trades continuously
-        through the goal minute.</p>`,
+        the differences are policy rather than intelligence. Three price
+        sources watch the same goal: Kalshi, the United States prediction
+        exchange whose tape this is; Polymarket, an offshore crowd market;
+        and Pinnacle, a professional sportsbook, the house the pros call the
+        book. The vehicle is the goal the reader will meet again: Haaland's
+        second against Brazil, from the finalized tape. Kalshi's book trades
+        continuously through the goal minute.</p>`,
       trigger: 'step',
       state: 'assembled',
       kind: 'resort',
-      chip: 'color: venue',
+      chip: 'color: venue · Kalshi cyan, Polymarket lavender, Pinnacle grey',
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>Pinnacle suspends about thirty-two seconds after the move
-        begins, goes dark for roughly eighty, and reopens with a single
-        quote already at the new fair level.<sup><a href="#fn-11">11</a></sup></p>`,
+      html: `<p>A sportsbook suspends by pulling its price the instant play
+        turns dangerous, then reposts once, at the level it now believes is
+        fair, rather than trading every step of the move the way an exchange
+        does. Pinnacle does exactly that here: it suspends about thirty-two
+        seconds after the move begins, goes dark for roughly eighty, and
+        reopens with a single quote already at the new fair
+        level.<sup><a href="#fn-11">11</a></sup></p>`,
       trigger: 'step',
       kind: 'recolor',
       overlayStep: 'b2',
@@ -353,10 +360,13 @@ export default {
     },
     {
       id: 'b4',
-      html: `<p>And the spike is the price: across clean goal reactions the
-        post-jump level held within the roughly two-cent friction band at a
-        thirty-minute horizon, so there was no overreaction to
-        fade.<sup><a href="#fn-20">20</a></sup></p>`,
+      html: `<p>To fade a move is to bet it will snap back. The friction band
+        is the couple of cents of fees and minimum price step inside which no
+        such bet can clear a profit, so a spike that settles inside it was
+        already the right price. Across clean goal reactions the post-jump
+        level held within the roughly two-cent friction band at a
+        thirty-minute horizon, so the spike was the price itself and there
+        was no overreaction to fade.<sup><a href="#fn-20">20</a></sup></p>`,
       trigger: 'step',
       kind: 'recolor',
       overlayStep: 'b4',

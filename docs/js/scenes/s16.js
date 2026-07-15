@@ -203,6 +203,17 @@ export default {
       w: view.region.w * 0.9,
       h: view.region.h * 0.9,
     };
+    // ENCODING (perception-brief §9b/§10.1,4): each lens must read as one
+    // active subset popping against a dimmed resting field. The pop is
+    // luminance, resolved engine-side by per-dot alpha tier — so the
+    // non-spotlighted field must land in rest-tier (alpha <=
+    // dot.opacity-rest-classify-max 0.42) for the engine to dim it. The RAMP
+    // multiplier below already carries the progressive desaturation the design
+    // note calls for; dimCeil is the guarantee that whatever alpha a sibling
+    // anchor handed back, the resting field never floats up into the
+    // unclassified 0.42-0.90 band and stops receding. Spotlighted dots are
+    // exempt and keep their anchor alpha (~1.0 -> active-tier, boosted).
+    const dimCeil = view.tokens.dot['opacity-dimmed-field-max']; // 0.40, safely below classify-max
     const calls = [
       () => callAnchor(s10, 'braid', data, view, rect),
       () => callAnchor(s14, 'curve', data, view, rect),
@@ -232,7 +243,10 @@ export default {
     };
 
     function state_dim(state, i, factor) {
-      state.color[i * 4 + 3] *= factor;
+      // Progressive ramp, then a hard rest-tier ceiling so the resting field is
+      // always dimmed by the engine (alpha <= classify-max), never stranded in
+      // the unclassified band. Only non-spotlighted dots reach this path.
+      state.color[i * 4 + 3] = Math.min(state.color[i * 4 + 3] * factor, dimCeil);
     }
   },
 
@@ -301,31 +315,31 @@ export default {
       id: 'l1',
       html: '<p>The number, once the vig is stripped, is the number. At a day out the amateurs and the professionals scored the same all tournament,<sup class="fn"><a href="#fn-16">16</a></sup> and the two retail venues never sustained even a five-point disagreement for half an hour.<sup class="fn"><a href="#fn-15">15</a></sup> No one sharper is waiting behind this price.</p>',
       trigger: 'step', state: 'lens0', kind: 'resort',
-      chip: 'color: venue (recap)', overlayStep: 'l1',
+      chip: 'color: each venue’s price', overlayStep: 'l1',
     },
     {
       id: 'l2',
       html: '<p>Trust the pools, not the ladders. The final’s three-way and the winner legs are the deepest markets of this exchange’s life, and weighted by dollars actually traded the big markets were nearly calibrated all tournament.<sup class="fn"><a href="#fn-20">20</a></sup> The first-scorer and exact-score ladders carry the one real mispricing the tape ever confirmed, a lottery tax bounded by the one-cent tick.<sup class="fn"><a href="#fn-20">20</a></sup></p>',
       trigger: 'step', state: 'lens1', kind: 'resort',
-      chip: 'color: calibration tail (re-lit)', overlayStep: 'l2',
+      chip: 'lit: the overpriced longshot money', overlayStep: 'l2',
     },
     {
       id: 'l3',
       html: '<p>If a shock lands, the spike is the price. Clean goal reactions held their post-jump level within friction at a thirty-minute horizon, and every shock of this tournament repriced to bracket arithmetic rather than fading from panic.<sup class="fn"><a href="#fn-12">12</a></sup> The same arithmetic that halved Kane’s price on 120 scoreless minutes prices a shock: remaining paths, not headlines.<sup class="fn"><a href="#fn-19">19</a></sup> One clause of fine print for a level final, carried from Act II: near minute ninety the regulation contract grinds to its tie-locked price by construction, and belief speaks through the winner legs.<sup class="fn"><a href="#fn-13">13</a></sup></p>',
       trigger: 'step', state: 'lens2', kind: 'resort',
-      chip: 'color: team (shock beneficiaries)', overlayStep: 'l3',
+      chip: 'lit: Norway’s and Argentina’s money', overlayStep: 'l3',
     },
     {
       id: 'l4',
       html: '<p>Final day, the flags will be at their loudest, and the price will not care. Fans at 87% agreement met an 11-cent market, and a home crowd’s team traded at a cent and a half on its own country’s exchange.<sup class="fn"><a href="#fn-17">17</a></sup> Attention moved volume by multiples all tournament and never bought more than a point or two of price.<sup class="fn"><a href="#fn-18">18</a></sup></p>',
       trigger: 'step', state: 'lens3', kind: 'resort',
-      chip: 'color: team (Argentina) vs. poll', overlayStep: 'l4',
+      chip: 'lit: Argentina’s money vs. the fans’ poll', overlayStep: 'l4',
     },
     {
       id: 'l5',
       html: '<p>One habit is still an open bet. Once the vig is stripped, the market kept France above the model for thirteen months and Spain below it, and Spain is the team still standing.<sup class="fn"><a href="#fn-21">21</a></sup> Whether that discount was information or attachment is the one question the tape could not settle. The piece stakes it here: the epilogue will return to this number and say which it was.</p>',
       trigger: 'step', state: 'lens4', kind: 'resort',
-      chip: 'color: team (France vs. Spain, opponent lit)', overlayStep: 'l5',
+      chip: 'lit: France’s vs. Spain’s money (opponent lit)', overlayStep: 'l5',
     },
   ],
 

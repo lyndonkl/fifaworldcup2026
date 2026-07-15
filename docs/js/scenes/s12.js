@@ -141,10 +141,16 @@ function layout(data, view) {
   const naive = makeState(N);
   const resolved = makeState(N);
   const baseSize = view.tokens.dot['radius-base-px'];
-  const restRgba = view.state('rest');
+  // Resting field uses the dimmed-field tint (dimmed-field-min, 0.25 alpha),
+  // not the standard rest tint, so the tournament's money recedes and the
+  // featured ladder reads as figure. That low alpha also lands in the
+  // engine's rest-classify tier (<= dot.opacity-rest-classify-max), so the
+  // shader dims its energy while boosting the full-alpha active subset
+  // (research/revision/perception-brief.md §9b, §10.1).
+  const restRgba = view.state('dimmed-field-min');
 
-  // Default: every dot rests scattered and dim (constancy — the rest of
-  // the tournament's money is present but not the story right now).
+  // Default: every dot rests scattered and dim (population constancy: the
+  // rest of the tournament's money is present, just not the story now).
   for (let i = 0; i < N; i++) {
     const [fx, fy] = fieldPosition(i, view);
     naive.x[i] = fx; naive.y[i] = fy;
@@ -362,16 +368,21 @@ const s12 = {
     },
     {
       id: 'b2',
-      html: `<p>Kane's four cents on six goals is fair under a plain Poisson
-        read of realized rates, and his price halved on the day England won
-        because he burned 120 scoreless minutes.<sup><a href="#fn-19">19</a></sup>
-        France's elimination re-runs the same lesson live: the ladder
-        reprices paths, and the final decides the race. Every figure on
-        this screen refreezes on deploy morning.</p>`,
+      html: `<p>Read as a Poisson process, meaning goals arrive at a
+        roughly steady rate, a player's remaining chances scale with the
+        minutes he has left. On that reading Kane's four cents on six goals
+        is fair, and his price halved on the day England won because he
+        burned 120 scoreless minutes.<sup><a href="#fn-19">19</a></sup>
+        The Golden Boot book is a ladder, one ranked rung of contracts per
+        contender, and it reprices the way a bracket does, on goals still
+        to come rather than goals already scored. France's elimination
+        re-runs the same lesson live: the ladder reprices paths, and the
+        final decides the race. Every figure on this screen refreezes on
+        deploy morning.</p>`,
       trigger: 'step',
       state: 'resolved',
       kind: 'recolor',
-      chip: 'color: player identity',
+      chip: 'color: each contender\'s Golden Boot money',
       overlayStep: 'b2',
     },
   ],

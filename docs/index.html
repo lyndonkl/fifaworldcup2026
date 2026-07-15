@@ -107,8 +107,13 @@
     }
     #chip.pulse { animation: chip-pulse var(--dur-chip-pulse) ease-out 1; }
     @keyframes chip-pulse {
-      0% { box-shadow: 0 0 0 0 rgba(255, 201, 77, 0.55); }
-      100% { box-shadow: 0 0 0 12px rgba(255, 201, 77, 0); }
+      /* REVISION: rgb matches the darkened --accent-annotation (#CCA13E =
+         204,161,62); see docs/design/tokens.css file header. Box-shadow
+         can't reference a CSS custom property inside its own color
+         function reliably across engines, so the literal is kept in sync
+         by hand -- flagged here so a future token edit greps this too. */
+      0% { box-shadow: 0 0 0 0 rgba(204, 161, 62, 0.55); }
+      100% { box-shadow: 0 0 0 12px rgba(204, 161, 62, 0); }
     }
 
     #grain-plate {

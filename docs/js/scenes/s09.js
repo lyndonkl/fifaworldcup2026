@@ -217,7 +217,7 @@ export default {
 
     const mirrorCaption = pinnedCaption(
       container,
-      'the tell: Norway’s spike and Argentina’s crash share bracket arithmetic, not one market driving the other',
+      'the tell: Norway’s blue leg spikes as Argentina’s lavender leg crashes, sharing one bracket’s arithmetic rather than one market driving the other',
       's09-mirror-caption',
     ).style('left', `${view.region.x}px`).style('top', `${view.region.y - 40}px`);
 
@@ -239,15 +239,19 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>Three shocks, three different arithmetics. Paraguay's winner
-        leg popped fivefold when Germany went out, Norway's about 3.6x over
-        Brazil, Belgium's roughly twofold, and the 72-hour paths then
+      html: `<p>Three shocks, three different arithmetics. A team's price is
+        really a price on the route still in front of it: beat this side,
+        then probably that one. When a result changes who a team would meet
+        next, every price along that path moves even though the team itself
+        did nothing. That repricing is the bracket arithmetic. Paraguay's
+        winner leg popped fivefold when Germany went out, Norway's about 3.6x
+        over Brazil, Belgium's roughly twofold, and the 72-hour paths then
         diverged with bracket news rather than fading from
         excess.<sup><a href="#fn-14">14</a></sup></p>`,
       trigger: 'step',
       state: 'pop',
       kind: 'resort',
-      chip: 'color: beneficiary team',
+      chip: 'color: beneficiary team · Paraguay teal, Norway blue, Belgium pink',
       grain: { text: '1 dot = $75,000 of matched volume', variant: 'return' },
       overlayStep: 'b1',
     },
@@ -272,6 +276,7 @@ export default {
       trigger: 'step',
       state: 'mirror',
       kind: 'resort',
+      chip: 'color: winner leg · Norway blue rising, Argentina lavender falling',
       overlayStep: 'b3',
     },
   ],

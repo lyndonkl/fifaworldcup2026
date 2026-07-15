@@ -123,11 +123,18 @@ function layout(data, view) {
   const hostX = registry.get('s13.hostX');
 
   const baseSize = view.tokens.dot['radius-base-px'];
-  const restRgba = view.state('rest');
+  // Resting field uses the dimmed-field tint (dimmed-field-min, 0.25 alpha),
+  // not the standard rest tint, so the tournament's money recedes and the
+  // featured country/host columns read as figure. That low alpha lands in
+  // the engine's rest-classify tier, so the shader dims it while boosting
+  // the full-alpha active subset (research/revision/perception-brief.md
+  // §9b, §10.1); matches this scene's own S16 anchor, which already dims to
+  // dimmed-field-min.
+  const restRgba = view.state('dimmed-field-min');
 
   const states = { argentina: makeState(N), usa: makeState(N), peers: makeState(N) };
 
-  // Default: scattered, dim (constancy).
+  // Default: scattered, dim (population constancy).
   for (const key of Object.keys(states)) {
     const st = states[key];
     for (let i = 0; i < N; i++) {
@@ -378,7 +385,7 @@ const s13 = {
       trigger: 'step',
       state: 'argentina',
       kind: 'resort',
-      chip: 'color: country',
+      chip: 'color: Argentina\'s winner-market money',
       overlayStep: 'b1',
     },
     {
@@ -389,20 +396,25 @@ const s13 = {
       trigger: 'step',
       state: 'usa',
       kind: 'resort',
+      chip: 'color: the USA\'s winner-market money',
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>Host attention was real money: Mexico and the USA drew two
-        to two and a half times the pre-tournament contracts of
-        model-equivalent peers, and the attention bought price as well as
-        volume, Mexico at roughly 1.8 times and the USA at roughly 1.5
+      html: `<p>Host attention was real money. The model here is Opta's
+        supercomputer, which plays the tournament out thousands of times to
+        give each team a simulated chance, and two teams count as
+        model-equivalent when it rates them about the same. Mexico and the
+        USA drew two to two and a half times the pre-tournament contracts of
+        those model-equivalent peers, and the attention bought price as well
+        as volume, Mexico at roughly 1.8 times and the USA at roughly 1.5
         times their model odds on tournament
         eve.<sup><a href="#fn-18">18</a></sup> Loud in volume, faint in
         price.</p>`,
       trigger: 'step',
       state: 'peers',
       kind: 'resort',
+      chip: 'color: each host team\'s money',
       overlayStep: 'b3',
     },
     {

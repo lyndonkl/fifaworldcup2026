@@ -57,6 +57,57 @@
  *     engine.mode reports 'webgl2' | 'webgl1'. createEngine returns null
  *     only when no WebGL context exists at all.
  *
+ *  7. EMPHASIS: RESTING-FIELD-DIM / ACTIVE-SUBSET-BOOST + ONSET PULSE
+ *     (post-Gate-3 revision, research/revision/perception-brief.md §2,
+ *     §4, §7, §9b, §10) — the ACTIVE/REST distinction was carrying its
+ *     "did that just change" signal on hue alone: every identity/side
+ *     token measures <=1.24:1 against field.rest at swatch level
+ *     (functionally isoluminant), and no swatch-hex change can buy real
+ *     separation there — field.rest's own luminance is already high
+ *     enough that even white clears only ~2.1:1 against it. Luminance
+ *     and motion-onset, not hue, are the channels the magnocellular
+ *     pathway actually uses for a figure/ground "did that just change"
+ *     judgment (brief §1, §2). So this fix runs where the actual
+ *     premultiplied energy is decided, per fragment, every frame:
+ *       (a) REST/ACTIVE classification (FRAG_POINTS) — each dot's OWN
+ *           current alpha (vColor.a, already computed by the vertex
+ *           stage's A/B mix, no new attribute needed) sorts it into
+ *           rest-tier (alpha <= uRestClassifyMax) or active-tier (alpha
+ *           >= uActiveClassifyMin); rest-tier energy is scaled by
+ *           uRestDim (<1), active-tier by uActiveBoost (>1). The
+ *           0.42-0.90 alpha band (state.dead / state.expiring, both
+ *           already-audited receding states, FIX #1 for S8) is left
+ *           unclassified on purpose — this revision must not touch that
+ *           settled semantics. This is a GLOBAL, per-dot policy, not a
+ *           true per-pixel local-density sample (that would need a
+ *           density-estimate pre-pass this close to ship is too much new
+ *           surface to add safely); dimming every rest-tier contributor
+ *           by a flat factor still directly attacks the brief's own
+ *           §9b compounding table (apparent field luminance catching up
+ *           to a single active dot by ~5 overlaps) by making the whole
+ *           curve climb more slowly, without a new render pass.
+ *       (b) ONSET PULSE (VERT_POINTS + FRAG_POINTS) — Rensink et al.'s
+ *           change-blindness literature (brief §7) says a silent hue
+ *           swap is exactly the change a reader looking right at the
+ *           field will miss; what reliably gets seen is a late-onset
+ *           luminance/size transient. Every tween already carries
+ *           per-dot aColA (frozen current value, via bakeCurrentIntoA)
+ *           and aColB (new target) — colorDelta = length(aColB - aColA)
+ *           is therefore already exactly "is this dot's color actually
+ *           changing in THIS transition," recomputed fresh on every
+ *           tween() call including interrupts, so a retarget correctly
+ *           re-fires its own pulse. The pulse envelope is a function of
+ *           each dot's own post-stagger progress u in [0,1], not
+ *           wall-clock time, so it rides correctly under scroll-scrub
+ *           and is automatically absent under reduced motion (A===B in
+ *           applyReduced, so colorDelta is always 0 there — no special
+ *           casing needed). Object constancy is untouched: neither (a)
+ *           nor (b) ever changes aPosA/aPosB/gl_Position, only the
+ *           energy and (for the pulse) the size already being tweened.
+ *     All seven numbers are tokens.json `emphasis.*` /
+ *     `dot.opacity-*-classify-*` (tokens are law, same as everywhere
+ *     else in this file); see tokens.css for the human-readable version.
+ *
  * Tokens are law: every color, duration, easing curve, gamma, cap and
  * bloom radius is read from opts.tokens (parsed docs/design/tokens.json).
  * The few remaining numeric constants below are engineering constants with
@@ -133,7 +184,15 @@ uniform vec2 uE1;         // active easing cubic-bezier control point 1
 uniform vec2 uE2;         // control point 2
 uniform vec2 uRes;        // canvas CSS pixel size
 uniform float uDpr;
+/* Onset pulse (engine.js header note #7 / tokens.json emphasis.*): a
+ * brief size/luminance overshoot on dots whose color is actually
+ * changing in THIS transition, confined to the first uPulseWindow
+ * fraction of each dot's own post-stagger progress u. */
+uniform float uPulseWindow;
+uniform float uPulseSizeGain;
+uniform float uPulseColorEps;
 varying vec4 vColor;
+varying float vPulse;     // 0..1 envelope, consumed by FRAG_POINTS for the luminance half
 
 /* Solve the CSS cubic-bezier timing function y(x) by Newton iteration.
  * 5 iterations from t=x keeps deviation from the CSS curve far below the
@@ -160,23 +219,53 @@ void main() {
   vec2 p = mix(aPosA, aPosB, e);
   vec4 c = mix(aColA, aColB, e);
   float s = mix(aSizeA, aSizeB, e);
+
+  /* colorDelta > uPulseColorEps means this dot's target actually differs
+   * from where it started THIS transition (bakeCurrentIntoA already
+   * froze the true current value into aColA, including on interrupts, so
+   * this is always "changing in the current transition," never stale).
+   * changeMag saturates to 1 quickly rather than scaling linearly with
+   * delta size, so even a modest recolor gets the full change-blindness
+   * countermeasure, not a partial one. */
+  float colorDelta = length(aColB - aColA);
+  float changeMag = clamp(colorDelta / max(uPulseColorEps, 1e-4), 0.0, 1.0);
+  float pulseT = clamp(u / max(uPulseWindow, 1e-4), 0.0, 1.0);
+  float envelope = sin(3.14159265 * pulseT); // 0 -> 1 -> 0 across [0, uPulseWindow], 0 after
+  vPulse = changeMag * envelope;
+
   vec2 clip = (p / uRes) * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-  gl_PointSize = max(s, 0.0) * uDpr;
+  gl_PointSize = max(s * (1.0 + vPulse * uPulseSizeGain), 0.0) * uDpr;
   vColor = c;
 }`;
 
 const FRAG_POINTS = `
 precision mediump float;
 uniform float uPreScale;  // 1.0 on the float path; 1/32 on the RGBA8 path
+/* Resting-field-dim / active-subset-boost (engine.js header note #7 /
+ * tokens.json emphasis.* + dot.opacity-*-classify-*): classifies THIS
+ * fragment's energy contribution by its own current alpha, every frame,
+ * independent of hue or which scene set it. The 0.42-0.90 alpha band
+ * (state.dead / state.expiring) is intentionally left at 1.0x -- FIX #1
+ * (S8) already audited that pair and this revision must not disturb it. */
+uniform float uRestDim;
+uniform float uActiveBoost;
+uniform float uRestClassifyMax;
+uniform float uActiveClassifyMin;
+uniform float uPulseLumGain;
 varying vec4 vColor;
+varying float vPulse;
 void main() {
   vec2 d = gl_PointCoord - vec2(0.5);
   float dist = length(d) * 2.0;
   float alpha = (1.0 - smoothstep(${DOT_EDGE_IN.toFixed(4)}, ${DOT_EDGE_OUT.toFixed(4)}, dist)) * vColor.a;
   if (alpha < ${ALPHA_DISCARD.toFixed(4)}) discard;
+  float emphasis = 1.0;
+  if (vColor.a <= uRestClassifyMax) emphasis = uRestDim;
+  else if (vColor.a >= uActiveClassifyMin) emphasis = uActiveBoost;
+  emphasis *= 1.0 + vPulse * uPulseLumGain;
   /* premultiplied energy, summed additively (blend ONE, ONE) */
-  gl_FragColor = vec4(vColor.rgb, 1.0) * alpha * uPreScale;
+  gl_FragColor = vec4(vColor.rgb, 1.0) * alpha * uPreScale * emphasis;
 }`;
 
 const VERT_QUAD = `
@@ -307,8 +396,33 @@ export function createEngine(canvas, opts = {}) {
   const easingTokens = tokens.motion && tokens.motion.easing;
   const density = tokens.density_tone_mapping;
   const bgToken = tokens.colors && tokens.colors['bg-canvas'];
-  if (!durations || !easingTokens || !density || !bgToken) {
-    throw new Error('[rt-engine] tokens.json missing motion/density/bg sections');
+  const dotTokens = tokens.dot;
+  const emphasis = tokens.emphasis;
+  if (!durations || !easingTokens || !density || !bgToken || !dotTokens || !emphasis) {
+    throw new Error('[rt-engine] tokens.json missing motion/density/bg/dot/emphasis sections');
+  }
+  // Resting-field-dim / active-subset-boost + onset pulse (header note #7).
+  const REST_CLASSIFY_MAX = dotTokens['opacity-rest-classify-max'];
+  const ACTIVE_CLASSIFY_MIN = dotTokens['opacity-active-classify-min'];
+  const REST_DIM = emphasis['rest-dim'];
+  const ACTIVE_BOOST = emphasis['active-boost'];
+  const PULSE_WINDOW = emphasis['pulse-window'];
+  const PULSE_SIZE_GAIN = emphasis['pulse-size-gain'];
+  const PULSE_LUM_GAIN = emphasis['pulse-luminance-gain'];
+  const PULSE_COLOR_EPS = emphasis['pulse-color-epsilon'];
+  for (const [name, v] of [
+    ['dot.opacity-rest-classify-max', REST_CLASSIFY_MAX],
+    ['dot.opacity-active-classify-min', ACTIVE_CLASSIFY_MIN],
+    ['emphasis.rest-dim', REST_DIM],
+    ['emphasis.active-boost', ACTIVE_BOOST],
+    ['emphasis.pulse-window', PULSE_WINDOW],
+    ['emphasis.pulse-size-gain', PULSE_SIZE_GAIN],
+    ['emphasis.pulse-luminance-gain', PULSE_LUM_GAIN],
+    ['emphasis.pulse-color-epsilon', PULSE_COLOR_EPS],
+  ]) {
+    if (typeof v !== 'number' || !isFinite(v)) {
+      throw new Error(`[rt-engine] tokens.json missing/invalid numeric token: ${name}`);
+    }
   }
   const DUR_DEFAULT = durations['resort-total-target'];       // 1700
   const DUR_HARD_CAP = durations['resort-hard-cap'];          // 1800
@@ -524,7 +638,9 @@ export function createEngine(canvas, opts = {}) {
       p: link(gl, VERT_POINTS, FRAG_POINTS, POINT_ATTRS),
     };
     progPoint.u = uniforms(gl, progPoint.p,
-      ['uT', 'uStagger', 'uE1', 'uE2', 'uRes', 'uDpr', 'uPreScale']);
+      ['uT', 'uStagger', 'uE1', 'uE2', 'uRes', 'uDpr', 'uPreScale',
+       'uPulseWindow', 'uPulseSizeGain', 'uPulseColorEps',
+       'uRestDim', 'uActiveBoost', 'uRestClassifyMax', 'uActiveClassifyMin', 'uPulseLumGain']);
     progCompress = { p: link(gl, VERT_QUAD, FRAG_COMPRESS, ['aXY']) };
     progCompress.u = uniforms(gl, progCompress.p, ['uTex', 'uGamma', 'uLumCap', 'uAccumScale']);
     progBlur = { p: link(gl, VERT_QUAD, FRAG_BLUR, ['aXY']) };
@@ -751,6 +867,15 @@ export function createEngine(canvas, opts = {}) {
     gl.uniform2f(progPoint.u.uRes, cssW, cssH);
     gl.uniform1f(progPoint.u.uDpr, dpr);
     gl.uniform1f(progPoint.u.uPreScale, preScale);
+    // Resting-field-dim / active-subset-boost + onset pulse (header note #7).
+    gl.uniform1f(progPoint.u.uPulseWindow, PULSE_WINDOW);
+    gl.uniform1f(progPoint.u.uPulseSizeGain, PULSE_SIZE_GAIN);
+    gl.uniform1f(progPoint.u.uPulseColorEps, PULSE_COLOR_EPS);
+    gl.uniform1f(progPoint.u.uRestDim, REST_DIM);
+    gl.uniform1f(progPoint.u.uActiveBoost, ACTIVE_BOOST);
+    gl.uniform1f(progPoint.u.uRestClassifyMax, REST_CLASSIFY_MAX);
+    gl.uniform1f(progPoint.u.uActiveClassifyMin, ACTIVE_CLASSIFY_MIN);
+    gl.uniform1f(progPoint.u.uPulseLumGain, PULSE_LUM_GAIN);
     gl.drawArrays(gl.POINTS, 0, N);
     gl.disable(gl.BLEND);
 

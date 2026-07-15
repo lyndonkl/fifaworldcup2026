@@ -92,7 +92,7 @@ just absence of a crash):
 
 - `s03.json`: `day1_end` / `crossover_end` / `press_floor` — matches `s03.js`'s `sj.day1_end` / `sj.crossover_end` / `sj.press_floor`.
 - `s04.json`: `grid` / `in_window` / `kickoff_hist.hours` / `rest_days` / `waking_band` — matches `s04.js` exactly.
-- `s05.json`: `trump_market.market_index` — matches `s05.js`.
+- `s05.json`: `novelty_market.{n_markets,contracts}` — matches `s05.js` (de-politicize swap: the former `trump_market` singleton is replaced by the sub-grain KXWCADS ad family, annotated on the below-threshold band rather than lit as a dot).
 - `s07.json`: `event.{goal_ts,label}`, `pinnacle.{quotes,suspend_start_s,suspend_end_s}`, `polymarket.blocks`, `friction_band_c` — matches `s07.js` exactly.
 - `s08.json`: `window.whistle_ts` — matches `s08.js`.
 - `s09.json`: `shocks[].{team,shock_ts,pop_multiple}`, `annotations[].{team,t_hours,label}` — matches `s09.js`.

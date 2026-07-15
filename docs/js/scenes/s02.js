@@ -114,14 +114,20 @@ export default {
     );
 
     const BASE_PX = view.tokens.dot['radius-base-px'] * 2;
-    const restColor = view.state('rest');
-    // "Color: contract family (futures vs everything else), muted" —
-    // futures dots get a muted cyan tint (side-yes at low alpha, the same
-    // hue the reader will re-learn as "taker YES" from S1 but here voided
-    // of that meaning by the chip re-narration, per design-system §6's
-    // team-vs-semantic transition-through-rest-tint discipline); everyone
-    // else keeps the plain field-rest tint.
-    const futuresColor = view.color('side-yes', 0.30);
+    const restColor = view.state('rest'); // 0.35 -> rest-tier: engine dims it
+    // Color: contract family (futures vs everything else). REVISION
+    // (perception-brief §9b, §10.1): the winner-futures family is this scene's
+    // subject, so it is the ACTIVE subset and has to pick out of the field.
+    // The prior build tinted it muted cyan at alpha 0.30 -- below even the rest
+    // field's 0.35, separated from it by hue alone, which the brief showed
+    // reads ~isoluminant (side.yes vs field.rest ~1.20:1) and does not pop.
+    // The fix keeps the same cyan hue (the chip re-narrates it away from S1's
+    // "taker YES" meaning, per design-system §6's team-vs-semantic discipline)
+    // and lifts its alpha into the active band (opacity-alive), so the engine
+    // boosts the winner-book thread's luminance above the dimmed rest of the
+    // market. Hue unchanged, luminance fixed -- exactly the brief's fix. Dot
+    // size stays fixed (unit grammar); the pop rides on alpha and the shader.
+    const futuresColor = view.color('side-yes', view.tokens.dot['opacity-alive']); // active-tier
     const invisible = [0, 0, 0, 0];
     const futuresIdx = manifest.enums.family.indexOf('winner_futures');
 
@@ -250,11 +256,14 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>The winner book opened in May 2025 and then did almost nothing for a year. The December draw, the moment the tournament became concrete, registers as a twitch: 190,000 contracts on the day, and the cleaner fingerprint is participation, 176 mostly small trades in the reveal hour.<sup><a href="#fn-3">3</a></sup> Peak match day would eventually run about 3,400 times larger in contracts and roughly 21,000 times larger in premium dollars.<sup><a href="#fn-3">3</a></sup> A market is not a poll that runs continuously; it is a crowd that shows up when something is at stake.</p>`,
+      html: `<p>A book is one market's running ledger of live orders, and the winner book is the single market for who lifts the trophy. It opened in May 2025 and then did almost nothing for a year. The December draw, the moment the tournament became concrete, registers as a twitch: 190,000 contracts on the day, and the cleaner fingerprint is participation, 176 mostly small trades in the reveal hour.<sup><a href="#fn-3">3</a></sup> A market can be sized two ways: by contracts, each a one-dollar bet, and by premium, the dollars actually paid at the prices those bets traded. The two move apart when prices themselves climb. Peak match day would eventually run about 3,400 times larger in contracts and roughly 21,000 times larger in premium dollars.<sup><a href="#fn-3">3</a></sup> A market is not a poll that runs continuously; it is a crowd that shows up when something is at stake.</p>`,
       trigger: { type: 'scrub', span: 3 },
       state: 'k0',
       kind: 'instant', // see s01.js comment: scrub fine-motion is driven by keyframes, not `kind`
-      chip: 'color: contract family',
+      // Micro-legend names the color's referent, not just "contract family":
+      // the lit cyan thread is the winner book (grounded by this beat's own
+      // opening gloss); the dimmed field is everything else trading.
+      chip: 'cyan: the winner book · grey: every other market',
       grain: {
         // Storyboard-verbatim "return" narration (CONTRACT §7 "return"
         // variant on re-merge). The literal $75,000 figure is the value

@@ -33,10 +33,13 @@
  *     "tail": { "markets": 19640, "share_pct": 0.36 },
  *     "gini_pooled": 0.930, "gini_within_family": 0.44,
  *     "lorenz_curve": [ { "market_frac": 0, "value_frac": 0 }, ... ],  // optional
- *     "trump_market": {
- *       "market_index": <u16, matches pop.market>, "ticker": "…",
- *       "rank": 1083, "contracts": 1400000,
- *       "family_size": 3005, "expected_rank_at_base_rate": 10
+ *     "novelty_market": {               // the loudest OFF-PITCH novelty of the
+ *       "series_ticker": "KXWCADS",     //   tournament (the ad family). It is
+ *       "label": "…",                   //   sub-grain: 35 markets, none large
+ *       "rank": 10500,                  //   enough to earn a single $75k dot, so
+ *       "contracts": 594454,            //   it owns NO dot in this population and
+ *       "n_markets": 35,                //   lives entirely in the below-threshold
+ *       "in_below_grain": true          //   band, never as a lit singleton dot.
  *     }
  *   }
  * `manifest.census.below_grain.{markets,usd}` (already part of the
@@ -122,14 +125,10 @@ export default {
 
     const sweepColor = colorOf(view.tokens, SWEEP_COLOR, view.tokens.dot['opacity-alive']);
     const baseSize = view.tokens.dot['radius-base-px'] * 2;
-    const haloSize = view.tokens.dot['radius-annotated-core-px'] * 2;
-    const amber = colorOf(view.tokens, 'accent-annotation', 1.0);
+    const restRgba = particleState(view.tokens, 'rest');
 
     const sweep = makeState(N);
     const localRank = new Map(); // marketIdx -> running counter
-
-    const trumpIdx = data.scene && data.scene.trump_market
-      ? data.scene.trump_market.market_index : null;
 
     for (let i = 0; i < N; i++) {
       const m = pop.market[i];
@@ -153,22 +152,27 @@ export default {
       sweep.size[i] = baseSize;
     }
 
-    const sweepHighlighted = makeState(N);
-    sweepHighlighted.x.set(sweep.x);
-    sweepHighlighted.y.set(sweep.y);
-    sweepHighlighted.color.set(sweep.color);
-    sweepHighlighted.size.set(sweep.size);
-    if (trumpIdx != null) {
-      for (let i = 0; i < N; i++) {
-        if (pop.market[i] === trumpIdx) {
-          const o = i * 4;
-          sweepHighlighted.color.set(amber, o);
-          sweepHighlighted.size[i] = haloSize;
-        }
-      }
+    // b3 punchline state. The loudest off-pitch novelty (the KXWCADS ad
+    // family) is sub-grain: it owns no dot in this population, so there is
+    // nothing in the sweep to light as a singleton. Instead the whole
+    // field recedes to the resting money tint (opacity-rest 0.35 <= the
+    // 0.42 rest-tier threshold -> engine rest-tier dim, perception-brief
+    // §4/§9b) so the amber below-band annotation drawn in overlay() reads
+    // as figure against a dimmed ground. Positions/sizes are identical to
+    // `sweep`, so this stays a pure recolor (kind: 'recolor').
+    const sweepDimmed = makeState(N);
+    sweepDimmed.x.set(sweep.x);
+    sweepDimmed.y.set(sweep.y);
+    sweepDimmed.size.set(sweep.size);
+    for (let i = 0; i < N; i++) {
+      const o = i * 4;
+      sweepDimmed.color[o] = restRgba[0];
+      sweepDimmed.color[o + 1] = restRgba[1];
+      sweepDimmed.color[o + 2] = restRgba[2];
+      sweepDimmed.color[o + 3] = restRgba[3];
     }
 
-    return { states: { sweep, sweepHighlighted } };
+    return { states: { sweep, sweepDimmed } };
   },
 
   overlay(container, data, view, scales) {
@@ -239,37 +243,42 @@ export default {
         .style('display', 'none');
     }
 
-    // Trump-market singleton: amber core, deflating co-located copy
-    // (design-system.md §8 FIX #6 — verbatim), constancy note verbatim
-    // from the storyboard's Units section.
-    const trump = sj.trump_market;
-    let trumpG = null;
-    if (trump) {
-      const rect = ml.rectByMarket.get(trump.market_index);
-      trumpG = g.append('g').attr('class', 's05-trump').style('display', 'none');
-      if (rect) {
-        const cx = (rect.x0 + rect.x1) / 2;
-        const cy = y((rect.yBotFrac + rect.yTopFrac) / 2);
-        trumpG.append('line')
-          .attr('x1', cx).attr('y1', cy)
-          .attr('x2', cx + 90).attr('y2', cy - 60)
-          .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
-        trumpG.append('text')
-          .attr('x', cx + 94).attr('y', cy - 64)
-          .attr('fill', view.css('accent-annotation'))
-          .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
-          .text(`rank ~${fmt.count(trump.rank)} of ${fmt.count(sj.total_markets || 0)}`);
-        trumpG.append('text')
-          .attr('x', cx + 94).attr('y', cy - 46)
-          .attr('fill', view.css('ink-mid'))
-          .style('font', `var(--type-caption-size) var(--font-apparatus)`)
-          .text("small, lit up because it's surprising, not because it's big.");
-        trumpG.append('text')
-          .attr('x', region.x + bandW + 8).attr('y', region.y + region.h - bandH - 40)
-          .attr('fill', view.css('ink-low'))
-          .style('font', `var(--type-caption-size) var(--font-apparatus)`)
-          .text('these tail dots carry a persistent tag; they return, unmoved in identity, as the sagging dots of S14.');
-      }
+    // Novelty-market callout (de-politicize swap; see prose-plan Part 3).
+    // The loudest off-pitch novelty of the tournament is the KXWCADS ad
+    // family ("which brands advertise around the final"). It is sub-grain:
+    // 35 markets, none large enough to earn a single $75k dot, so it owns
+    // NO dot in this population and lives entirely in the below-threshold
+    // band drawn above. The callout is therefore an amber ANNOTATION
+    // (design-system §6: amber is annotation, never a data encoding)
+    // pointing at that band, not a lit singleton. The former single-dot
+    // Trump highlight is removed with the swap; FIX #6's "lit up because
+    // surprising" caption and the S14-constancy tag both presupposed an
+    // in-population dot the ad family does not have.
+    const novelty = sj.novelty_market;
+    let noveltyG = null;
+    if (novelty) {
+      noveltyG = g.append('g').attr('class', 's05-novelty').style('display', 'none');
+      // The band spans most of the stage width, so anchor the callout to
+      // its right end and let the text run LEFT across the dimmed tail
+      // (clamped inside the region), never off the right edge. A short
+      // vertical leader drops from the callout down to the band.
+      const anchorX = Math.min(region.x + bandW, region.x + region.w - 8);
+      const bandTopY = region.y + region.h - bandH;
+      const labelY = region.y + region.h - bandH - 58;
+      noveltyG.append('line')
+        .attr('x1', anchorX - 4).attr('y1', bandTopY)
+        .attr('x2', anchorX - 4).attr('y2', labelY + 6)
+        .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
+      noveltyG.append('text')
+        .attr('x', anchorX).attr('y', labelY).attr('text-anchor', 'end')
+        .attr('fill', view.css('accent-annotation'))
+        .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
+        .text(`the loudest off-pitch novelty: ${fmt.count(novelty.n_markets || 0)} ad markets`);
+      noveltyG.append('text')
+        .attr('x', anchorX).attr('y', labelY + 18).attr('text-anchor', 'end')
+        .attr('fill', view.css('ink-mid'))
+        .style('font', `var(--type-caption-size) var(--font-apparatus)`)
+        .text(`~${fmt.count(novelty.contracts || 0)} contracts, too small to earn a single $75k dot`);
     }
 
     return {
@@ -277,14 +286,14 @@ export default {
         if (beatId === 'b1') {
           tailBracket.style('display', 'none');
           coreLabel && coreLabel.style('display', 'none');
-          trumpG && trumpG.style('display', 'none');
+          noveltyG && noveltyG.style('display', 'none');
           lorenzPath && lorenzPath.style('display', 'none');
         } else if (beatId === 'b2') {
           tailBracket.style('display', null);
           coreLabel && coreLabel.style('display', null);
           lorenzPath && lorenzPath.style('display', null);
         } else if (beatId === 'b3') {
-          trumpG && trumpG.style('display', null);
+          noveltyG && noveltyG.style('display', null);
         }
       },
       exit() { g.remove(); },
@@ -302,20 +311,22 @@ export default {
     },
     {
       id: 'b2',
-      html: '<p>Three core series, 414 contract legs, absorb 63.5% of all dollars, while 19,640 markets, more than half the catalog, carry 0.36% of volume; the pooled concentration reads as extreme, a Gini of 0.930, and the within-family reality is ordinary, 0.44.<sup><a href="#fn-7">7</a></sup></p>',
+      html: '<p>A series is Kalshi&rsquo;s name for a family of related markets, such as every three-way in the tournament. A leg is one outcome-contract inside a market: the France-wins bet is one leg of the winner market, and a single match splits into three legs, home win, draw, away win. Three core series, 414 of those legs, absorb 63.5% of all dollars, while 19,640 markets, more than half the catalog, carry 0.36% of volume; on the Gini scale, where zero is an equal share for every market and one is a single market holding all of it, the pooled concentration reads as extreme at 0.930, and the within-family reality is ordinary at 0.44.<sup><a href="#fn-7">7</a></sup></p>',
       trigger: 'step',
     },
     {
       id: 'b3',
-      html: "<p>The catalog's most famous novelty, the biggest Trump-mention market, drew a real 1.40 million contracts and still could not crack the top 1,000; the honest punchline runs the other way, since the maximum of a 3,005-market family trading at catalog base rate should land near rank ten.<sup><a href=\"#fn-8\">8</a></sup> America's biggest off-pitch market was roughly sixty times smaller than the moneyline on its own broadcast.<sup><a href=\"#fn-8\">8</a></sup></p>",
+      html: '<p>The loudest market that had nothing to do with football was a bet on advertising: which brands would run a spot around the final. Every one of those 35 ad markets put together drew about 594,000 contracts, five thousandths of one percent of the tape, and the most-traded of them, whether Pepsi would advertise, could not crack the top ten thousand markets.<sup><a href="#fn-8">8</a></sup> The whole family was more than two hundred times smaller than a single knockout-night match market.<sup><a href="#fn-8">8</a></sup> Loud in imagination, faint in money.</p>',
       trigger: 'step',
-      state: 'sweepHighlighted',
+      state: 'sweepDimmed',
       kind: 'recolor',
+      chip: 'field at rest; amber marks the ad family',
     },
   ],
 
-  // Reduced motion: defaults suffice — the sweep assembles once (b1) and
-  // the only later positional state, sweepHighlighted, shares identical
-  // x/y with sweep (kind: 'recolor'), so reduced motion's instant-state
-  // + crossfade rule already yields the correct still frames.
+  // Reduced motion: defaults suffice. The sweep assembles once (b1); the
+  // only later state, sweepDimmed, shares identical x/y and size with
+  // sweep (kind: 'recolor', an alpha-only change to the resting tint), so
+  // reduced motion's instant-state + crossfade rule already yields the
+  // correct still frames.
 };

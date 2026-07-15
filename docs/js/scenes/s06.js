@@ -287,7 +287,7 @@ export default {
 
     const captionEl = pinnedCaption(
       container,
-      'what the tape can and cannot say about who was trading',
+      'Mexico-to-advance money · what the tape can and cannot say about who traded',
       's06-caption',
     ).style('left', `${view.region.x}px`).style('top', `${view.region.y - 40}px`);
 
@@ -350,22 +350,25 @@ export default {
       html: `<p>The single biggest market of the tournament was not the winner book.
         It was Mexico to advance past England, 158.7 million contracts across
         roughly a million trades, host-nation money concentrated on one
-        elimination night.<sup><a href="#fn-9">9</a></sup> Zoomed to individual
-        trades, it looks like ordinary Kalshi retail flow at extraordinary
-        scale: typical trade sizes, the exchange-wide taker-yes skew, a
-        heavier pre-match profile than the median knockout market.<sup><a
-        href="#fn-9">9</a></sup> The tape records that money moved; it cannot
-        say whether the mover was hedging heartbreak or chasing it. The
-        arrival rate tells its own story: the pre-kick hour already runs
-        about one print per second, and the opening whistle steps it up
-        about 5.4-fold.<sup><a href="#fn-10">10</a></sup></p>`,
+        elimination night.<sup><a href="#fn-9">9</a></sup> Retail flow is the
+        order stream of ordinary individual traders rather than institutions,
+        the small bettors who make up almost all of this exchange. Zoomed to
+        individual trades, it looks like ordinary Kalshi retail flow at
+        extraordinary scale: typical trade sizes, the exchange-wide taker-yes
+        skew, a heavier pre-match profile than the median knockout
+        market.<sup><a href="#fn-9">9</a></sup> The tape records that money
+        moved; it cannot say whether the mover was hedging heartbreak or
+        chasing it. The arrival rate tells its own story: the pre-kick hour
+        already runs about one print, meaning one executed trade, per second,
+        and the opening whistle steps it up about 5.4-fold.<sup><a
+        href="#fn-10">10</a></sup></p>`,
       // Non-uniform scroll-to-time mapping lives in layout().keyframes;
       // span is a pacing choice for this gateway zoom scene (not itself a
       // dated figure), matching S1/S8's scrub-track convention.
       trigger: { type: 'scrub', span: 4.5 },
       state: 'k0',
       kind: 'resort',
-      chip: 'color: taker side',
+      chip: 'color: taker side · cyan bought yes, vermillion bought no',
       overlayStep: 'b1',
     },
   ],

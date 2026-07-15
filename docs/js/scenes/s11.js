@@ -130,6 +130,13 @@ export default {
   },
 
   layout(data, view) {
+    // Figure/ground per research/revision/perception-brief.md §4, §9b: like S10,
+    // this scene has NO active PARTICLE subset — a Brier contribution is a score,
+    // not money, so the movers are outline-only D3 columns, not dots. The whole
+    // population is the dimmed GROUND at 'dimmed-field-min' (alpha 0.25, inside
+    // the engine's rest-tier so emphasis-rest-dim recedes it further each frame).
+    // The FIGURE that pops is the D3 columns in bright venue hues, now direct-
+    // labeled by drawVenueLegend() so the reader knows WHICH source each colour is.
     return { states: { rest: restField(data, view) } };
   },
 
@@ -146,12 +153,14 @@ export default {
     const maxSeq = M['overlay-max-sequenced-elements'];
     const leaderWeight = view.tokens.layout['annotation-leader-weight-px'];
     const leaderStandoff = view.tokens.layout['annotation-leader-standoff-px'];
+    const spacing = view.tokens.spacing_px; // [4,8,12,16,24,32,48,64,96,128]
 
     const g = svg.append('g').attr('class', 's11-columns');
     const axisLayer = g.append('g').attr('class', 's11-axes');
     const barLayer = g.append('g').attr('class', 's11-bars');
     const annoLayer = g.append('g').attr('class', 's11-anno');
     const strikeLayer = g.append('g').attr('class', 's11-strike');
+    const legendLayer = g.append('g').attr('class', 's11-venue-key');
 
     const smallN = html.append('div').attr('class', 's11-small-n')
       .style('font', '13.5px var(--font-apparatus)').style('color', view.css('ink-low'));
@@ -254,15 +263,43 @@ export default {
         .text('scores a closed book against a live market, not a fair fight');
 
       receipt.html(
-        `<div>three arms, one artifact:</div>`
+        `<div>three parts of the study, one artifact:</div>`
         + THREE_TRAPS.map((t) => `<div>&middot; ${t}</div>`).join(''),
       );
+    }
+
+    // Direct-labeled venue key (design-system.md §1 "teach-on-first-contact
+    // labeling with no standing legends"). The columns carry their source only
+    // in hue, the piece's weakest channel (perception-brief.md §1), so each
+    // colour is named on debut: cyan Kalshi, lavender Polymarket, grey the
+    // de-vigged professional book. Right-aligned along the top so it clears the
+    // 'Brier score (lower is better)' axis label at top-left.
+    function drawVenueLegend() {
+      legendLayer.selectAll('*').remove();
+      const yTop = view.region.y - leaderStandoff;
+      const items = [
+        { label: 'Kalshi', token: 'venue-kalshi' },
+        { label: 'Polymarket', token: 'venue-polymarket' },
+        { label: 'de-vigged Pinnacle', token: 'venue-pinnacle' },
+      ];
+      let x = view.region.x + view.region.w;
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        const t = legendLayer.append('text')
+          .attr('x', x).attr('y', yTop)
+          .attr('text-anchor', 'end')
+          .attr('fill', view.css(it.token))
+          .style('font', '12px var(--font-apparatus)')
+          .text(it.label);
+        x -= t.node().getComputedTextLength() + spacing[3];
+      }
     }
 
     return {
       step(beatId) {
         if (beatId === 'b1') {
           smallN.text(`${nLegs} coupled legs, effective n of ${effN}`);
+          drawVenueLegend();
           drawGroup(['T-24h', 'T-1h'], true);
           matchedLegAnnotation();
         } else if (beatId === 'b2') {
@@ -283,12 +320,16 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>At every horizon where both were alive, the amateurs and the professionals scored the same. At a day out and an hour out, Kalshi, Polymarket, and the de-vigged professional book post near-identical Brier scores, 0.158 to 0.169, on the same 84 legs; matched leg for leg at T-24h the gap is 0.162 versus 0.164, a sample that can rule out a large skill gap and establish nothing stronger.${FN(16)}</p>`,
+      html: `<p>At every horizon where both were alive, the amateurs and the professionals scored the same. A sportsbook prices every outcome a little rich, so its odds add up to more than one hundred percent; the surplus is the vig, its margin. De-vigging strips that surplus back out so the book's numbers can be read as clean probabilities and set beside the exchange.</p><p>A Brier score grades a long run of probability forecasts against what actually happened, where zero is a perfect record and lower is always better. At a day out and an hour out, Kalshi, Polymarket, and the de-vigged professional book post near-identical Brier scores, 0.158 to 0.169, on the same 84 legs; matched leg for leg at T-24h the gap is 0.162 versus 0.164, a sample that can rule out a large skill gap and establish nothing stronger.${FN(16)}</p>`,
       trigger: 'step',
       // Sync to S10's exact rest positions; duration 0 so nothing visibly
       // moves (storyboard §Units: "No population re-sort").
       state: 'rest',
       kind: 'instant',
+      // Re-narrate the venue colour meaning at the mark. S11 inherits S10's chip
+      // when scrolled in sequence, but a direct deep-link into s11 (CONTRACT
+      // §10.9 acceptance check 9) needs the legend set here too.
+      chip: 'color: venue (Kalshi cyan, Polymarket lavender, de-vigged Pinnacle grey)',
       overlayStep: 'b1',
     },
     {
@@ -299,7 +340,7 @@ export default {
     },
     {
       id: 'b3',
-      html: `<p>This analysis walked into that trap three separate times, in three separate arms, before the tape corrected it.${FN(22)} The receipt stays on screen, small.</p>`,
+      html: `<p>This analysis walked into that same trap three separate times, in three different parts of the study, before the tape corrected it.${FN(22)} The receipt stays on screen, small.</p>`,
       trigger: 'step',
       overlayStep: 'b3',
     },

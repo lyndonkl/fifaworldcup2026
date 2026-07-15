@@ -112,7 +112,17 @@ export default {
     const restRgba = particleState(view.tokens, 'rest');
     const densityColor = colorOf(view.tokens, DENSITY_COLOR, view.tokens.dot['opacity-alive'] * 0.6);
     const inColor = colorOf(view.tokens, IN_WINDOW_COLOR, view.tokens.dot['opacity-alive']);
-    const outColor = colorOf(view.tokens, OUT_WINDOW_COLOR, view.tokens.dot['opacity-alive'] * 0.8);
+    // REVISION (perception-brief §2/§4/§9b): the step-3 recolor was
+    // "in-window vs out-of-window at constant luminance" (design-system §9
+    // S4), which the motion/figure-ground literature says is close to
+    // inert -- an isoluminant hue swap does not pop. The active subset
+    // (money inside kickoff windows) now keeps opacity-alive (1.0 ->
+    // engine active-tier boost) while the resting field (off-peak clock)
+    // drops to opacity-dimmed-field-max (0.4 <= the 0.42 rest-tier
+    // threshold -> engine rest-tier dim), so in-window reads as figure by
+    // luminance, not hue alone. This deliberately supersedes the
+    // constant-luminance note for this beat.
+    const outColor = colorOf(view.tokens, OUT_WINDOW_COLOR, view.tokens.dot['opacity-dimmed-field-max']);
     const baseSize = view.tokens.dot['radius-base-px'] * 2;
     const restY = region.y + region.h * 0.02;
 
@@ -275,7 +285,7 @@ export default {
       trigger: 'step',
       state: 'recolored',
       kind: 'recolor',
-      chip: 'color: in-window vs out-of-window',
+      chip: 'teal: money inside kickoff windows · dim: the off-peak clock',
     },
   ],
 

@@ -403,7 +403,7 @@ export default {
       trigger: 'step',
       state: 'day1',
       kind: 'resort',
-      chip: 'color: contract family',
+      chip: 'teal: the futures book · lavender: match markets',
     },
     {
       id: 'b2',
@@ -414,7 +414,7 @@ export default {
     },
     {
       id: 'b3',
-      html: '<p>The reconciled tape totals $10.94 billion through July 8 and $12.3 billion at the July 14 snapshot; the widely reported &ldquo;$7.4 billion&rdquo; matches the tape&rsquo;s own cumulative as of roughly June 30, a floor about a week stale.<sup><a href="#fn-5">5</a></sup> 98.6% of everything ever traded here traded in-tournament, largely because three quarters of the notional sits in per-match products that did not exist before kickoff.<sup><a href="#fn-5">5</a></sup></p>',
+      html: '<p>The tape is the exchange&rsquo;s own trade-by-trade receipt, every transaction it ever cleared, and this counter is its running total. That total reaches $10.94 billion through July 8 and $12.3 billion at the July 14 snapshot. The widely reported &ldquo;$7.4 billion&rdquo; matches the tape&rsquo;s own cumulative as of roughly June 30, a floor about a week stale, since a tape only ever adds trades and any dated total is a number a later reading can only raise.<sup><a href="#fn-5">5</a></sup> 98.6% of everything ever traded here traded in-tournament, largely because three quarters of the notional sits in per-match products that did not exist before kickoff.<sup><a href="#fn-5">5</a></sup></p>',
       trigger: 'step',
       state: 'snapshot',
       kind: 'resort',
