@@ -68,7 +68,10 @@ function cellIndexFor(birthMs, day0Ms, days) {
 export default {
   id: 's04',
   act: 1,
-  title: "The tournament's clock",
+  // Structure-spec §5 S4: retitled so the scene's own job (the volume
+  // trap a reader must dodge tonight) is legible from the title alone.
+  title: 'Busy is not smart',
+  kicker: 'Skill 2, continued — the volume trap',
   layoutName: 'clock-grid',
 
   needs: { scene: true, series: [], zoom: null },
@@ -192,6 +195,15 @@ export default {
       .style('color', view.css('ink-low'))
       .style('font', `var(--type-micro-size) var(--font-apparatus)`)
       .call(axisHour);
+    // Axis titles (G3): the top hour axis and the left day axis both name
+    // what they measure, in plain words, with their unit.
+    g.append('text').attr('class', 'axis-title axis-title-hour')
+      .attr('x', gridRect.x + gridRect.w / 2).attr('y', gridRect.y - 28)
+      .attr('text-anchor', 'middle')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+      .style('font-weight', 500)
+      .text('hour of day (Eastern Time)');
 
     const grid = sj.grid || { days: 1, day0: data.manifest.epoch };
     const day0Ms = Date.parse(grid.day0) || Date.parse(data.manifest.epoch);
@@ -204,6 +216,13 @@ export default {
       .style('color', view.css('ink-low'))
       .style('font', `var(--type-micro-size) var(--font-apparatus)`)
       .call(axisDay);
+    g.append('text').attr('class', 'axis-title axis-title-day')
+      .attr('x', gridRect.x).attr('y', gridRect.y - 8)
+      .attr('text-anchor', 'start')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+      .style('font-weight', 500)
+      .text('tournament day (date)');
 
     // Kickoff-histogram bounded strip (own axis, never painted over the cells).
     const kh = (sj.kickoff_hist && sj.kickoff_hist.hours) || new Array(24).fill(0);
@@ -215,31 +234,36 @@ export default {
       .attr('width', hour.bandwidth() * 0.8)
       .attr('y', (v) => stripScale(v))
       .attr('height', (v) => stripScale(0) - stripScale(v))
-      .attr('fill', view.css('ink-low'));
+      .attr('fill', view.css('neutral-data'));
     stripG.append('text')
       .attr('x', stripRect.x).attr('y', stripRect.y - 4)
       .attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-caption-size) var(--font-apparatus)`)
-      .text('scheduled kickoffs, by ET hour; the market’s pulse is the schedule');
+      .text('scheduled kickoffs, by hour (Eastern Time)');
 
-    // "US waking hours" band.
+    // "US waking hours" band -- the scene's one amber unit (design-
+    // revision-spec S4 §1): fill at 0.10, stroke none, label rewritten
+    // to plain words, right-aligned inside the band per §2 placement.
     const wb = sj.waking_band;
     let bandG = null;
     if (wb) {
       bandG = g.append('g').attr('class', 's04-waking-band').style('display', 'none');
+      const bandX = hour(wb.start_hour);
+      const bandW = hour(wb.end_hour) - hour(wb.start_hour) + hour.bandwidth();
       bandG.append('rect')
-        .attr('x', hour(wb.start_hour))
-        .attr('width', hour(wb.end_hour) - hour(wb.start_hour) + hour.bandwidth())
+        .attr('x', bandX).attr('width', bandW)
         .attr('y', gridRect.y).attr('height', gridRect.h)
-        .attr('fill', view.css('accent-annotation')).attr('opacity', 0.08);
+        .attr('fill', view.css('accent-annotation')).attr('stroke', 'none').attr('opacity', 0.10);
       bandG.append('text')
-        .attr('x', hour(wb.start_hour) + 4).attr('y', gridRect.y + 14)
+        .attr('x', bandX + bandW - 12).attr('y', gridRect.y + 14)
+        .attr('text-anchor', 'end')
         .attr('fill', view.css('accent-annotation'))
         .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
-        .text('US waking hours: ~2x the schedule-only residual');
+        .text('US waking hours: about twice the schedule alone');
     }
 
-    // Rest-day row markers.
+    // Rest-day row markers + caption (structure-spec S4 §2: the 5-15x /
+    // 3x-futures ratios demote out of prose into this caption).
     const restDays = sj.rest_days || [];
     const restG = g.append('g').attr('class', 's04-rest-days').style('display', 'none');
     restG.selectAll('line').data(restDays).join('line')
@@ -247,6 +271,12 @@ export default {
       .attr('y1', (d) => day(Math.floor((Date.parse(d) - day0Ms) / 86400000)))
       .attr('y2', (d) => day(Math.floor((Date.parse(d) - day0Ms) / 86400000)))
       .attr('stroke', view.css('ink-mid')).attr('stroke-width', 2);
+    restG.append('text')
+      .attr('x', gridRect.x - 6).attr('y', gridRect.y + gridRect.h + 24)
+      .attr('text-anchor', 'start')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `var(--type-caption-size) var(--font-apparatus)`)
+      .text('rest days: trading drops 5-15x; the always-open winner market, only about 3x');
 
     return {
       step(beatId) {
@@ -268,24 +298,30 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: "<p>The market's clock is the tournament's clock.</p>",
+      html: "<p>The market's clock is the tournament's clock. Next, a strip of kickoff bars draws above the grid.</p>",
       trigger: 'step',
       state: 'assemble',
       kind: 'resort',
-      chip: 'brightness: trade density (color carries no meaning yet)',
+      chip: [
+        { token: 'field-rest', glyph: 'ramp', label: 'brighter = more money that hour' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded' },
     },
     {
       id: 'b2',
-      html: '<p>Windows bracketing kickoffs cover about a third of tournament time and capture 54.7% of tournament volume, a tilt of roughly 1.6x; the hour-of-day heatmap is, to a first approximation, a map of when a North America-hosted World Cup schedules football.<sup><a href="#fn-6">6</a></sup></p>',
+      html: '<p>The market gets loud when games kick off, and goes quiet when they do not. Kickoff windows cover about a third of the tournament&rsquo;s hours. But they capture 54.7% of all the money traded, about 1.6 times their fair share.<sup><a href="#fn-6">6</a></sup> The grid on this screen is really just a picture of the match schedule. Next, watch the grid change color. Teal marks kickoff windows.</p>',
       trigger: 'step',
     },
     {
       id: 'b3',
-      html: '<p>A genuine but mild residual survives the schedule: US waking hours run about twice the volume the kickoff calendar alone would predict.<sup><a href="#fn-6">6</a></sup> On rest days activity falls five to fifteen fold, but the always-open futures dim only about threefold, the cleaner measure of attention at rest.<sup><a href="#fn-6">6</a></sup></p>',
+      html: '<p>One thing survives even after you subtract out the schedule. During American waking hours, trading runs about twice as heavy as the schedule alone would predict.<sup><a href="#fn-6">6</a></sup> Tonight&rsquo;s final kicks off in United States primetime. Heavy trading tonight will mean people are watching, not that anyone knows the result early. It also means the price will be wide awake the moment the whistle blows.</p>',
       trigger: 'step',
       state: 'recolored',
       kind: 'recolor',
-      chip: 'teal: money inside kickoff windows · dim: the off-peak clock',
+      chip: [
+        { token: 'identity-teal', glyph: 'dot', label: 'teal = money inside match windows' },
+        { token: 'identity-ref', glyph: 'dim', label: 'dim = the off-peak clock' },
+      ],
     },
   ],
 

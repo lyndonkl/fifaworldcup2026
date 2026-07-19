@@ -134,6 +134,9 @@ export default {
   id: 's03',
   act: 1,
   title: 'The flood',
+  // Gate-4 round 2 (structure-spec §2/§3): course spine, shown on every
+  // beat card via main.js's kicker fallback chain (scene.kicker wins).
+  kicker: 'Skill 2 of 5 — what volume means',
   layoutName: 'family-race',
 
   needs: { scene: true, series: [], zoom: null },
@@ -293,6 +296,26 @@ export default {
       .style('color', view.css('ink-low'))
       .call(axisY);
 
+    // Axis titles (design-revision-spec G3: every D3 axis names what it
+    // measures, with a unit). X sits centered below its tick labels; Y
+    // stays horizontal, left-aligned above its topmost tick.
+    g.append('text').attr('class', 'axis-title axis-title-x')
+      .attr('x', chartRect.x + chartRect.w / 2)
+      .attr('y', chartRect.y + chartRect.h + 24 + 12)
+      .attr('text-anchor', 'middle')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+      .style('font-weight', 500)
+      .text('tournament days (date)');
+    g.append('text').attr('class', 'axis-title axis-title-y')
+      .attr('x', chartRect.x)
+      .attr('y', chartRect.y - 12)
+      .attr('text-anchor', 'start')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+      .style('font-weight', 500)
+      .text('total traded so far (dollars)');
+
     const lineFut = d3.line().x((d) => x(an.epochMs + d.day * 86400000)).y((d) => y(d.futUsd)).curve(d3.curveStepAfter);
     const lineMatch = d3.line().x((d) => x(an.epochMs + d.day * 86400000)).y((d) => y(d.matchUsd)).curve(d3.curveStepAfter);
 
@@ -315,36 +338,54 @@ export default {
         .attr('text-anchor', 'end')
         .attr('fill', view.css('ink-mid'))
         .style('font', `${view.tokens.typography.scale.find((s) => s.name === 'caption').size} var(--font-apparatus)`)
-        .text(pf.label || 'press floor');
+        .text(pf.label || 'press floor, about one week stale');
     }
 
-    // Crossover annotation (amber, annotation-only per §6).
+    // Crossover annotation. The scene's one amber unit, step 2 only
+    // (design-revision-spec S3 §2); it decays to ink-mid on step 3, no
+    // new amber unit replacing it (bright-unit ledger: step 3 carries
+    // zero amber). Label kept to the 8-word annotation cap.
     const crossMs = tsMs(sj.crossover_end, null);
-    let crossMark = null;
+    let crossMark = null, crossLine = null, crossLabel = null;
     if (crossMs) {
       crossMark = g.append('g').attr('class', 's03-crossover');
-      crossMark.append('line')
+      crossLine = crossMark.append('line')
         .attr('x1', x(crossMs)).attr('x2', x(crossMs))
         .attr('y1', chartRect.y).attr('y2', chartRect.y + chartRect.h)
         .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
-      crossMark.append('text')
+      crossLabel = crossMark.append('text')
         .attr('x', x(crossMs) + 6).attr('y', chartRect.y + 12)
         .attr('fill', view.css('accent-annotation'))
         .style('font', `${view.tokens.typography.scale.find((s) => s.name === 'annotation').size} var(--font-apparatus)`)
-        .text('day two: crossover');
+        .text('day two: match markets catch up');
       crossMark.style('display', 'none');
     }
 
+    // The demoted-share caption (structure-spec S3 b3: the 98.6%
+    // in-tournament figure moves out of prose into a caption). One
+    // pinned Zone-K-weight line, ink-mid, shown only once the tape has
+    // climbed past the press floor (step 3).
+    const shareCaption = g.append('text').attr('class', 's03-share-caption')
+      .attr('x', chartRect.x).attr('y', chartRect.y + chartRect.h + 24 + 12 + 18)
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+      .text('98.6% of everything on this tape traded after kickoff.')
+      .style('display', 'none');
+
     // The running dollar counter — the scene's protagonist number.
+    // Moved to the stage's top-right (design-revision-spec S3 §1), clear
+    // of the KEY RECT (G5): ink-hi, not amber, so motion (not the
+    // reserved annotation hue) carries the attention.
     const counterEl = html.append('div').attr('class', 'interactive s03-counter')
       .style('position', 'absolute')
-      .style('left', `${chartRect.x}px`)
-      .style('top', `${chartRect.y + chartRect.h + 12}px`)
+      .style('right', 'var(--space-24)')
+      .style('top', 'calc(var(--layout-key-exclusion-h-px) + var(--space-24) + var(--space-16))')
       .style('font-family', 'var(--font-apparatus)')
       .style('font-weight', '600')
       .style('font-size', 'clamp(28px, 4vw, 48px)')
       .style('color', 'var(--ink-hi)')
       .style('font-variant-numeric', 'tabular-nums lining-nums')
+      .style('text-align', 'right')
       .style('pointer-events', 'none');
 
     let raf = null;
@@ -379,13 +420,23 @@ export default {
           setCounter(sumUpTo(tsMs(sj.day1_end, an.epochMs)), true);
           if (pfLine) { pfLine.style('display', 'none'); pfLabel.style('display', 'none'); }
           if (crossMark) crossMark.style('display', 'none');
+          shareCaption.style('display', 'none');
         } else if (beatId === 'b2') {
           setCounter(sumUpTo(tsMs(sj.crossover_end, an.epochMs)), true);
           if (crossMark) crossMark.style('display', null);
+          shareCaption.style('display', 'none');
         } else if (beatId === 'b3') {
           const finalTotal = (data.manifest.census && data.manifest.census.total_usd) || sumUpTo(Infinity);
           setCounter(finalTotal, true);
           if (pfLine) { pfLine.style('display', null); pfLabel.style('display', null); }
+          // Emphasis decay (G4): the one amber unit this scene ever shows
+          // demotes to ink-mid here; no new amber replaces it.
+          if (crossLine && crossLabel) {
+            const dim = view.reducedMotion ? 0 : 550;
+            crossLine.transition().duration(dim).attr('stroke', view.css('ink-mid'));
+            crossLabel.transition().duration(dim).attr('fill', view.css('ink-mid'));
+          }
+          shareCaption.style('display', null);
         }
       },
       exit() {
@@ -399,22 +450,27 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>The tournament began and the money arrived all at once.</p>',
+      html: '<p>The tournament kicked off, and the money arrived all at once. Watch two towers grow: one for bets on the tournament winner, one for bets on single matches.</p>',
       trigger: 'step',
       state: 'day1',
       kind: 'resort',
-      chip: 'teal: the futures book · lavender: match markets',
+      chip: [
+        { token: 'identity-teal', glyph: 'dot', label: 'teal = bets on the tournament winner' },
+        { token: 'identity-lavender', glyph: 'dot', label: 'lavender = bets on single matches' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded' },
     },
     {
       id: 'b2',
-      html: '<p>Match markets out-traded the entire futures book, the same winner market the piece has followed since May 2025, on day one, 49.4 million contracts to 31.6 million, and passed its thirteen-month cumulative stock on day two; the futures book set its own record the same day, at roughly ninety times its pre-tournament pace.<sup><a href="#fn-4">4</a></sup></p>',
+      html: '<p>Match markets are bets on a single game. They cannot open until the schedule is set, so kickoff created thousands of them at once. On day one alone, those match markets traded 49.4 million contracts. The tournament-winner market, open for a whole year already, had traded only 31.6 million contracts in its entire life.<sup><a href="#fn-4">4</a></sup> By day two, match markets had out-traded that whole year. The winner market sped up too, trading about ninety times faster than before the tournament began.<sup><a href="#fn-4">4</a></sup> Next, watch the counter pass the grey dashed line.</p>',
       trigger: 'step',
       state: 'crossover',
       kind: 'resort',
     },
     {
       id: 'b3',
-      html: '<p>The tape is the exchange&rsquo;s own trade-by-trade receipt, every transaction it ever cleared, and this counter is its running total. That total reaches $10.94 billion through July 8 and $12.3 billion at the July 14 snapshot. The widely reported &ldquo;$7.4 billion&rdquo; matches the tape&rsquo;s own cumulative as of roughly June 30, a floor about a week stale, since a tape only ever adds trades and any dated total is a number a later reading can only raise.<sup><a href="#fn-5">5</a></sup> 98.6% of everything ever traded here traded in-tournament, largely because three quarters of the dollars sit in per-match products that did not exist before kickoff.<sup><a href="#fn-5">5</a></sup></p>',
+      html: '<p>The counter just passed the press number and kept climbing. The tape is the exchange&rsquo;s complete receipt: every trade it ever cleared, kept forever. This counter is the tape&rsquo;s running total. By July 8 that total reached $10.94 billion. By the July 14 snapshot, it reached $12.3 billion.<sup><a href="#fn-5">5</a></sup> Newspapers had reported &ldquo;$7.4 billion,&rdquo; a number that matched the tape about a week earlier, around June 30. A receipt only ever grows, so any dated total is really a floor, not a ceiling. The market knew its own size before the press did.</p>',
       trigger: 'step',
       state: 'snapshot',
       kind: 'resort',

@@ -155,6 +155,9 @@
   --dur-chip-pulse: 1200ms;
   --dur-scrub-lerp-smoothing: 120ms;
   --dur-ui-chrome-fade-up: 800ms;
+  /* REVISION (design-revision-spec §3, Gate-4 round 2): minimum stillness
+     between two sequenced motion events inside one beat (G6). */
+  --dur-stillness-gap: 400ms;
 
   /* ---- Motion: misc ---- */
   --motion-overlay-max-sequenced-elements: 10;
@@ -174,6 +177,16 @@
   --layout-annotation-leader-weight-px: 1.5px;
   --layout-max-annotations-per-step: 2;
   --layout-max-pinned-captions-per-step: 1;
+
+  /* REVISION (design-revision-spec §3, Gate-4 round 2): six additions for
+     the persistent color key, Zone K/F placement, and the frame-level
+     pinned-caption ceiling. No color changes, no modifications. */
+  --layout-caption-slot-top-offset-px: 40px;
+  --layout-footer-slot-offset-px: 32px;
+  --layout-key-exclusion-w-px: 280px;
+  --layout-key-exclusion-h-px: 132px;
+  --layout-key-exclusion-h-mobile-px: 56px;
+  --layout-max-visible-captions: 2;
 
   /* ---- Population scaling (grain plate) ---- */
   --pop-desktop-grain-usd-per-dot: 75000;

@@ -1309,8 +1309,8 @@ def build_s04_scene(con):
 def build_s05_scene(market_totals, market_meta, ticker_to_idx, lorenz):
     """s05.js reads total_markets, core_series.{legs,share_pct},
     tail.{markets,share_pct}, gini_pooled, gini_within_family, lorenz_curve[]
-    (optional), trump_market.{market_index,ticker,rank,contracts,
-    family_size,expected_rank_at_base_rate}. below_grain is read from
+    (optional), novelty_market.{series_ticker,label,rank,contracts,
+    n_markets,in_below_grain}. below_grain is read from
     manifest.census directly (s05.js's own header note), not from this file.
     core_series/gini_within_family are computed live (class A, matching this
     file's existing treatment of every other Lorenz field) off the same
@@ -1347,16 +1347,22 @@ def build_s05_scene(market_totals, market_meta, ticker_to_idx, lorenz):
         trapz = getattr(np, "trapezoid", None) or np.trapz
         gini_within = round(float(1.0 - 2.0 * trapz(cpv, cpm)), 4)
 
-    trump_ticker = novelty.get("ticker")
-    trump_family_size = None
-    trump_expected_rank = None
-    if trump_ticker:
-        fam_prefix = trump_ticker.split("-")[0]
-        n_family = int((market_meta["series_ticker"] == fam_prefix).sum())
-        trump_family_size = n_family or None
-        n_traded = novelty.get("n_traded_markets")
-        if trump_family_size and n_traded:
-            trump_expected_rank = round(n_traded / (trump_family_size + 1))
+    # Novelty exemplar (Gate-4 de-politicization): the brand-advertising family
+    # KXWCADS replaces the Trump-mention market everywhere, including this data
+    # layer — the emitter must never resurface a political ticker in served
+    # JSON. All figures are class-A recomputes off the tape (market_totals),
+    # so they refreeze on every deploy-morning rebuild.
+    ADS_SERIES = "KXWCADS"
+    ads_tickers = {t for t, s in series_by_ticker.items() if s == ADS_SERIES}
+    ads_rows = market_totals[market_totals["ticker"].isin(ads_tickers)]
+    ads_contracts = float(ads_rows["total_dollars"].sum()) if len(ads_rows) else 0.0
+    ads_n_markets = int(len(ads_rows))
+    ads_rank = None
+    ads_below_grain = None
+    if len(ads_rows):
+        biggest = float(ads_rows["total_dollars"].max())
+        ads_rank = int((market_totals["total_dollars"] > biggest).sum()) + 1
+        ads_below_grain = bool(biggest < 75000)
 
     lorenz_curve_pts = [
         {"market_frac": round(mf, 6), "value_frac": round(vf, 9)}
@@ -1374,13 +1380,13 @@ def build_s05_scene(market_totals, market_meta, ticker_to_idx, lorenz):
         "gini_pooled": lorenz["gini"],
         "gini_within_family": gini_within,
         "lorenz_curve": lorenz_curve_pts,
-        "trump_market": {
-            "market_index": ticker_to_idx.get(trump_ticker),
-            "ticker": trump_ticker,
-            "rank": novelty.get("rank_out_of_traded_markets"),
-            "contracts": novelty.get("contracts"),
-            "family_size": trump_family_size,
-            "expected_rank_at_base_rate": trump_expected_rank,
+        "novelty_market": {
+            "series_ticker": ADS_SERIES,
+            "label": "the ad family (which brands advertise around the final)",
+            "rank": ads_rank,
+            "contracts": round(ads_contracts),
+            "n_markets": ads_n_markets,
+            "in_below_grain": ads_below_grain,
         },
     }
 

@@ -102,7 +102,8 @@ function sideColor(tokens, sideIdx) {
 export default {
   id: 's06',
   act: 2,
-  title: 'Anatomy of the biggest market',
+  title: 'One market, up close',
+  kicker: 'Skill 2, continued: the tape’s limit',
   layoutName: 'match-zoom',
 
   needs: { scene: true, series: [], zoom: 'mexeng' },
@@ -110,7 +111,7 @@ export default {
   zoom: {
     key: 'mexeng',
     tagBit: 'ZOOM_MEXENG',
-    grainText: '1 dot = 1 trade · showing every {n}th of {count} trades',
+    grainText: '1 dot = 1 trade · showing every {n}th of {count} trades · Mexico-England, July 5',
   },
 
   scales(data, view) {
@@ -212,13 +213,31 @@ export default {
     const { x, rate } = scales;
     const g = container.svg;
 
+    // ET tick format: the tape is stored in UTC; the reader is told
+    // "Eastern Time" (G3), so ticks apply a fixed UTC-4 (EDT, July) shift
+    // rather than the browser's own local zone.
+    function etHourLabel(d) {
+      const et = new Date(d.getTime() - 4 * 3600 * 1000);
+      let h = et.getUTCHours() % 12;
+      if (h === 0) h = 12;
+      return `${h}${et.getUTCHours() >= 12 ? 'pm' : 'am'}`;
+    }
+
     const axisG = g.append('g').attr('class', 's06-axis');
     axisG.append('g')
       .attr('transform', `translate(0,${view.region.y + view.region.h + 8})`)
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-micro-size)')
       .attr('color', 'var(--ink-mid)')
-      .call(d3.axisBottom(x).ticks(6));
+      .call(d3.axisBottom(x).ticks(6).tickFormat(etHourLabel));
+    axisG.append('text')
+      .attr('x', view.region.x + view.region.w / 2)
+      .attr('y', view.region.y + view.region.h + 8 + 24)
+      .attr('text-anchor', 'middle')
+      .attr('font-family', 'var(--font-apparatus)')
+      .attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-mid)')
+      .text('the market’s last 24 hours (Eastern Time)');
 
     const rateG = g.append('g').attr('class', 's06-rate-strip');
     if (data.scene && Array.isArray(data.scene.rate_curve) && data.scene.rate_curve.length) {
@@ -240,8 +259,9 @@ export default {
         .call(d3.axisLeft(rate).ticks(3))
         .append('text')
         .attr('fill', 'var(--ink-mid)')
-        .attr('x', 0).attr('y', -8)
-        .text('trades/s');
+        .attr('font-size', 'var(--type-caption-size)')
+        .attr('x', 0).attr('y', rate(6) - 12)
+        .text('trades arriving (per second)');
     }
 
     let kickoffX = null;
@@ -256,9 +276,10 @@ export default {
         .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
         .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', 1.5)
         .attr('stroke-dasharray', '2,3');
-      const label = data.scene.kickoff_step_multiplier
-        ? `kickoff · ×${data.scene.kickoff_step_multiplier} step`
-        : 'kickoff';
+      const mult = data.scene.kickoff_step_multiplier;
+      const label = mult
+        ? `kickoff: 1 trade a second becomes ${mult}`
+        : 'kickoff: the pace steps up';
       drawSingleton(kickoffG, kickoffX, view.region.y - 4, view.tokens, label);
     }
 
@@ -279,21 +300,27 @@ export default {
         .attr('d', line);
       const pct = data.scene.size_growth_pct;
       if (pct !== undefined) {
-        sparkCaption = pinnedCaption(container, `per-trade size, in-play: +${pct}%`, 's06-spark-caption')
+        sparkCaption = pinnedCaption(container, `per-trade size, +${pct}% in play`, 's06-spark-caption')
           .style('left', `${view.region.x}px`)
-          .style('top', `${view.region.y + view.region.h + 46}px`);
+          .style('top', `${view.region.y + view.region.h + 38}px`);
       }
     }
 
+    // Zone K occupant: the scene's one honest-limit line. It is withheld
+    // until the scrub nears its end (G6 "final step"), not shown from the
+    // moment the beat activates, so it reads as the scene's conclusion.
     const captionEl = pinnedCaption(
       container,
-      'Mexico-to-advance money · what the tape can and cannot say about who traded',
+      'What moved is certain. Why it moved is not.',
       's06-caption',
-    ).style('left', `${view.region.x}px`).style('top', `${view.region.y - 40}px`);
+    ).style('left', `${view.region.x}px`).style('top', `${view.region.y - 40}px`)
+      .style('display', 'none');
 
     // Mobile: fine stream texture is illegible at phone size -- the rate
     // axis becomes a haptic-adjacent visual metronome (a single pulsing dot)
-    // instead of the line strip (design-system.md S6 note).
+    // instead of the line strip (design-system.md S6 note). Moved to the
+    // top-right (mobile KEY band) so it never collides with the Zone K
+    // caption slot on the left (design-revision-spec S6, mobile note).
     let metronome = null;
     if (view.mobile) {
       rateG.style('display', 'none');
@@ -303,8 +330,8 @@ export default {
         .style('width', '10px').style('height', '10px')
         .style('border-radius', '50%')
         .style('background', 'var(--accent-annotation)')
-        .style('left', `${view.region.x}px`)
-        .style('top', `${view.region.y - 20}px`)
+        .style('right', 'var(--space-16)')
+        .style('top', `${view.region.y - 40}px`)
         .style('opacity', 0.4);
     }
 
@@ -316,6 +343,7 @@ export default {
     }
 
     function scrub(t) {
+      captionEl.style('display', t >= 0.92 ? null : 'none');
       if (kickoffX === null) return;
       const cx = view.region.x + t * view.region.w;
       const active = Math.abs(cx - kickoffX) < view.region.w * 0.02;
@@ -347,28 +375,37 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>The single biggest market of the tournament was not the winner book.
-        It was Mexico to advance past England, 158.7 million contracts across
-        roughly a million trades, host-nation money concentrated on one
-        elimination night.<sup><a href="#fn-9">9</a></sup> Retail flow is the
-        order stream of ordinary individual traders rather than institutions,
-        the small bettors who make up almost all of this exchange. Zoomed to
-        individual trades, it looks like ordinary Kalshi retail flow at
-        extraordinary scale: typical trade sizes, the exchange-wide taker-yes
-        skew, a heavier pre-match profile than the median knockout
-        market.<sup><a href="#fn-9">9</a></sup> The tape records that money
-        moved; it cannot say whether the mover was hedging heartbreak or
-        chasing it. The arrival rate tells its own story: the pre-kick hour
-        already runs about one print, meaning one executed trade, per second,
-        and the opening whistle steps it up about 5.4-fold.<sup><a
-        href="#fn-10">10</a></sup></p>`,
+      html: `<p>The biggest single market of the whole tournament was not the
+        market on who wins it all. It was one question: would Mexico knock out
+        England? Mexico was a host country of this World Cup, playing at home.
+        The money that piled up that night was bets on that one match. The tape
+        recorded 158.7 million tickets bought and sold, in about a million
+        separate trades.<sup><a href="#fn-9">9</a></sup></p>
+        <p>Zoomed in, trade by trade, it looks almost ordinary. Trade sizes
+        were typical. More people bought yes than no, the same pattern found
+        everywhere on this exchange. Trading ran heavier before kickoff than
+        in a typical knockout match.<sup><a href="#fn-9">9</a></sup></p>
+        <p>The tape can say that money moved. It cannot say why. It cannot
+        tell a Mexico fan betting with hope apart from a Mexico fan
+        protecting against heartbreak.</p>
+        <p>The pace tells its own story. Before kickoff, a trade was landing
+        about once a second, one print, one executed trade. Watch for the
+        kickoff line: the pace steps up about 5.4 times the moment the whistle
+        blows.<sup><a href="#fn-10">10</a></sup></p>
+        <p>Volume tells you where the crowd is watching. It does not tell you
+        what the crowd knows. For that, you have to watch prices move during
+        a match itself. That is next.</p>`,
       // Non-uniform scroll-to-time mapping lives in layout().keyframes;
       // span is a pacing choice for this gateway zoom scene (not itself a
       // dated figure), matching S1/S8's scrub-track convention.
       trigger: { type: 'scrub', span: 4.5 },
       state: 'k0',
       kind: 'resort',
-      chip: 'color: taker side · cyan bought yes, vermillion bought no',
+      chip: [
+        { token: 'side-yes', glyph: 'dot', label: 'cyan = money that bet YES on Mexico advancing' },
+        { token: 'side-no', glyph: 'dot', label: 'orange = money that bet NO' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
       overlayStep: 'b1',
     },
   ],

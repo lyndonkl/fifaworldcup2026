@@ -77,6 +77,7 @@ export default {
   id: 's08',
   act: 2,
   title: 'Which market you watch',
+  kicker: 'Skill 3, continued: check which ticket is talking',
   layoutName: 'dual-path',
 
   needs: { scene: true, series: [], zoom: 'gerpar' },
@@ -84,7 +85,7 @@ export default {
   zoom: {
     key: 'gerpar',
     tagBit: 'ZOOM_GERPAR',
-    grainText: '1 dot = 1 trade · showing every {n}th of {count} trades',
+    grainText: '1 dot = 1 trade · showing every {n}th of {count} trades · Germany-Paraguay, June 29',
   },
 
   scales(data, view) {
@@ -214,29 +215,52 @@ export default {
     const { x, yReg, yAdv, laneTop, laneH } = scales;
     const g = container.svg;
 
-    g.append('g')
+    // Whistle instant, hoisted above the axis block so the x-axis can label
+    // itself as match-clock minutes (kickoff ~= whistle - 90') rather than
+    // raw clock time (G3).
+    const whistleTs = data.scene && data.scene.window && data.scene.window.whistle_ts
+      ? new Date(data.scene.window.whistle_ts).getTime() : null;
+    const kickoffTs = whistleTs !== null ? whistleTs - 90 * 60000 : null;
+    function matchMinuteLabel(d) {
+      if (kickoffTs === null) return '';
+      return `${Math.round((d.getTime() - kickoffTs) / 60000)}’`;
+    }
+
+    const axisG = g.append('g')
       .attr('transform', `translate(0,${view.region.y + view.region.h + 8})`)
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-micro-size)')
-      .call(d3.axisBottom(x).ticks(6));
+      .call(d3.axisBottom(x).ticks(6).tickFormat(matchMinuteLabel));
+    axisG.append('text')
+      .attr('x', view.region.x + view.region.w / 2).attr('y', 28)
+      .attr('text-anchor', 'middle')
+      .attr('font-family', 'var(--font-apparatus)')
+      .attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-mid)')
+      .text('match clock (minutes)');
 
-    // Dual price axes: one per lane.
+    // Dual price axes: one per lane, each with its own horizontal title
+    // (G3: y titles are never rotated).
     g.append('g').attr('transform', `translate(${view.region.x - 8},0)`)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
       .call(d3.axisLeft(yReg).ticks(4));
+    g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.reg + 10)
+      .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-mid)').text('regulation-market price (cents)');
     g.append('g').attr('transform', `translate(${view.region.x - 8},0)`)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
       .call(d3.axisLeft(yAdv).ticks(4));
+    g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.adv + 10)
+      .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-mid)').text('advance-market price (cents)');
 
     g.append('text').attr('x', view.region.x).attr('y', laneTop.reg - 6)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
-      .attr('fill', 'var(--ink-low)').text('REGULATION (GER leg) · slate-grey, settling out');
+      .attr('fill', 'var(--ink-low)').text('REGULATION · Germany wins in 90, expiring by rule');
     g.append('text').attr('x', view.region.x).attr('y', laneTop.adv - 6)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
-      .attr('fill', 'var(--ink-low)').text('ADVANCEMENT · cyan, still trading');
+      .attr('fill', 'var(--ink-low)').text('ADVANCE · Germany goes through, still trading');
 
-    const whistleTs = data.scene && data.scene.window && data.scene.window.whistle_ts
-      ? new Date(data.scene.window.whistle_ts).getTime() : null;
     const whistleG = g.append('g').style('display', 'none');
     if (whistleTs !== null) {
       const wx = x(whistleTs);
@@ -251,7 +275,11 @@ export default {
 
     // Shootout region shading + per-kick markers (advancement leg, tile
     // flags bit 0 = detector-anchored repricing event) -- one composite
-    // annotation cluster, not N separate annotations.
+    // annotation cluster, not N separate annotations. Markers sit in a
+    // thin strip near the bottom of the advance lane (never full-lane
+    // height) and stay ink-low: this scene's one amber unit is already
+    // spent on the merged decay annotation below (design-revision-spec S8
+    // bright-unit ledger caps this scene at cyan + white + one amber).
     const kicksG = g.append('g').style('display', 'none');
     if (whistleTs !== null) {
       const spec = data.manifest.zoom.gerpar;
@@ -261,25 +289,43 @@ export default {
         .attr('y', laneTop.adv).attr('height', laneH)
         .attr('fill', 'var(--field-rest)').attr('fill-opacity', 0.06);
       const tile = data.zoom.gerpar;
+      const stripBottom = laneTop.adv + laneH - 4;
+      const stripTop = stripBottom - 12;
       if (tile) {
+        let kickN = 0;
         for (let r = 0; r < tile.count; r++) {
           const ts = tile.t0 + tile.ts_ms[r];
           if (ts > whistleTs && (tile.flags[r] & 1)) {
+            kickN += 1;
+            const kx = x(ts);
             kicksG.append('line')
-              .attr('x1', x(ts)).attr('x2', x(ts))
-              .attr('y1', laneTop.adv).attr('y2', laneTop.adv + laneH)
-              .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', 1)
-              .attr('stroke-opacity', 0.6);
+              .attr('x1', kx).attr('x2', kx)
+              .attr('y1', stripTop).attr('y2', stripBottom)
+              .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1);
+            kicksG.append('text')
+              .attr('x', kx).attr('y', stripTop - 3)
+              .attr('text-anchor', 'middle')
+              .attr('font-family', 'var(--font-tape)')
+              .attr('font-size', 'var(--type-micro-size)')
+              .attr('fill', 'var(--ink-low)')
+              .text(String(Math.min(kickN, 99)));
           }
         }
       }
     }
 
+    // Merged two-line annotation (CR-8): line 1 amber (the scene's one
+    // amber unit), line 2 ink-mid. One leader, one block, never two
+    // separate captions competing for the same story point.
     const decayCaption = pinnedCaption(
       container,
-      'regulation leg decay: no more than 7¢/min · a real goal jumps 19–25¢ in 30s · this is expiry, not news',
+      '',
       's08-decay-caption',
-    ).style('left', `${view.region.x}px`).style('top', `${laneTop.reg + laneH + 8}px`);
+    ).style('left', `${view.region.x}px`).style('top', `${laneTop.reg + laneH + 8}px`)
+      .html(
+        '<div style="color:var(--accent-annotation)">settling out: never faster than 7 cents a minute</div>'
+        + '<div style="color:var(--ink-mid); margin-top:4px">a real goal moves 19 to 25 cents in 30 seconds</div>',
+      );
 
     // One continuous scrub track (storyboard's single Beat/Scroll spec):
     // the whistle marker, the decay caption, and the shootout/kick markers
@@ -316,26 +362,38 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>Which market you watch matters more than what the players do.
-        Germany and Paraguay finished level, and the regulation-time
-        contract did exactly what its rules require: the Germany leg ground
-        from 48 cents to one over twenty-two minutes on accelerating
-        settlement volume, a decay never exceeding seven cents a minute,
-        while real goals jump nineteen to twenty-five cents inside thirty
-        seconds.<sup><a href="#fn-13">13</a></sup> The advancement contract
-        barely moved at the whistle and kept trading through the shootout
-        for another hour.<sup><a href="#fn-13">13</a></sup> A reader
-        watching only the regulation leg would see the market abandon
-        Germany without news. The tape shows a contract obeying its own
-        settlement clock, while belief kept trading in the advancement leg
-        through every kick.</p>`,
+      html: `<p>Which market you watch matters more than what the players
+        do. Germany and Paraguay finished level after ninety minutes.</p>
+        <p>One ticket paid off only if Germany won inside those ninety
+        minutes. By its own rules, that ticket had to die at the final
+        whistle: a draw counts as no. Its price slid from 48 cents to 1,
+        like sand falling through an hourglass, never faster than 7 cents a
+        minute.<sup><a href="#fn-13">13</a></sup> Compare that to a real
+        goal: a real goal moves a price 19 to 25 cents in 30 seconds, more
+        than three times as fast.</p>
+        <p>A second ticket paid off if Germany went through to the next
+        round, however that happened. It barely moved at the whistle and
+        kept trading through every penalty kick, for another
+        hour.<sup><a href="#fn-13">13</a></sup></p>
+        <p>Same match. Two tickets. Two different stories. Someone watching
+        only the first ticket would swear the market gave up on Germany for
+        no reason. It didn't. At the whistle line, watch the two paths
+        split. One dies. One keeps trading.</p>
+        <p>Tonight's tie-in: if the final is level late, the
+        win-in-ninety-minutes ticket will slide by rule, not by belief. The
+        real belief will be sitting in the champion tickets. Check which
+        ticket is talking before you react.</p>`,
       // Scrub from minute 85 through the shootout's end; the dwell at the
       // whistle (where layout().keyframes slows real time per scroll inch)
       // is the scene's gold coin, per storyboard §Scroll.
       trigger: { type: 'scrub', span: 6 },
       state: 'k0',
       kind: 'resort',
-      chip: 'color: contract status · cyan still trading, slate-grey settling out',
+      chip: [
+        { token: 'side-yes', glyph: 'dot', label: 'cyan = the advance market, still trading' },
+        { token: 'state-expiring', glyph: 'dot', label: 'slate = the regulation market, expiring by rule' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
       overlayStep: 'b1',
     },
   ],

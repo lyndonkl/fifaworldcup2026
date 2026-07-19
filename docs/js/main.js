@@ -30,6 +30,15 @@ import {
 /* Note: s16 imports s09/s10/s13/s14/s15 itself (CONTRACT §2 sibling-   */
 /* import exception for its anchor carousel); ES module singletons mean */
 /* importing them again here is the same instances, not a duplicate.    */
+/*                                                                       */
+/* GATE-4 ROUND 2 (structure-spec §6): the revision council evaluated a  */
+/* reorder (s13 between s11 and s12) and REJECTED it for this pass --    */
+/* zero reorder_needed. s12/s13 instead fold into the Skill-5 act as its */
+/* two "fake flaws" before s14's real one, entirely in prose (kickers +  */
+/* beat html), with no registry surgery and no transition re-QA. Cuts:   */
+/* none -- every scene carries a named skill job in the structure spec.  */
+/* Do not reorder or comment out any line below without a corresponding  */
+/* structure-spec revision; this array is intentionally untouched.       */
 
 import s01 from './scenes/s01.js';
 import s02 from './scenes/s02.js';
@@ -100,6 +109,12 @@ function computeView() {
     state: (name) => particleState(tokens, name),
     css: (name) => `var(--${name})`,
     grain: null,        // filled after the population tile loads
+    // Persistent color key update API (design-revision-spec G1), exposed
+    // on `view` per the spec's "expose it on the view or a shared module"
+    // instruction -- the same escape-hatch pattern activateSceneState()
+    // already uses for mid-scene interactives (S14's toggle, S18's picker)
+    // that need to drive chrome outside the normal beat-activation flow.
+    setChip: (rows) => setChip(rows),
   };
   // Global scales (owned here; scenes own their 'sNN.*' keys).
   if (manifest) {
@@ -215,17 +230,131 @@ function fillSlots() {
 }
 
 /* ---------------------------------------------------------------- */
-/* Chip + grain plate (CONTRACT §7)                                  */
+/* Persistent color key + grain plate (CONTRACT §7)                  */
+/* Key rebuilt per design-revision-spec G1 (Gate-4 round 2): a stacked   */
+/* list, one row per active color meaning, each row a rendered swatch +  */
+/* plain color word + meaning -- recognition over recall. #chip/#key-rows*/
+/* markup and the standing rest-field debut row live in index.html; this */
+/* module only ever repopulates #key-rows, never hides the container.    */
 
 const chipEl = document.getElementById('chip');
+const chipRowsEl = document.getElementById('key-rows');
 const plateEl = document.getElementById('grain-plate');
-let chipText = null;
+let chipText = null;              // fingerprint of the last-rendered rows
 
-function setChip(text) {
-  if (!text || text === chipText) return;
-  chipText = text;
-  chipEl.textContent = text;
-  chipEl.style.visibility = 'visible';   // debuts once; never disappears after
+const KEY_MAX_MEANING_ROWS = 3;   // + 1 standing row per beat (G1, 4+/-1)
+
+/* Swatch fill (G1): every glyph renders at alpha 1.0 EXCEPT the two
+ * state-swatches -- 'dim' (the resting field) and 'dead' (settled money)
+ * -- which render at their own particle-state alpha so the key matches
+ * what the reader actually sees on screen rather than a boosted preview. */
+function keySwatchRGBA(token, glyph) {
+  if (glyph === 'dim') return particleState(tokens, 'rest');
+  if (glyph === 'dead') return particleState(tokens, 'dead');
+  return colorOf(tokens, token, 1.0);
+}
+function rgbaCss(rgba) {
+  const [r, g, b, a] = rgba;
+  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`;
+}
+
+/* Glyph-true swatches (G1): the key must reproduce the actual mark, never
+ * default every row to a dot -- dot = money (filled circle) · line = D3
+ * price/model line · dash = Pinnacle requotes · block = Polymarket minutes
+ * · box = non-money D3 marks, outline-only (filled-vs-outline is the
+ * piece's "dots are money" grammar, so it must be legible in the key too)
+ * · ramp = brightness-means-density (S4 b1) · dim/dead = state swatches,
+ * see keySwatchRGBA above. A row with no token/glyph (the bare-string
+ * compat branch below) renders an empty slot rather than a wrong mark. */
+function makeKeySwatch(token, glyph) {
+  const el = document.createElement('span');
+  const g = glyph || 'dot';
+  el.className = `key-swatch key-swatch-${g}`;
+  el.setAttribute('aria-hidden', 'true');
+  if (!token || !glyph) { el.style.visibility = 'hidden'; return el; }
+  const css = rgbaCss(keySwatchRGBA(token, glyph));
+  switch (glyph) {
+    case 'line':
+      el.style.width = '12px'; el.style.height = '2px'; el.style.borderRadius = '0';
+      el.style.background = css;
+      break;
+    case 'dash':
+      el.style.width = '10px'; el.style.height = '2px'; el.style.borderRadius = '0';
+      el.style.background = `repeating-linear-gradient(to right, ${css} 0 3px, transparent 3px 5px)`;
+      break;
+    case 'block':
+      el.style.width = '12px'; el.style.height = '8px'; el.style.borderRadius = '2px';
+      el.style.background = css;
+      break;
+    case 'box':
+      el.style.width = '12px'; el.style.height = '8px'; el.style.borderRadius = '2px';
+      el.style.background = 'transparent';
+      el.style.border = `1.5px solid ${css}`;
+      break;
+    case 'ramp': {
+      const lo = rgbaCss(keySwatchRGBA(token, 'dim'));
+      const hiRgba = colorOf(tokens, token, 1.0);
+      const mid = rgbaCss([hiRgba[0], hiRgba[1], hiRgba[2], 0.6]);
+      const hi = rgbaCss(hiRgba);
+      el.style.width = '12px'; el.style.height = '8px'; el.style.borderRadius = '2px';
+      el.style.background = `linear-gradient(to right, ${lo} 0 33%, ${mid} 33% 66%, ${hi} 66% 100%)`;
+      break;
+    }
+    case 'dot':
+    case 'dim':
+    case 'dead':
+    default:
+      el.style.width = '10px'; el.style.height = '10px'; el.style.borderRadius = '50%';
+      el.style.background = css;
+      el.style.border = '1px solid rgba(124, 135, 148, 0.4)';
+      break;
+  }
+  return el;
+}
+
+/* The key's update API (G1). rows: [{token, glyph, label}], label <= 9
+ * words, capped to 3 meaning rows + 1 standing row per beat. Also exposed
+ * as `view.setChip` (computeView(), above) for mid-scene interactives.
+ *
+ * Backward-compat shim: a scene module not yet migrated to the row-array
+ * shape (structure-spec §9's prose-rewrite pass) may still pass a bare
+ * string -- every current `beat.chip: '...'` does, and so does s18.js's
+ * own setChipDirect(). Rendered as one unlabeled text row so nothing
+ * breaks; delete this branch once every scene ships row arrays. */
+function setChip(rows) {
+  if (typeof rows === 'string') {
+    rows = rows ? [{ token: null, glyph: null, label: rows }] : [];
+  }
+  if (!rows || !rows.length) return;
+
+  const fingerprint = JSON.stringify(rows);
+  if (fingerprint === chipText) return;
+  chipText = fingerprint;
+
+  const capped = rows.slice(0, KEY_MAX_MEANING_ROWS + 1);
+  const render = () => {
+    chipRowsEl.innerHTML = '';
+    for (const row of capped) {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'key-row';
+      rowEl.appendChild(makeKeySwatch(row.token, row.glyph));
+      const label = document.createElement('span');
+      label.textContent = row.label;
+      rowEl.appendChild(label);
+      chipRowsEl.appendChild(rowEl);
+    }
+    chipRowsEl.style.opacity = '1';
+  };
+
+  if (reducedMotion) {
+    render();
+  } else {
+    // Outgoing/incoming rows crossfade over --dur-recolor-min (500ms, G1);
+    // the pulse below fires at t=0 of the change, never at tween end.
+    chipRowsEl.style.opacity = '0';
+    requestAnimationFrame(render);
+  }
+
   chipEl.classList.remove('pulse');
   void chipEl.offsetWidth;               // restart the pulse animation
   chipEl.classList.add('pulse');
@@ -323,8 +452,14 @@ function buildRail() {
       const isScrub = beat.trigger && beat.trigger.type === 'scrub';
       const card = document.createElement('div');
       card.className = 'card';
+      // GATE-4 ROUND 2 (structure-spec §2/§3): the course spine is carried
+      // on screen by scene kickers ("Skill 1 of 5", ...), distinct from
+      // each scene's own dramatic title. A scene module that has adopted
+      // the new `kicker` field wins here; `title` (today's behavior) is
+      // the fallback for any scene not yet migrated by the prose-rewrite
+      // pass, so this ships safely ahead of and after that pass lands.
       card.innerHTML =
-        `<div class="kicker">${scene.title || scene.id}</div>${beat.html || ''}`;
+        `<div class="kicker">${scene.kicker || scene.title || scene.id}</div>${beat.html || ''}`;
       let sentinel;
       if (isScrub) {
         const track = document.createElement('div');

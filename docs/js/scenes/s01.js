@@ -4,13 +4,24 @@
  * <=6 viewport-heights total INCLUDING the static pre-title header),
  * §4.3 (zoom/tick semantics), §7 (grain plate / chip).
  * Design: research/design-system.md §9 "S1" (Grain Plate pre-title,
- * non-cuttable; side-binary cyan/vermillion debut; chip debut; amber at
- * the repricing event and the whistle; the France pour is the piece's
- * first sight of state.dead grey).
+ * non-cuttable; side-binary cyan/orange debut; chip debut; amber at
+ * the repricing event; the France pour is the piece's first sight of
+ * state.dead grey).
  * Findings: research/findings-dossier.md R3/R20 (goal mechanism, no
  * exploitable fade) ground the "spike is the price" framing carried
  * forward by S7/S16-L3; this scene itself only narrates the settlement,
  * per storyboard R23-adjacent discipline (no cross-venue claims here).
+ *
+ * GATE-4 ROUND-2 REVISION (structure-spec §5 S1 / design-revision-spec §2
+ * S1): kicker "Skill 1 of 5 — what a price means"; prose rewritten to
+ * eighth-grade level teaching ticket-as-chance and settle before use;
+ * boot/pre-title now paints EVERY dot at field.rest (CR-18) with tonight's
+ * amber tag arriving as one announced, engine-onset-pulsed tween a hair
+ * into the scrub rather than baked into the very first pixel; the whistle
+ * annotation drops its amber halo/white core (declutter checklist) for
+ * plain ink-mid text so "the goal" stays the scene's one amber unit; the
+ * color key debuts here via the row-array `setChip` API, updated
+ * imperatively as the scrub crosses pre-title -> zoom -> settle.
  *
  * STORYBOARD CONTRACT NOTE — pre-title frame: the storyboard's "Beat,
  * pre-title" text ("A still field of dots... every dot on this screen is
@@ -182,6 +193,10 @@ export default {
   id: 's01',
   act: 0,
   title: 'Ninety minutes in Arlington',
+  // Piece-wide spine (structure-spec §2/§3): the scene kicker names which
+  // of the five skills this scene teaches. main.js's buildRail() already
+  // prefers `scene.kicker` over `scene.title` for the rail card header.
+  kicker: 'Skill 1 of 5 — what a price means',
   layoutName: 'resting-field → tick-stream',
 
   // No per-scene JSON: everything s01 needs is already in the contract's
@@ -244,7 +259,7 @@ export default {
     );
 
     const BASE_PX = view.tokens.dot['radius-base-px'] * 2; // radius -> diameter
-    // ACTIVE/REST luminance encoding (REVISION, perception-brief §9b, §10.1-2):
+    // ACTIVE/REST luminance encoding (perception-brief §9b, §10.1-2):
     // the pop between "tonight's trades" and the resting field is bought here
     // purely by which ALPHA BAND each dot lands in, not by hue. The engine
     // (FRAG_POINTS/VERT_POINTS) dims any dot whose own alpha is <=
@@ -270,19 +285,28 @@ export default {
     const stageX = clockX(0) - 14; // "not yet arrived" staging point
     const stageY = priceY(50);
 
-    // ---- state: 'resting' — the pre-title still frame AND kf0 of the
-    // scrub. Tonight's FRA-ESP dots light up amber against the resting
-    // field ("one held breath, no motion... then a few thousand dots
-    // near the timeline's right edge light up: tonight's"). This is also
-    // the very first frame painted at boot (CONTRACT §8.4 step 6: "first
-    // paint is setState, never animate the initial render"). ----
-    function makeResting() {
+    // ---- state: 'bootRest' — the TRUE first pixel painted, before any
+    // reader interaction (CR-18, perception-brief §7 on change blindness /
+    // onset capture): every dot, including tonight's FRA-ESP subset, sits
+    // at plain field.rest. No amber pre-light. This is the state
+    // boot()/activateBeat() snap to for the silent first paint. ----
+    function makeAllRest() {
       const s = makeState(N);
       for (let i = 0; i < N; i++) {
         s.x[i] = restPos.x[i]; s.y[i] = restPos.y[i];
         setColor(s.color, i, restColor);
         s.size[i] = BASE_PX;
       }
+      return s;
+    }
+
+    // ---- state: 'resting' — the amber-tagged frame the reader reaches a
+    // hair into the scrub (kf at 0.02, see `keyframes` below): tonight's
+    // FRA-ESP dots light up amber against the resting field as ONE
+    // announced color tween out of 'bootRest', crossing the engine's
+    // active alpha band so its onset pulse fires (CR-18). ----
+    function makeResting() {
+      const s = makeAllRest();
       for (const i of taggedIdx) setColor(s.color, i, amber);
       return s;
     }
@@ -316,10 +340,12 @@ export default {
           s.x[i] = clockX(minute);
           s.y[i] = priceY(zoomTile.price_c[t]);
           // Hero France-winner leg stays active-tier (base alpha 1.0, boosted);
-          // the 3-way companion legs drop to 0.5, which lands in the engine's
-          // unclassified mid-band -- brighter than the dimmed rest field, but
-          // subordinate to the boosted hero stream. A deliberate three-tier read.
-          setColor(s.color, i, faint ? [base[0], base[1], base[2], base[3] * 0.5] : base);
+          // the 3-way companion legs drop to 0.40 (perception-brief §9b: a
+          // dimmed-field-tier alpha, not the old 0.5 which sat in the
+          // shader's unclassified 0.42-0.90 gap and half-competed with the
+          // boosted hero stream). A deliberate two-tier read: hero pops,
+          // companions recede into the same tier as the resting field.
+          setColor(s.color, i, faint ? [base[0], base[1], base[2], base[3] * 0.40] : base);
         } else {
           s.x[i] = stageX; s.y[i] = stageY;
           setColor(s.color, i, waitColor);
@@ -350,6 +376,7 @@ export default {
 
     const bp = env.breakpoints;
     const states = {
+      bootRest: makeAllRest(),
       resting: makeResting(),
       kickoff: tickState(bp[1].clock),
       preEvent: tickState(bp[2].clock),
@@ -358,8 +385,15 @@ export default {
       whistle: tickState(bp[5].clock),
       settled: makeSettled(),
     };
+    // CR-18: an extra kf0 (bootRest, at=0.00) precedes the amber-tagged
+    // 'resting' frame (moved to at=0.02, a hair into the scrub) so the
+    // amber ignition is a witnessed tween, not a fact the reader arrives
+    // to. `bp` (env.breakpoints, used separately by the overlay's
+    // cutoffAt/axis logic) is untouched; only this engine-facing keyframe
+    // list gains the one extra entry.
     const keyframes = [
-      { at: bp[0].at, state: 'resting' },
+      { at: 0.00, state: 'bootRest' },
+      { at: 0.02, state: 'resting' },
       { at: bp[1].at, state: 'kickoff' },
       { at: bp[2].at, state: 'preEvent' },
       { at: bp[3].at, state: 'postEvent' },
@@ -381,7 +415,10 @@ export default {
     const g = svg.append('g').attr('class', 's01-overlay');
 
     const clockAxisG = g.append('g').attr('class', 'axis axis-clock')
-      .attr('transform', `translate(0, ${view.region.y + view.region.h + 8})`);
+      // G3 mobile fix: the bottom x-axis abuts the mobile prose sheet, so
+      // its tick labels render ABOVE the axis line (d3.axisTop) on mobile
+      // instead of below it, staying inside the visible stage.
+      .attr('transform', `translate(0, ${view.region.y + view.region.h + (view.mobile ? 0 : 8)})`);
     const priceAxisG = g.append('g').attr('class', 'axis axis-price')
       .attr('transform', `translate(${view.region.x - 8}, 0)`);
 
@@ -398,13 +435,45 @@ export default {
     // compression is honest and narrated").
     function drawClockAxis(maxMinutes) {
       const scale = d3.scaleLinear().domain([0, Math.max(5, maxMinutes)]).range(clockX.range());
-      clockAxisG.call(d3.axisBottom(scale).ticks(6).tickFormat((d) => `${Math.round(d)}'`));
+      const axisFn = view.mobile
+        ? d3.axisTop(scale).ticks(6).tickFormat((d) => `${Math.round(d)}'`)
+        : d3.axisBottom(scale).ticks(6).tickFormat((d) => `${Math.round(d)}'`);
+      clockAxisG.call(axisFn);
       styleAxis(clockAxisG);
     }
     function drawPriceAxis() {
       priceAxisG.call(d3.axisLeft(priceY).ticks(5).tickFormat((d) => `${d}¢`));
       styleAxis(priceAxisG);
     }
+
+    // G3 axis-label standard: every D3 axis carries a titled unit. X title
+    // centered below the tick labels; Y title horizontal, left-aligned
+    // above the topmost tick.
+    function titleStyle(sel) {
+      sel.attr('fill', view.css('ink-mid'))
+        .style('font-family', view.css('font-apparatus'))
+        .style('font-size', view.css('type-caption-size'))
+        .style('font-weight', 500);
+    }
+    if (view.mobile) {
+      const cx = view.region.x - 8 - 20;
+      const cy = view.region.y + view.region.h / 2;
+      titleStyle(g.append('text').attr('class', 'axis-title axis-title-clock')
+        .attr('x', cx).attr('y', cy).attr('text-anchor', 'middle')
+        .attr('transform', `rotate(-90, ${cx}, ${cy})`)
+        .text('match clock (minutes played)'));
+    } else {
+      titleStyle(g.append('text').attr('class', 'axis-title axis-title-clock')
+        .attr('x', view.region.x + view.region.w / 2)
+        .attr('y', view.region.y + view.region.h + 8 + 24)
+        .attr('text-anchor', 'middle')
+        .text('match clock (minutes played)'));
+    }
+    titleStyle(g.append('text').attr('class', 'axis-title axis-title-price')
+      .attr('x', view.region.x - 8)
+      .attr('y', view.region.y - 12)
+      .attr('text-anchor', 'start')
+      .text('price of the France contract (cents; 100 = certain)'));
 
     // Settlement reference line at price = 0.
     const settleLine = g.append('line').attr('class', 'settle-line')
@@ -414,7 +483,8 @@ export default {
       .style('opacity', 0);
 
     // One pre-title caption line (storyboard overlay spec), lifted
-    // verbatim from the beat's own narration.
+    // verbatim from the beat's own narration. Retimed (CR-18) to be
+    // visible from kf0 rather than gated behind a t>0.005 threshold.
     const caption = g.append('text').attr('class', 'pretitle-caption')
       .attr('x', view.region.x).attr('y', view.region.y - 16)
       .attr('fill', view.css('ink-mid'))
@@ -425,8 +495,22 @@ export default {
       .text('the lit dots: tonight, France–Spain · one dot is one trade')
       .style('opacity', 0);
 
+    // Transient caption for the 3-way companion streams (design-revision-
+    // spec §2 S1 item 3): names the fainter streams once they first
+    // appear, then clears before the goal so it never competes with the
+    // scene's one amber unit.
+    const companionCaption = g.append('text').attr('class', 'companion-caption')
+      .attr('x', view.region.x).attr('y', view.region.y - 40)
+      .attr('fill', view.css('ink-mid'))
+      .style('font-family', view.css('font-tape'))
+      .style('font-size', view.css('type-tape-size'))
+      .text('fainter streams: the match’s own win / draw / lose legs')
+      .style('opacity', 0);
+
     // Amber singleton protocol (design-system §6 emphasis stack: luminance
-    // singleton, white core + amber halo) for "the goal" / "the whistle".
+    // singleton, white core + amber halo) for "the goal" — the scene's
+    // ONE amber unit (design-revision-spec §2 S1: the whistle is demoted
+    // below, so it no longer competes for the same budget).
     function makeAnnotation() {
       const grp = g.append('g').attr('class', 'annotation').style('opacity', 0);
       grp.append('circle').attr('class', 'halo')
@@ -456,14 +540,38 @@ export default {
     }
 
     const goalAnn = makeAnnotation();
-    const whistleAnn = makeAnnotation();
+
+    // Declutter checklist (design-revision-spec §4): the whistle drops its
+    // amber halo, white core, and amber leader — a plain ink-mid text mark
+    // (mirrored, since the whistle lands near the stage's right edge) at
+    // the same coordinates, >= space-24 clear of "the goal" vertically.
+    const whistleGrp = g.append('g').attr('class', 'annotation-plain').style('opacity', 0);
+    whistleGrp.append('line').attr('class', 'leader')
+      .attr('stroke', view.css('ink-low'))
+      .attr('stroke-width', tokens.layout['annotation-leader-weight-px']);
+    whistleGrp.append('text').attr('class', 'label')
+      .attr('fill', view.css('ink-mid'))
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-annotation-size'));
+    function placeWhistle(cx, cy, dx, dy, text) {
+      whistleGrp.select('.leader')
+        .attr('x1', cx).attr('y1', cy)
+        .attr('x2', cx + dx).attr('y2', cy + dy - standoff);
+      whistleGrp.select('.label')
+        .attr('x', cx + dx).attr('y', cy + dy)
+        .attr('text-anchor', 'end')
+        .text(text);
+    }
 
     // Mobile (storyboard S1 mobile note): "annotations collapse to
     // numbered markers with a footer legend."
     let footerLegend = null;
     if (view.mobile) {
       footerLegend = html.append('div').attr('class', 'interactive s01-footer-legend')
-        .style('position', 'absolute').style('left', '0').style('right', '0').style('bottom', '0')
+        .style('position', 'absolute').style('left', '0').style('right', '0')
+        // G5 mobile Zone F: clear of the mobile prose sheet (was bottom:0,
+        // sitting inside the sheet band).
+        .style('bottom', 'calc(var(--layout-card-max-height-mobile-vh) + var(--space-8))')
         .style('font-family', 'var(--font-apparatus)')
         .style('font-size', 'var(--type-caption-size)')
         .style('color', 'var(--ink-mid)')
@@ -479,6 +587,38 @@ export default {
       sel.transition().duration(drawIn).style('opacity', 0);
     }
 
+    // Color key (G1): imperative updates as the scrub crosses pre-title ->
+    // zoom -> settle, since this single-beat scrub scene changes color
+    // meaning mid-beat (the declarative `beat.chip` below only covers the
+    // first activation snap). Capped at 3 meaning rows + 1 standing row.
+    let chipPhase = null;
+    function updateChip(cutoff, t) {
+      let phase;
+      if (t < 0.02) phase = 'pretitle';
+      else if (cutoff >= env.whistleMinute - 0.5) phase = 'settled';
+      else phase = 'zoom';
+      if (phase === chipPhase) return;
+      chipPhase = phase;
+      if (phase === 'pretitle') {
+        view.setChip([
+          { token: 'accent-annotation', glyph: 'dot', label: "amber = tonight's match, France v Spain" },
+          { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+        ]);
+      } else if (phase === 'zoom') {
+        view.setChip([
+          { token: 'side-yes', glyph: 'dot', label: 'cyan = money that bet YES' },
+          { token: 'side-no', glyph: 'dot', label: 'orange = money that bet NO' },
+          { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+        ]);
+      } else {
+        view.setChip([
+          { token: 'side-yes', glyph: 'dot', label: 'cyan = money that bet YES' },
+          { token: 'side-no', glyph: 'dot', label: 'orange = money that bet NO' },
+          { token: 'state-dead', glyph: 'dead', label: 'grey = settled to zero, dead money' },
+        ]);
+      }
+    }
+
     let lastCutoff = -1;
     function updateForScrub(t) {
       const cutoff = env.cutoffAt(t);
@@ -486,7 +626,13 @@ export default {
         drawClockAxis(cutoff);
         lastCutoff = cutoff;
       }
-      if (t > 0.005 && t < 0.5) fadeIn(caption); else if (t >= 0.5) fadeOut(caption);
+      updateChip(cutoff, t);
+      // Pretitle caption: visible from kf0 (CR-18), not gated on t>0.005.
+      if (t < 0.5) fadeIn(caption); else fadeOut(caption);
+      // Companion-stream caption: transient, appears once trades start
+      // flowing and clears before the goal so it never shares a frame
+      // with the scene's one amber unit.
+      if (cutoff > 0 && cutoff < env.eventMinute) fadeIn(companionCaption); else fadeOut(companionCaption);
       if (cutoff >= env.eventMinute) {
         placeAnnotation(
           goalAnn, clockX(env.eventMinute), priceY(env.eventPriceC), 24, -28,
@@ -495,11 +641,13 @@ export default {
         fadeIn(goalAnn);
       }
       if (cutoff >= env.whistleMinute - 0.5) {
-        placeAnnotation(
-          whistleAnn, clockX(env.whistleMinute), priceY(0) - 40, 24, -12,
-          view.mobile ? '②' : 'the whistle',
-        );
-        fadeIn(whistleAnn);
+        if (view.mobile) {
+          placeAnnotation(goalAnn, clockX(env.eventMinute), priceY(env.eventPriceC), 24, -28, '①');
+          placeWhistle(clockX(env.whistleMinute), priceY(0) - 40, 24, -12, '②');
+        } else {
+          placeWhistle(clockX(env.whistleMinute), priceY(0) - 40, -24, -12, 'the whistle');
+        }
+        fadeIn(whistleGrp);
         fadeIn(settleLine, stagger);
         if (footerLegend) fadeIn(footerLegend);
       }
@@ -507,11 +655,13 @@ export default {
 
     drawPriceAxis();
     drawClockAxis(5);
+    updateChip(0, 0);
 
     return {
       step() {
         drawClockAxis(5);
         fadeIn(caption);
+        updateChip(0, 0);
       },
       scrub(t) { updateForScrub(t); },
       exit() {
@@ -524,38 +674,44 @@ export default {
   // Reduced motion: main.js's driveScrub() already snaps scrub tracks to
   // the nearest keyframe end-state with the standard canvas crossfade when
   // view.reducedMotion is true (CONTRACT §3.5 / §6.3). Every keyframe
-  // above (resting / kickoff / preEvent / postEvent / approachFinal /
-  // whistle / settled) is independently a complete, static-readable frame
-  // by construction, so the generic driver behavior already satisfies
-  // "end states plus crossfades" (CONTRACT §9) for this scene; no
-  // per-beat override is declared.
+  // above (bootRest / resting / kickoff / preEvent / postEvent /
+  // approachFinal / whistle / settled) is independently a complete,
+  // static-readable frame by construction, so the generic driver behavior
+  // already satisfies "end states plus crossfades" (CONTRACT §9) for this
+  // scene; no per-beat override is declared.
 
   beats: [
     {
       id: 'b1',
-      html: `<p>France arrived in Arlington priced near forty cents to win the World Cup, the market's favorite for thirteen months.<sup><a href="#fn-2">2</a></sup> A contract here pays one dollar if its outcome happens and nothing if it does not, so a price of forty cents is simply the market's odds written as money: a roughly forty percent chance. Ninety minutes later the contract was worth nothing. Down here, one dot is one trade: every dot on this screen is one real trade from that night, money changing hands as a belief died in regulation time.<sup><a href="#fn-1">1</a></sup> Every trade has two sides, a buyer of yes and a buyer of no, and color marks which side took the offered price. When the whistle settles the outcome, the exchange pays a dollar to every winning contract and zero to every losing one, and the contract stops trading for good. That is the pour to the floor on screen. Before asking whether the market saw it coming, it is worth asking what this market actually is. The answer starts fourteen months earlier.</p>`,
+      html: `<p>For more than a year, a ticket that pays off if France wins the World Cup cost about forty cents.<sup><a href="#fn-2">2</a></sup> Here is the deal on every ticket like it: it pays one dollar if its team wins, and nothing if it does not. So a price of forty cents means the crowd thought France's chance was about forty out of a hundred. The market's own word for a ticket like this is a contract. Watch for the one vertical jump on the chart ahead: that is the goal. On July 14, Spain beat France in ninety minutes, and the ticket fell to zero.<sup><a href="#fn-1">1</a></sup> Down here, one dot is one real trade from that night. Cyan dots are money that bet yes, France wins. Orange dots are money that bet no. At the final whistle, the exchange pays a dollar to every ticket that won and nothing to every ticket that lost, a moment traders call settling, and the market closes for good. That is the pour you see hit the floor on screen. This was the night Spain booked tonight's final. Before you judge tonight's price, you should meet the thing that set it. The story starts fourteen months earlier.</p>`,
       // Hard budget (storyboard): the whole of S1, pre-title included,
       // occupies at most 6 viewport-heights. The static title header
       // (CONTRACT §8.2) already spends 1; this scrub spends the remaining 5.
       trigger: { type: 'scrub', span: 5 },
-      state: 'resting',
+      // CR-18: the beat's own state key now points at the true no-amber
+      // boot frame; the announced amber ignition is the scrub's kf1 (see
+      // layout().keyframes), not this snap.
+      state: 'bootRest',
       // 'instant': this is only the ONE-TIME snap into kf0 on first
       // activation, which already matches the boot-time setState frame
       // (engine.js dedupes same-reference/t>=1 tweens to a true no-op).
       // The fine-grained scrub motion itself is driven by
       // scrubBetween/setScrub over layout().keyframes, not by `kind`.
       kind: 'instant',
-      // Micro-legend names the two colors the movers wear, in the plain terms
-      // the beat's own gloss just grounded ("a buyer of yes and a buyer of no"),
-      // rather than the untaught "taker side".
-      chip: 'cyan: yes buyer · vermillion: no buyer',
+      // Declarative color-key snap for first activation (G1): plain color
+      // words, matching the imperative phases the overlay drives as the
+      // scrub proceeds (updateChip above).
+      chip: [
+        { token: 'accent-annotation', glyph: 'dot', label: "amber = tonight's match, France v Spain" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
       grain: {
         // Storyboard-verbatim template (CONTRACT §4.2/§4.3 zoom.grainText
         // format); {n}/{count} are filled by the driver's narrated-sampling
         // substitution. NOTE: main.js's zoomGrainText() helper is defined
         // but not yet called from activateBeat() for zoom scenes — see
         // data_requests in the build handoff.
-        text: '1 dot = 1 trade · showing every {n}th of {count} trades, France–Spain, July 14',
+        text: '1 dot = 1 trade · showing every {n}th of {count} trades · France–Spain, July 14',
         variant: 'debut',
       },
       overlayStep: 'b1',
@@ -565,6 +721,6 @@ export default {
   zoom: {
     key: 'fraesp',
     tagBit: 'ZOOM_FRAESP',
-    grainText: '1 dot = 1 trade · showing every {n}th of {count} trades, France–Spain, July 14',
+    grainText: '1 dot = 1 trade · showing every {n}th of {count} trades · France–Spain, July 14',
   },
 };

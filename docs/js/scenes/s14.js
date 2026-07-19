@@ -197,6 +197,28 @@ function overlay(container, data, view, scalesObj) {
     .call(d3.axisLeft(y).ticks(5).tickFormat((d) => `${d}%`))
     .call((sel) => sel.selectAll('text, line, path').style('stroke', view.css('ink-low')).style('fill', view.css('ink-low')));
 
+  // Axis titles (design-revision-spec G3): x centered below the tick
+  // labels; y horizontal (never rotated), left-aligned above its axis.
+  g.append('text')
+    .attr('class', 's14-axis-x-title')
+    .attr('x', view.region.x + view.region.w / 2)
+    .attr('y', view.region.y + view.region.h + 38)
+    .attr('text-anchor', 'middle')
+    .style('font-family', view.css('font-apparatus'))
+    .style('font-size', view.css('type-caption-size'))
+    .style('font-weight', 500)
+    .style('fill', view.css('ink-mid'))
+    .text('what the price implied (cents = % chance)');
+  g.append('text')
+    .attr('class', 's14-axis-y-title')
+    .attr('x', view.region.x)
+    .attr('y', view.region.y - 46)
+    .style('font-family', view.css('font-apparatus'))
+    .style('font-size', view.css('type-caption-size'))
+    .style('font-weight', 500)
+    .style('fill', view.css('ink-mid'))
+    .text('how often it actually happened (%)');
+
   // Calibration diagonal: implied == realized.
   g.append('line')
     .attr('x1', x(0)).attr('y1', y(0))
@@ -205,13 +227,34 @@ function overlay(container, data, view, scalesObj) {
     .style('stroke-width', 1.5)
     .style('opacity', 0.6);
 
+  // "Perfectly priced" (G3: the one licensed rotated label piece-wide,
+  // because it names the diagonal line itself, not a data point).
+  {
+    const diagDeg = Math.atan2(y(100) - y(0), x(100) - x(0)) * (180 / Math.PI);
+    const midX = x(64);
+    const midY = y(64) - 10;
+    g.append('text')
+      .attr('class', 's14-diagonal-label')
+      .attr('x', midX).attr('y', midY)
+      .attr('transform', `rotate(${diagDeg}, ${midX}, ${midY})`)
+      .attr('text-anchor', 'middle')
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-caption-size'))
+      .style('fill', view.css('ink-hi'))
+      .style('opacity', 0.65)
+      .text('perfectly priced');
+  }
+
   // Realized-rate marker path, connecting each bucket's active-weighting
   // point — the exact mark the toggle re-positions (storyboard: "the
-  // toggle... re-positions each bucket's realized-rate marker").
+  // toggle... re-positions each bucket's realized-rate marker"). Ink-hi,
+  // outline-only (design-revision-spec per-scene S14 #1): `side.no` means
+  // "no buyer" everywhere else in the piece, so painting these markers
+  // orange actively misreads as "NO money" here.
   const markerPath = g.append('path')
     .attr('class', 's14-marker-path')
     .style('fill', 'none')
-    .style('stroke', view.css('side-no'))
+    .style('stroke', view.css('ink-hi'))
     .style('stroke-width', 2);
   const markerDots = g.append('g').attr('class', 's14-marker-dots');
 
@@ -232,21 +275,28 @@ function overlay(container, data, view, scalesObj) {
     else sel.attr('d', line);
 
     const dots = markerDots.selectAll('circle').data(d);
-    dots.enter().append('circle').attr('r', 3).style('fill', view.css('side-no'))
+    dots.enter().append('circle').attr('r', 3.5)
+      .style('fill', 'none')
+      .style('stroke', view.css('ink-hi'))
+      .style('stroke-width', 1.5)
       .merge(dots)
       .transition().duration(animate ? view.tokens.motion.durations_ms['overlay-draw-in'] : 0)
       .attr('cx', (dd) => x(dd.px)).attr('cy', (dd) => y(dd.py));
     dots.exit().remove();
   }
 
-  // Ladder-attribution caption (72% / 55%).
+  // Ladder-attribution caption (72% / 55%), one two-line ink-mid block
+  // (design-revision-spec per-scene S14 #2), sitting above the y-axis
+  // title so the two never collide.
   const ladderCaption = g.append('text')
     .attr('x', view.region.x)
-    .attr('y', view.region.y - 8)
+    .attr('y', view.region.y - 30)
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('fill', view.css('ink-mid'))
     .style('opacity', 0);
+  const ladderLine1 = ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '0em');
+  const ladderLine2 = ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '1.2em');
 
   // Tick-floor bracket at 1-2c.
   const tickFloor = sceneJson.tick_floor || { lo_c: 1, hi_c: 2 };
@@ -260,7 +310,7 @@ function overlay(container, data, view, scalesObj) {
     .style('font-family', view.css('font-tape'))
     .style('font-size', view.css('type-tape-size'))
     .style('fill', view.css('ink-low'))
-    .text(`${tickFloor.lo_c}-${tickFloor.hi_c}c: the one-cent tick floor`);
+    .text(`${tickFloor.lo_c}-${tickFloor.hi_c} cents: the tick floor`);
 
   // 90-95c callout: the amber singleton protocol (halo core ring), an
   // overlay-only highlight independent of the current toggle weighting.
@@ -282,13 +332,14 @@ function overlay(container, data, view, scalesObj) {
       .attr('cx', x(px)).attr('cy', y(py))
       .attr('r', view.tokens.dot['radius-annotated-core-px'])
       .style('fill', view.css('accent-annotation'));
+    // Trimmed to the 8-word annotation cap (design-revision-spec CR-14).
     callout.append('text')
       .attr('x', x(px) + 14).attr('y', y(py))
       .attr('dy', '0.35em')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-annotation-size'))
       .style('fill', view.css('accent-annotation'))
-      .text(`${label}: worst-calibrated bucket of all`);
+      .text('worst bucket: a favorite, not a longshot');
     callout.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
   }
 
@@ -300,9 +351,12 @@ function overlay(container, data, view, scalesObj) {
     .attr('role', 'radiogroup')
     .attr('aria-label', 'weight the calibration curve by');
 
+  // Self-explaining pair (design-revision-spec CR-13): the control persists
+  // on screen after its step, so the label must stand alone without the
+  // beat prose next to it.
   const options = [
-    { key: 'markets', label: 'By markets' },
-    { key: 'dollars', label: 'By dollars traded' },
+    { key: 'markets', label: 'count every market equally' },
+    { key: 'dollars', label: 'weight by dollars traded' },
   ];
   const buttons = toggleWrap.selectAll('button').data(options).enter()
     .append('button')
@@ -332,9 +386,9 @@ function overlay(container, data, view, scalesObj) {
       drawMarkers('markets', true);
     } else if (beatId === 'b2') {
       const attr = sceneJson.ladder_attribution || {};
-      ladderCaption
-        .text(`${attr.pct_in_ten_plus_leg_ladders ?? '—'}% of cheap-band observations sit in prop ladders of ten or more legs; ${attr.pct_at_tick_floor ?? '—'}% sit at the one-to-two-cent tick floor.`)
-        .transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
+      ladderLine1.text(`${attr.pct_in_ten_plus_leg_ladders ?? '—'}% of the underpriced tickets sit in prop ladders of ten bets or more.`);
+      ladderLine2.text(`${attr.pct_at_tick_floor ?? '—'}% sit at the one-to-two-cent tick floor.`);
+      ladderCaption.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
       tickBracket.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
     } else if (beatId === 'b3') {
       setWeighting('dollars', true);
@@ -358,6 +412,9 @@ const s14 = {
   id: 's14',
   act: 4,
   title: 'The one real sin',
+  // Gate-4 round 2 (structure-spec §3): the last beat of Skill 5 hands the
+  // reader the one confirmed flaw, and its exact address.
+  kicker: 'Skill 5, continued — the flaw that is real',
   layoutName: 'calibration-curve',
 
   needs: { scene: true, series: [], zoom: null },
@@ -369,39 +426,48 @@ const s14 = {
   beats: [
     {
       id: 'b1',
-      html: `<p>One sin survived verification, and it lives where the money
-        was not. A price is well calibrated when the things it prices at
-        thirty cents happen about thirty percent of the time, so the
-        diagonal on screen is the calibrated line and dots that fall below
-        it were overpriced. Cheap yes-legs underperformed their price, an
-        implied 3.04% paying 1.19% at an hour
-        out.<sup><a href="#fn-20">20</a></sup></p>`,
+      html: `<p>The chart below holds the one flaw that survived every
+        check. It lives where the money almost never went. A price is well
+        calibrated when it comes true about as often as it says: a price of
+        30 cents should happen about 30 percent of the time. The white line
+        on screen is that promise, kept. A dot below the line marks an
+        overpriced ticket: buyers paid more than the outcome was worth.
+        Cheap yes-tickets, priced from 1 to 10 cents, broke that promise.
+        Buyers paid about 3 cents for what was really a 1-in-100 shot.
+        Those tickets implied a 3.04% chance. They paid off only 1.19% of
+        the time, an hour before the market
+        closed.<sup><a href="#fn-20">20</a></sup></p>`,
       trigger: 'step',
       state: 'assemble-markets',
       kind: 'resort',
-      chip: 'amber: the cheap longshots that underpay',
+      chip: [
+        { token: 'neutral-data', glyph: 'dot', label: 'pale = money at each price level' },
+        { token: 'accent-annotation', glyph: 'dot', label: 'amber = the overpriced penny tickets' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded', variant: 'return' },
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>A prop is a side bet on something other than the result,
-        such as the first scorer or the exact final score, and a prop ladder
-        stacks many of them together. The tick is the smallest legal price
-        step, one cent, and it is the floor these longshots pile up against.
-        72% of those observations sit in prop ladders with ten or more legs,
-        and 55% sit at the one-to-two-cent tick
-        floor.<sup><a href="#fn-20">20</a></sup></p>`,
+      html: `<p>A prop is a side bet on something other than who wins,
+        like who scores first or the exact final score. A prop ladder
+        stacks many of these side bets together, rung by rung. The tick is
+        the smallest price step allowed, one cent, and it is the floor
+        these cheap tickets pile up against. 72% of the overpriced penny tickets
+        sit inside prop ladders of ten bets or more. 55% sit right at that
+        one-to-two-cent floor.<sup><a href="#fn-20">20</a></sup> Next,
+        watch the sagging dots. Weighted by dollars, the sag flattens.</p>`,
       trigger: 'step',
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>Weight the same curve by dollars actually traded and the
-        sag flattens to about half a
-        point.<sup><a href="#fn-20">20</a></sup> The dots sagging here are
-        the same dots that sat in the barely-traded tail three acts ago,
-        the thousands of markets that never drew one dot's worth of
-        money.</p>`,
+      html: `<p>Weigh the same chart by dollars actually traded, and the
+        sag nearly disappears, down to about half a
+        point.<sup><a href="#fn-20">20</a></sup> These sagging dots are the
+        same dots that sat almost empty in the long thin tail three acts
+        ago. Weak prices live where money does not.</p>`,
       trigger: 'step',
       state: 'assemble-dollars',
       kind: 'recolor',
@@ -409,10 +475,13 @@ const s14 = {
     },
     {
       id: 'b4',
-      html: `<p>The worst-calibrated bucket of all is the 90-to-95-cent
-        favorite, so the textbook one-sided story fails in both
-        directions.<sup><a href="#fn-20">20</a></sup> Mispricing and
-        emptiness are one map at two exposures.</p>`,
+      html: `<p>The worst-priced tickets of all were not longshots. They
+        were the 90-to-95-cent favorites.<sup><a href="#fn-20">20</a></sup>
+        That is the same sin seen from its other side. Every overpriced
+        penny ticket has a seller, and that seller holds the favorite side
+        of the very same bet. One lottery premium, showing up at both ends
+        of the price scale. So the old story, that crowds only overpay for
+        longshots, is not even half right.</p>`,
       trigger: 'step',
       overlayStep: 'b4',
     },

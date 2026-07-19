@@ -171,3 +171,61 @@ export function formatSlot(value, format) {
 export function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
 }
+
+/* ---------------------------------------------------------------- */
+/* Axis-label standard (design-revision-spec G3, Gate-4 round 2).    */
+/* Pure position/style spec builders only -- this module's own contract
+ * (top of file) is "no DOM writes here." A scene applies the returned
+ * attrs/style to its own D3 <text> selection, e.g.:
+ *   g.append('text').attr('x', p.x).attr('y', p.y)
+ *    .attr('text-anchor', p.textAnchor).call(applyAxisTitleStyle)
+ *    .text(axisLabel('trades arriving', 'per second'));
+ * Centralizing the math/wording here means all 18 scenes' axis titles
+ * agree on placement and register without each hand-deriving the rule. */
+
+/* Shared type spec for every axis title (G3): font-apparatus, caption
+ * size, weight 500, ink-mid. `sel` is a D3 selection (or a plain object
+ * with a `.style` method matching that call shape); this only sets
+ * style, so it composes with whatever `.attr()` chain the caller builds. */
+export function applyAxisTitleStyle(sel) {
+  return sel
+    .style('font-family', 'var(--font-apparatus)')
+    .style('font-size', 'var(--type-caption-size)')
+    .style('font-weight', 500)
+    .style('fill', 'var(--ink-mid)');
+}
+
+/* X title: centered beneath the tick labels, offset --space-24 below the
+ * axis line (region.y + region.h). */
+export function axisTitleXAttrs(view) {
+  const r = view.region;
+  return { x: r.x + r.w / 2, y: r.y + r.h + 24, textAnchor: 'middle' };
+}
+
+/* Y title: HORIZONTAL, never rotated (no `transform: rotate(...)`);
+ * left-aligned over its axis, --space-12 above the topmost tick. One
+ * licensed piece-wide exception (S14's "perfectly priced" diagonal label,
+ * which names the line itself) is a scene-level call, not this helper's. */
+export function axisTitleYAttrs(view) {
+  const r = view.region;
+  return { x: r.x, y: r.y - 12, textAnchor: 'start' };
+}
+
+/* Wording template (G3): "[what it measures] ([unit])", <= 7 words before
+ * the parenthesis; omit the unit entirely when there isn't one. Scenes
+ * still author their own measure/unit strings -- this just keeps the
+ * parenthetical shape mechanically consistent piece-wide. */
+export function axisLabel(measure, unit) {
+  return unit ? `${measure} (${unit})` : measure;
+}
+
+/* Mobile: every bottom x-axis renders as d3.axisTop translated to
+ * y = region.y + region.h, so tick labels sit above the axis line, inside
+ * the stage -- the mobile stage bottom (~0.62H) abuts the 38vh prose sheet
+ * and labels drawn below it are occluded (G3). Returns which D3 axis
+ * constructor orientation to use; the scene still builds
+ * `d3['axis' + capitalize(mobileAxisOrientation(view))](scale)` (or an
+ * equivalent if/else) and positions the <g> at the y this implies. */
+export function mobileAxisOrientation(view) {
+  return view.mobile ? 'top' : 'bottom';
+}

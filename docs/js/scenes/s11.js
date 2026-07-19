@@ -8,15 +8,19 @@
  * white strike. Receipts at footnote-weight mono ink.low. Dots never
  * move.").
  *
- * UNIT DISCIPLINE (storyboard §0 + CONTRACT §1.3): a Brier contribution is
- * a score, not money. §0: "No population re-sort: the dots stay at rest
- * (... the rest was narrated at S10)." This scene therefore reconstructs
- * S10's exact rest-field formula (see below) and syncs to it with a
- * zero-duration ('instant') tween on entry rather than an animated resort
- * — pixel-identical positions mean nothing visibly moves, while a direct
- * deep-link into s11 (CONTRACT §10.9 acceptance check 9) still renders
- * correctly instead of showing whatever a prior, unrelated scene left
- * behind.
+ * GATE-4 ROUND 2 (research/revision/structure-spec.md §5 S11;
+ * research/revision/design-revision-spec.md §2 S11): title unchanged; the
+ * course spine now runs on screen via `kicker` ("Skill 4, continued").
+ * Prose rewritten to eighth-grade register — vig/devig and forecast-grading
+ * are taught in plain words before any score is shown, "Brier" itself is
+ * banned from body prose (named once, in the footnote, per the jargon
+ * rule) and survives only inside the y-axis title, an apparatus label, not
+ * a sentence. Both amber usages in this scene are deleted (this scene's own
+ * "no amber" rule): the matched-leg figure and the crossout caption both
+ * recolor to ink-mid. The white strike stays the scene's one ink-hero
+ * element. Ends with the act's two close cards (Skill unlocked / The
+ * receipt), prose only. No data binding, layout, or engine change; every
+ * edit below is text, color, or position only.
  *
  * ---------------------------------------------------------------------
  * DATA CONTRACT ASSUMPTIONS (flagged in this build's data_requests; per
@@ -88,7 +92,22 @@ function styleAxis(sel, color) {
   return sel;
 }
 
+/* Placement-zone helpers (design-revision-spec.md G5), duplicated from
+ * s10.js rather than imported — see that file's header note. */
+function zoneF(sel, view) {
+  const L = view.tokens.layout;
+  const sp = view.tokens.spacing_px;
+  if (view.mobile) {
+    return sel.style('left', `${sp[3]}px`)
+      .style('bottom', `calc(${L['card-max-height-mobile-vh']}vh + ${sp[1]}px)`)
+      .style('max-width', '50vw');
+  }
+  return sel.style('left', `${view.region.x}px`)
+    .style('top', `${view.region.y + view.region.h + L['footer-slot-offset-px']}px`);
+}
+
 const HORIZONS = ['T-24h', 'T-1h', 'T-5min'];
+const HORIZON_LABELS = { 'T-24h': 'a day out', 'T-1h': 'an hour out', 'T-5min': '5 min out' };
 const SOURCES = ['kalshi', 'polymarket', 'pinnacle_devig'];
 const SOURCE_TOKEN = {
   kalshi: 'venue-kalshi',
@@ -96,16 +115,22 @@ const SOURCE_TOKEN = {
   pinnacle_devig: 'venue-pinnacle',
 };
 
+// Plain-word rewrite of the three places this analysis fell into the same
+// trap (design-revision-spec §2 S11: no "Brier" in body text or this
+// receipt; register rule G4 jargon deletions). Read aloud alongside beat
+// b3's own prose, which now names all three inline so the point survives
+// on a screen too narrow for the floating panel (see crossOutT5min()).
 const THREE_TRAPS = [
-  'the 16 "divergence episodes" (S10)',
-  'the 29s / 60s / 119s reaction ladder (S7)',
-  'this T-5min Brier "blowout"',
+  'the sixteen "gaps" with the professionals, seen earlier',
+  'the goal-reaction speed ladder, seen earlier',
+  'this five-minutes-left score, seen just now',
 ];
 
 export default {
   id: 's11',
   act: 3,
   title: 'The verdict, and the trap',
+  kicker: 'Skill 4, continued: the pros tied, and the trap',
   layoutName: 'brier-columns',
 
   needs: {
@@ -131,12 +156,12 @@ export default {
 
   layout(data, view) {
     // Figure/ground per research/revision/perception-brief.md §4, §9b: like S10,
-    // this scene has NO active PARTICLE subset — a Brier contribution is a score,
-    // not money, so the movers are outline-only D3 columns, not dots. The whole
-    // population is the dimmed GROUND at 'dimmed-field-min' (alpha 0.25, inside
-    // the engine's rest-tier so emphasis-rest-dim recedes it further each frame).
-    // The FIGURE that pops is the D3 columns in bright venue hues, now direct-
-    // labeled by drawVenueLegend() so the reader knows WHICH source each colour is.
+    // this scene has NO active PARTICLE subset — a score is not money, so the
+    // movers are outline-only D3 columns, not dots. The whole population is the
+    // dimmed GROUND at 'dimmed-field-min' (alpha 0.25, inside the engine's
+    // rest-tier so emphasis-rest-dim recedes it further each frame). The FIGURE
+    // that pops is the D3 columns in bright venue hues, named by the persistent
+    // color key so the reader knows which source each color is.
     return { states: { rest: restField(data, view) } };
   },
 
@@ -149,6 +174,7 @@ export default {
     const T = view.tokens.motion.durations_ms;
     const M = view.tokens.motion.misc;
     const drawIn = T['overlay-draw-in'];
+    const recolorMs = T['recolor-min'];
     const stagger = T['overlay-stagger'];
     const maxSeq = M['overlay-max-sequenced-elements'];
     const leaderWeight = view.tokens.layout['annotation-leader-weight-px'];
@@ -160,14 +186,31 @@ export default {
     const barLayer = g.append('g').attr('class', 's11-bars');
     const annoLayer = g.append('g').attr('class', 's11-anno');
     const strikeLayer = g.append('g').attr('class', 's11-strike');
-    const legendLayer = g.append('g').attr('class', 's11-venue-key');
 
-    const smallN = html.append('div').attr('class', 's11-small-n')
-      .style('font', '13.5px var(--font-apparatus)').style('color', view.css('ink-low'));
+    const smallN = zoneF(
+      html.append('div').attr('class', 's11-small-n')
+        .style('position', 'absolute')
+        .style('font', '13.5px var(--font-apparatus)')
+        .style('color', view.css('ink-low'))
+        .style('pointer-events', 'none'),
+      view,
+    );
     const matchedLeg = html.append('div').attr('class', 's11-matched-leg')
-      .style('font', '13px var(--font-apparatus)').style('color', view.css('accent-annotation'));
+      .style('position', 'absolute')
+      .style('font', '13px var(--font-apparatus)')
+      .style('color', view.css('ink-mid'))
+      .style('text-align', 'center')
+      .style('max-width', '22ch')
+      .style('transform', 'translateX(-50%)')
+      .style('pointer-events', 'none');
     const receipt = html.append('div').attr('class', 's11-receipt')
-      .style('font', '13px var(--font-tape)').style('color', view.css('ink-low'));
+      .style('position', 'absolute')
+      .style('font', '13px var(--font-tape)')
+      .style('color', view.css('ink-low'))
+      .style('max-width', '30ch')
+      .style('text-align', 'right')
+      .style('pointer-events', 'none')
+      .style('display', 'none');
 
     const scene = data.scene || {};
     const scores = scene.scores || [];
@@ -179,7 +222,7 @@ export default {
     styleAxis(
       axisLayer.append('g')
         .attr('transform', `translate(0,${y0})`)
-        .call(d3.axisBottom(scales.x)),
+        .call(d3.axisBottom(scales.x).tickFormat((d) => HORIZON_LABELS[d] || d)),
       view.css('ink-mid'),
     );
     styleAxis(
@@ -192,7 +235,14 @@ export default {
       .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff)
       .attr('fill', view.css('ink-mid'))
       .style('font', '12px var(--font-apparatus)')
-      .text('Brier score (lower is better)');
+      .text('error score (Brier: 0 is perfect, lower is better)');
+    axisLayer.append('text')
+      .attr('x', view.region.x + view.region.w / 2)
+      .attr('y', y0 + spacing[4] + 14)
+      .attr('text-anchor', 'middle')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', '12px var(--font-apparatus)')
+      .text('when the price was read');
 
     function barRect(sel) {
       sel.attr('x', (d) => scales.x(d.horizon) + scales.xSub(d.source))
@@ -208,7 +258,8 @@ export default {
       const enter = sel.enter().append('rect').attr('class', 'bar')
         .call(barRect)
         .attr('stroke', (d) => view.css(SOURCE_TOKEN[d.source]))
-        .attr('y', y0).attr('height', 0);
+        .attr('y', y0).attr('height', 0)
+        .attr('opacity', 1);
       const merged = enter.merge(sel);
       if (animate && !view.reducedMotion) {
         merged.transition()
@@ -227,14 +278,26 @@ export default {
       const k = byKey.get('T-24h|kalshi');
       const p = byKey.get('T-24h|pinnacle_devig');
       if (!k || !p) return;
-      matchedLeg.text(`matched leg-for-leg at T-24h: ${k.brier.toFixed(3)} (Kalshi) vs ${p.brier.toFixed(3)} (de-vigged Pinnacle)`);
+      const cx = scales.x('T-24h') + scales.xSub.bandwidth() * 1.5;
+      matchedLeg
+        .style('left', `${cx}px`)
+        .style('top', `${y0 + spacing[2] + 14}px`)
+        .text(`matched leg for leg: ${k.brier.toFixed(3)} vs ${p.brier.toFixed(3)}`);
     }
 
     function crossOutT5min() {
       const rows = scores.filter((d) => d.horizon === 'T-5min');
+
+      // One common-fate event (design-revision-spec §2 S11 item 2): the two
+      // parity groups recede to context while the T-5min columns desaturate
+      // to state.dead, in the same recolor beat as the strike itself.
+      barLayer.selectAll('rect.bar')
+        .filter((d) => d.horizon !== 'T-5min')
+        .transition().duration(recolorMs)
+        .attr('opacity', 0.7);
       barLayer.selectAll('rect.bar')
         .filter((d) => d.horizon === 'T-5min')
-        .transition().duration(drawIn)
+        .transition().duration(recolorMs)
         .attr('stroke', view.css('state-dead'));
 
       strikeLayer.selectAll('line.strike').remove();
@@ -258,48 +321,33 @@ export default {
       annoLayer.selectAll('text.crossout-cap').remove();
       annoLayer.append('text').attr('class', 'crossout-cap')
         .attr('x', scales.x('T-5min')).attr('y', view.region.y - leaderStandoff)
-        .attr('fill', view.css('accent-annotation'))
+        .attr('fill', view.css('ink-mid'))
         .style('font', '15px var(--font-apparatus)')
         .text('scores a closed book against a live market, not a fair fight');
 
-      receipt.html(
-        `<div>three parts of the study, one artifact:</div>`
-        + THREE_TRAPS.map((t) => `<div>&middot; ${t}</div>`).join(''),
-      );
-    }
-
-    // Direct-labeled venue key (design-system.md §1 "teach-on-first-contact
-    // labeling with no standing legends"). The columns carry their source only
-    // in hue, the piece's weakest channel (perception-brief.md §1), so each
-    // colour is named on debut: cyan Kalshi, lavender Polymarket, grey the
-    // de-vigged professional book. Right-aligned along the top so it clears the
-    // 'Brier score (lower is better)' axis label at top-left.
-    function drawVenueLegend() {
-      legendLayer.selectAll('*').remove();
-      const yTop = view.region.y - leaderStandoff;
-      const items = [
-        { label: 'Kalshi', token: 'venue-kalshi' },
-        { label: 'Polymarket', token: 'venue-polymarket' },
-        { label: 'de-vigged Pinnacle', token: 'venue-pinnacle' },
-      ];
-      let x = view.region.x + view.region.w;
-      for (let i = items.length - 1; i >= 0; i--) {
-        const it = items[i];
-        const t = legendLayer.append('text')
-          .attr('x', x).attr('y', yTop)
-          .attr('text-anchor', 'end')
-          .attr('fill', view.css(it.token))
-          .style('font', '12px var(--font-apparatus)')
-          .text(it.label);
-        x -= t.node().getComputedTextLength() + spacing[3];
+      // Mobile carries this content in the beat's own prose instead (b3's
+      // closing sentence names all three traps inline), so the floating
+      // panel below is a desktop-only echo, never a second copy crowding a
+      // narrow screen (design-revision-spec §2 S11 item 2, mobile clause).
+      if (view.mobile) {
+        receipt.style('display', 'none');
+      } else {
+        receipt
+          .style('display', null)
+          .style('right', `${view.W - view.region.x - view.region.w + spacing[4]}px`)
+          .style('top', `${view.region.y + view.region.h / 2}px`)
+          .style('transform', 'translateY(-50%)')
+          .html(
+            '<div>the same mistake, three times:</div>'
+            + THREE_TRAPS.map((t) => `<div>&middot; ${t}</div>`).join(''),
+          );
       }
     }
 
     return {
       step(beatId) {
         if (beatId === 'b1') {
-          smallN.text(`${nLegs} coupled legs, effective n of ${effN}`);
-          drawVenueLegend();
+          smallN.text(`${nLegs} coupled legs · effective sample: ${effN} matches`);
           drawGroup(['T-24h', 'T-1h'], true);
           matchedLegAnnotation();
         } else if (beatId === 'b2') {
@@ -320,27 +368,36 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>At every horizon where both were alive, the amateurs and the professionals scored the same. A sportsbook prices every outcome a little rich, so its odds add up to more than one hundred percent; the surplus is the vig, its margin. De-vigging strips that surplus back out so the book's numbers can be read as clean probabilities and set beside the exchange.</p><p>A Brier score grades a long run of probability forecasts against what actually happened, where zero is a perfect record and lower is always better. At a day out and an hour out, Kalshi, Polymarket, and the de-vigged professional book post near-identical Brier scores, 0.158 to 0.169, on the same 84 legs; matched leg for leg at T-24h the gap is 0.162 versus 0.164, a sample that can rule out a large skill gap and establish nothing stronger.${FN(16)}</p>`,
+      html: `<p>A bookmaker builds a small profit into every price it posts. Add up the odds on all three outcomes of a match and they come to a little more than one hundred percent. That extra is called the vig, the bookmaker's own fee. Strip it back out, and its price can be compared fairly with anyone else's, cent for cent, a step called devigging (bookmaker's cut removed).</p><p>Grade a price the way you would grade a weather forecast: the closer the percent was to what actually happened, the better the score, and a lower score always wins.${FN(16)} At a day out and an hour out, this exchange's crowd and the professional book, once its fee was stripped out, scored the same. Matched one ticket to one ticket, a day out, the two scores were 0.162 and 0.164. The gap is tiny. With this few matches, a gap that small cannot even be confirmed as real.</p>`,
       trigger: 'step',
       // Sync to S10's exact rest positions; duration 0 so nothing visibly
       // moves (storyboard §Units: "No population re-sort").
       state: 'rest',
       kind: 'instant',
-      // Re-narrate the venue colour meaning at the mark. S11 inherits S10's chip
-      // when scrolled in sequence, but a direct deep-link into s11 (CONTRACT
-      // §10.9 acceptance check 9) needs the legend set here too.
-      chip: 'color: venue (Kalshi cyan, Polymarket lavender, de-vigged Pinnacle grey)',
+      // Re-narrate the venue colour meaning at the mark. S11 inherits S10's
+      // chip when scrolled in sequence, but a direct deep-link into s11
+      // (CONTRACT §10.9 acceptance check 9) needs the legend set here too.
+      chip: [
+        { token: 'venue-kalshi', glyph: 'box', label: 'cyan = Kalshi' },
+        { token: 'venue-polymarket', glyph: 'box', label: 'lavender = Polymarket' },
+        { token: 'venue-pinnacle', glyph: 'box', label: "grey = the pros, devigged (bookmaker's cut removed)" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
+      ],
+      grain: {
+        text: 'the dots rest · each column is an accuracy score, not money',
+        variant: 'debut',
+      },
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>The lone blowout, at five minutes to settlement, scores live repricing against a product that had ceased to exist, since in-play books close at the whistle by design; roughly 74% of the professional book's error comes from five matches with stoppage-time goals landing after its book closed.${FN(16)}</p>`,
+      html: `<p>There is one real blowout on this chart, five minutes before the final whistle. But the professional book had already closed by then. Here is how both can be true: a soccer match runs past the 90-minute mark into added time. The book shuts at 90:00 by design, and the final whistle comes a few minutes later. Grading someone after they have left the room is not a fair test. About 74% of the professional book's error here comes from just five matches. Each was decided by a goal in those added minutes, after the book had shut.${FN(16)}</p>`,
       trigger: 'step',
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>This analysis walked into that same trap three separate times, in three different parts of the study, before the tape corrected it.${FN(22)} The receipt stays on screen, small.</p>`,
+      html: `<p>This piece fell into that same trap three separate times, in three different places, before its own raw trade tape corrected it.${FN(22)} The proof sits next to this chart: the sixteen "gaps" with the professionals, the goal-reaction speed ladder, and this five-minutes-left score.</p><p><strong>Skill unlocked:</strong> take the number at face value once its fee is stripped out. No one sharper is hiding behind it. A sudden gap between two markets just means one of them stopped quoting.</p><p><strong>The receipt:</strong> all sixteen "wins over the professionals" started the moment the professionals stopped posting prices. This piece fell for it three times too, and its own trade tape caught the mistake.</p>`,
       trigger: 'step',
       overlayStep: 'b3',
     },

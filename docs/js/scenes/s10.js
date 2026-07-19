@@ -7,12 +7,17 @@
  * gap-meter (0.74 pts); Pinnacle grey line dies into dashed #6B7480
  * terminations").
  *
- * UNIT DISCIPLINE (storyboard §0 + CONTRACT §1.3): dots mean money and only
- * money. A per-minute matched price is not money — it is a derived
- * quantity — so it is drawn as a D3 mark, never as a repositioned dot. The
- * population itself is not removed; it rests, dimmed, behind the marks.
- * This is also true of s11.js, which inherits this same resting field
- * without re-sorting it (see that file's header).
+ * GATE-4 ROUND 2 (research/revision/structure-spec.md §5 S10;
+ * research/revision/design-revision-spec.md §2 S10): retitled "Two crowds,
+ * one price"; the course spine now runs on screen via `kicker` ("Skill 4 of
+ * 5"). Prose rewritten to eighth-grade register — the three-way, "a point
+ * is a cent," and the arbitrage-closes-gaps mechanism are taught in plain
+ * words in beat 1. The standalone floating venue-legend panel is retired
+ * (its job now belongs to the persistent global color key, `beat.chip`
+ * rows) and replaced by two direct at-line labels drawn once. The gap meter
+ * and count chip move into the placement-zone map (Zone F / Zone S
+ * top-right) and are reworded in plain words. No data binding, layout, or
+ * engine change; every edit below is text, color, or position only.
  *
  * ---------------------------------------------------------------------
  * DATA CONTRACT ASSUMPTIONS (flagged in this build's data_requests — the
@@ -111,10 +116,49 @@ function styleAxis(sel, color) {
   return sel;
 }
 
+/* Placement-zone helpers (design-revision-spec.md G5). Desktop anchors to
+ * the stage region; mobile drops into the fixed Zone K / Zone F bands
+ * above the bottom card sheet, since `region.y` is too small on mobile for
+ * a region-relative offset to stay on screen (a naive `region.y - 40`
+ * would print off the top of a 0.06H-tall margin). Duplicated in s11.js
+ * rather than imported, matching this file's existing hash01/restField
+ * duplication convention (CONTRACT §2 reserves cross-scene imports for
+ * S16's anchors only). */
+function zoneK(sel, view) {
+  const L = view.tokens.layout;
+  const sp = view.tokens.spacing_px;
+  if (view.mobile) {
+    return sel.style('left', `${sp[3]}px`).style('top', `${sp[3] + 44 + sp[2]}px`);
+  }
+  return sel.style('left', `${view.region.x}px`)
+    .style('top', `${view.region.y - L['caption-slot-top-offset-px']}px`);
+}
+function zoneF(sel, view) {
+  const L = view.tokens.layout;
+  const sp = view.tokens.spacing_px;
+  if (view.mobile) {
+    return sel.style('left', `${sp[3]}px`)
+      .style('bottom', `calc(${L['card-max-height-mobile-vh']}vh + ${sp[1]}px)`)
+      .style('max-width', '50vw');
+  }
+  return sel.style('left', `${view.region.x}px`)
+    .style('top', `${view.region.y + view.region.h + L['footer-slot-offset-px']}px`);
+}
+function zoneTopRight(sel, view) {
+  const L = view.tokens.layout;
+  const sp = view.tokens.spacing_px;
+  if (view.mobile) {
+    return sel.style('right', `${sp[3]}px`).style('top', `${view.region.y + sp[1]}px`);
+  }
+  return sel.style('right', `${view.W - view.region.x - view.region.w + sp[4]}px`)
+    .style('top', `${sp[4] + (L['key-exclusion-h-px'] || 132) + sp[3]}px`);
+}
+
 export default {
   id: 's10',
   act: 3,
-  title: 'One price, two venues',
+  title: 'Two crowds, one price',
+  kicker: 'Skill 4 of 5: who is behind the number',
   layoutName: 'braid',
 
   needs: {
@@ -144,8 +188,8 @@ export default {
     // GROUND, assigned 'dimmed-field-min' (alpha 0.25 <= opacity-rest-classify-max
     // 0.42), which the engine's emphasis-rest-dim recedes further every frame.
     // The FIGURE that pops is the D3 braid in bright venue hues (venue-kalshi /
-    // venue-polymarket / venue-pinnacle, all AAA vs canvas), now direct-labeled
-    // by drawVenueLegend() so the reader knows WHICH price each colour is.
+    // venue-polymarket / venue-pinnacle, all AAA vs canvas), direct-labeled
+    // once at the line's end plus named in the persistent color key.
     return { states: { rest: restField(data, view) } };
   },
 
@@ -168,14 +212,32 @@ export default {
     const lineLayer = g.append('g').attr('class', 's10-lines');
     const spikeLayer = g.append('g').attr('class', 's10-spikes');
     const termLayer = g.append('g').attr('class', 's10-terms');
-    const legendLayer = g.append('g').attr('class', 's10-venue-key');
+    const directLabelLayer = g.append('g').attr('class', 's10-direct-labels');
 
-    const captionDiv = html.append('div').attr('class', 's10-caption')
-      .style('font', '13px var(--font-tape)').style('color', view.css('ink-mid'));
-    const gapMeter = html.append('div').attr('class', 's10-gap-meter')
-      .style('font', '13px var(--font-tape)').style('color', view.css('ink-hi'));
-    const countChip = html.append('div').attr('class', 's10-count-chip')
-      .style('font', '13px var(--font-tape)').style('color', view.css('accent-annotation'));
+    const captionDiv = zoneK(
+      html.append('div').attr('class', 's10-caption')
+        .style('position', 'absolute')
+        .style('font', '13px var(--font-tape)')
+        .style('color', view.css('ink-mid'))
+        .style('pointer-events', 'none'),
+      view,
+    );
+    const gapMeter = zoneF(
+      html.append('div').attr('class', 's10-gap-meter')
+        .style('position', 'absolute')
+        .style('font', '13px var(--font-tape)')
+        .style('color', view.css('ink-mid'))
+        .style('pointer-events', 'none'),
+      view,
+    );
+    const countChip = zoneTopRight(
+      html.append('div').attr('class', 's10-count-chip')
+        .style('position', 'absolute')
+        .style('font', '13px var(--font-tape)')
+        .style('color', view.css('accent-annotation'))
+        .style('pointer-events', 'none'),
+      view,
+    );
 
     const scene = data.scene || {};
     const braid = scene.braid || { t: [], kalshi_pts: [], polymarket_pts: [], pinnacle_pts: [] };
@@ -200,6 +262,14 @@ export default {
     const polyPts = toPoints(braid.t, braid.polymarket_pts);
     const pinnPts = toPoints(braid.t, braid.pinnacle_pts);
 
+    function lastDefined(arr) {
+      for (let i = arr.length - 1; i >= 0; i--) {
+        const v = arr[i].v;
+        if (v !== null && v !== undefined && !Number.isNaN(v)) return arr[i];
+      }
+      return null;
+    }
+
     const lineGen = d3.line()
       .defined((d) => d.v !== null && d.v !== undefined && !Number.isNaN(d.v))
       .x((d) => scales.time(d.t))
@@ -207,10 +277,16 @@ export default {
 
     // Axes: time across the knockout window, price in points. Domain is
     // already 0-100 (a true zero baseline), so no break marker is needed.
+    // Mobile flip (design-revision-spec G3): a bottom axis on mobile
+    // renders as axisTop translated to the same line, so tick labels sit
+    // above it, inside the stage, instead of spilling into the card sheet.
+    const timeAxisGen = view.mobile
+      ? d3.axisTop(scales.time).ticks(6)
+      : d3.axisBottom(scales.time).ticks(6);
     styleAxis(
       axisLayer.append('g')
         .attr('transform', `translate(0,${view.region.y + view.region.h})`)
-        .call(d3.axisBottom(scales.time).ticks(6)),
+        .call(timeAxisGen),
       view.css('ink-mid'),
     );
     styleAxis(
@@ -223,33 +299,45 @@ export default {
       .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff)
       .attr('fill', view.css('ink-mid'))
       .style('font', '12px var(--font-apparatus)')
-      .text('price (points)');
+      .text('contract price (points; 1 point = 1 cent)');
+    axisLayer.append('text')
+      .attr('x', view.region.x + view.region.w / 2)
+      .attr('y', view.mobile
+        ? view.region.y + view.region.h - spacing[6]
+        : view.region.y + view.region.h + spacing[4] + 14)
+      .attr('text-anchor', 'middle')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', '12px var(--font-apparatus)')
+      .text('the knockout stage (date)');
 
-    // Direct-labeled venue key (design-system.md §1 "teach-on-first-contact
-    // labeling with no standing legends; direct-labeled at the mark on debut").
-    // Names each braid colour so the movers are legible: this is the on-screen
-    // half of the color-encoding revision (research/revision/perception-brief.md
-    // §1 — hue is the piece's weakest channel, so it must be captioned, not
-    // guessed). Right-aligned along the top so it clears the 'price (points)'
-    // axis label at top-left. Colours read straight off the venue tokens.
-    function drawVenueLegend() {
-      legendLayer.selectAll('*').remove();
-      const yTop = view.region.y - leaderStandoff;
-      const items = [
-        { label: 'Kalshi', token: 'venue-kalshi' },
-        { label: 'Polymarket', token: 'venue-polymarket' },
-        { label: 'Pinnacle', token: 'venue-pinnacle' },
-      ];
-      let x = view.region.x + view.region.w;
-      for (let i = items.length - 1; i >= 0; i--) {
-        const it = items[i];
-        const t = legendLayer.append('text')
-          .attr('x', x).attr('y', yTop)
-          .attr('text-anchor', 'end')
-          .attr('fill', view.css(it.token))
+    // Direct-labeled venues, drawn once at the line's end (design-revision-
+    // spec G1/CR-2): the standalone floating legend panel is retired — the
+    // persistent global key already names every color meaning — but a
+    // reader looking straight at the braid still deserves an at-mark
+    // answer to "which line is which," so Kalshi and Polymarket keep one
+    // small label each, planted at the last point either line actually
+    // reaches. Pinnacle needs no line label of its own: its color and its
+    // "stopped quoting" meaning are taught by the key and by the
+    // termination caption when its dashes land.
+    function drawDirectLabels() {
+      directLabelLayer.selectAll('*').remove();
+      const kLast = lastDefined(kalshiPts);
+      const pLast = lastDefined(polyPts);
+      if (kLast) {
+        directLabelLayer.append('text')
+          .attr('x', scales.time(kLast.t) + spacing[1])
+          .attr('y', scales.price(kLast.v) - spacing[1])
+          .attr('fill', view.css('venue-kalshi'))
           .style('font', '12px var(--font-apparatus)')
-          .text(it.label);
-        x -= t.node().getComputedTextLength() + spacing[3];
+          .text('Kalshi');
+      }
+      if (pLast) {
+        directLabelLayer.append('text')
+          .attr('x', scales.time(pLast.t) + spacing[1])
+          .attr('y', scales.price(pLast.v) + spacing[1] + 10)
+          .attr('fill', view.css('venue-polymarket'))
+          .style('font', '12px var(--font-apparatus)')
+          .text('Polymarket');
       }
     }
 
@@ -288,20 +376,22 @@ export default {
       } else {
         merged.attr('opacity', 0.35);
       }
-      captionDiv.text('the 41.6-point goal-second spikes close within a minute');
+      // Pre-cue (design-revision-spec CR-10/G6): this IS the caption for
+      // this step, and it primes the termination event two steps ahead.
+      captionDiv.text('Next, watch the grey line. It stops quoting sixteen times.');
     }
 
     function resolveGapMeter() {
       if (!alive || meanGap === null || meanGap === undefined) return;
       if (view.reducedMotion) {
-        gapMeter.text(`running 1-min Kalshi-Polymarket gap: ${meanGap.toFixed(2)} points`);
+        gapMeter.text(`mean gap: ${meanGap.toFixed(2)} points`);
         return;
       }
       const t0 = performance.now();
       const tick = (now) => {
         if (!alive) return;
         const p = Math.min(1, (now - t0) / countUpMax);
-        gapMeter.text(`running 1-min Kalshi-Polymarket gap: ${(meanGap * p).toFixed(2)} points`);
+        gapMeter.text(`mean gap: ${(meanGap * p).toFixed(2)} points`);
         if (p < 1) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
@@ -338,7 +428,7 @@ export default {
     function runCountUp(n) {
       if (!alive) return;
       if (view.reducedMotion) {
-        countChip.text(`${n} for ${n}: every episode starts at a final quote`);
+        countChip.text(`${n} of ${n} start at Pinnacle's last quote.`);
         resolveGapMeter();
         return;
       }
@@ -347,9 +437,9 @@ export default {
       const step = () => {
         if (!alive) return;
         i += 1;
-        countChip.text(`${i} for ${n}`);
+        countChip.text(`${i} of ${n}`);
         if (i >= n) {
-          countChip.text(`${n} for ${n}: every episode starts at a final quote`);
+          countChip.text(`${n} of ${n} start at Pinnacle's last quote.`);
           setTimeout(() => { if (alive) resolveGapMeter(); }, drawIn);
           return;
         }
@@ -363,9 +453,9 @@ export default {
         if (beatId === 'b1') {
           drawLines();
           drawPinnacleLive();
-          drawVenueLegend();
-          captionDiv.text('for this scene and the next, the dots rest; one mark here is one minute of matched price');
-          gapMeter.text('running 1-min Kalshi-Polymarket gap: —');
+          drawDirectLabels();
+          captionDiv.text('The dots rest here. One mark is one minute of matched price.');
+          gapMeter.text('mean gap: —');
           countChip.text('');
         } else if (beatId === 'b2') {
           flashSpikes();
@@ -386,11 +476,16 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>For the entire knockout stage the two retail venues were effectively one market. A three-way is the match's win, draw, or lose market, its three legs the only three ways ninety minutes can end. A point here is one cent of price, so a five-point gap is five cents, about five percentage points of implied chance. Across 84 three-way legs, Kalshi and Polymarket never sustained a five-point gap for thirty minutes; the mean one-minute gap is 0.74 points, and the 41.6-point goal-second spikes last exactly one minute.${FN(15)}</p>`,
+      html: `<p>Every match in the knockout stage has three tickets: one pays out on a home win, one on a draw, one on an away win. Traders call this the three-way. A point on this chart is one cent of price, so a five-point gap is five cents, about five chances out of a hundred.</p><p>Two rival markets priced every one of those tickets, all month: Kalshi, built in the United States, and Polymarket, built offshore. The two never sat five points apart for even thirty minutes. Minute by minute, the average gap stayed under one cent.${FN(15)}</p><p>Here is why the gap almost never opens. When one market prices a ticket a little rich and the other prices it a little cheap, traders buy the cheap ticket and sell the rich one until the two prices meet. That trade is close to free money, so the gap closes fast.</p>`,
       trigger: 'step',
       state: 'rest',
       kind: 'resort',
-      chip: 'color: venue (Kalshi cyan, Polymarket lavender, Pinnacle grey)',
+      chip: [
+        { token: 'venue-kalshi', glyph: 'line', label: 'cyan = Kalshi price' },
+        { token: 'venue-polymarket', glyph: 'line', label: 'lavender = Polymarket price' },
+        { token: 'venue-pinnacle', glyph: 'dash', label: "grey = the pros' price, dashed when they stop quoting" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
+      ],
       grain: {
         text: 'for this scene and the next, the dots rest; one mark here is one minute of matched price',
         variant: 'debut',
@@ -399,16 +494,17 @@ export default {
     },
     {
       id: 'b2',
-      // Pure-visual step: the "41.6-point goal-second spikes last exactly
-      // one minute" claim is already stated verbatim in b1; this step
-      // performs it (the flash-and-close), not narrates it again.
+      // Pure-visual step: the fact this beat performs (goal-second gaps
+      // close within a minute) is already stated by the braid holding
+      // together in b1's prose; this step shows it, not narrates it again.
+      // The caption it drives is the pre-cue for b3 (see flashSpikes()).
       html: '<!-- visual-only step: goal-second flashes -->',
       trigger: 'step',
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>The sixteen apparent divergences from the professional book tell a different story: all sixteen begin within about two minutes of Pinnacle's final quote and contain zero fresh ticks.${FN(15)} Sixteen episodes, one cause: the professional book had stopped quoting.</p>`,
+      html: `<p>Sixteen times, Kalshi seemed to split from the professional book. That book is Pinnacle, the professional sportsbook from the goal scene. Every split began within about two minutes of Pinnacle's last posted price. Not one held a single fresh Pinnacle quote after that.${FN(15)}</p><p>Sixteen episodes, one cause: the professionals had left the room.</p>`,
       trigger: 'step',
       overlayStep: 'b3',
     },
@@ -421,7 +517,7 @@ export default {
      * field (storyboard S10 Units), and those traces live in this scene's
      * JSON, which S16 does not load. The honest recap is therefore the
      * resting population under the braid's time frame plus the two-venue
-     * legend, never a fabricated price line. Self-sufficient: reads only
+     * caption, never a fabricated price line. Self-sufficient: reads only
      * data.pop and data.manifest, builds a fresh local time scale (the
      * registry key this scene owned is cleared on exit, CONTRACT §6.1). S16
      * applies no dot spotlight to L1, matching "the braid is D3-only, the
@@ -468,7 +564,7 @@ export default {
           ax.append('text').attr('x', rect.x + 168).attr('y', rect.y - 6)
             .attr('fill', view.css('ink-mid'))
             .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))
-            .text('one price, two venues');
+            .text('two crowds, one price');
         },
       };
     },

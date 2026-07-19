@@ -138,13 +138,14 @@ function setGrainPlateDirect(text) {
   const el = document.getElementById('grain-plate');
   if (el) { el.textContent = text; el.style.visibility = 'visible'; }
 }
-function setChipDirect(text) {
-  const el = document.getElementById('chip');
-  if (!el) return;
-  el.textContent = text;
-  el.style.visibility = 'visible';
-  el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
-}
+// NOTE (Gate-4 round-2 label pass): this used to write `el.textContent`
+// directly on `#chip`, which nuked the key's own header/row markup the
+// G1 rewrite gave it (`#chip` now wraps a ".key-header" + "#key-rows"
+// pair, not bare text). Every call site below now goes through
+// `view.setChip(rows)` instead (the same row-array API every other
+// scene's `beat.chip` drives), which is exposed on `view` for exactly
+// this kind of mid-scene interactive update (design-revision-spec G1;
+// S14's toggle uses the identical escape hatch).
 
 function zoomGrainText(manifest, key, taggedCount, template) {
   const spec = manifest.zoom[key];
@@ -160,7 +161,8 @@ function zoomGrainText(manifest, key, taggedCount, template) {
 export default {
   id: 's18',
   act: 6,
-  title: 'The rail releases',
+  title: 'Check it yourself',
+  kicker: 'The lab',
   layoutName: 'free (rail releases)',
 
   needs: { scene: false, series: [], zoom: null }, // zoom tiles fetched lazily on selection
@@ -187,7 +189,7 @@ export default {
     shell.append('p').attr('class', 's18-intro')
       .style('font-family', view.css('font-prose')).style('font-size', view.css('type-lede-size'))
       .style('color', view.css('ink-hi')).style('max-width', '60ch')
-      .html('The story is told; every dot above is still yours to open. Pick a contract and scrub its price life from listing, when the market opens, to settlement; open a zoom match and step through it tick by tick. Nothing here is a simulation. Every dot is money that moved.');
+      .html('The story is told. Every dot above is still yours to open. Pick a contract and step through its price, from the day it was listed to the day it settled. Open a zoom match and step through it trade by trade. Nothing here is a simulation. Every dot is money that moved. If you doubted anything above, or want to test your own read before kickoff, open a market and check it here.');
 
     /* -------- Market picker -------- */
     const pickerWrap = shell.append('div').attr('class', 's18-picker interactive')
@@ -215,6 +217,16 @@ export default {
       .style('color', view.css('ink-mid'));
     const chartSvg = chartWrap.append('svg').attr('width', '100%').attr('height', 160)
       .attr('viewBox', '0 0 640 160').attr('preserveAspectRatio', 'none');
+    // Titled axes (design-revision-spec §2 S18 item 3: "market lifetime
+    // (date)" / "price (cents)"), rendered once as static SVG text — this
+    // chart is a small fixed-viewBox picker preview, not a scaled D3
+    // axis, so a text label carries the unit without new tick machinery.
+    chartSvg.append('text').attr('x', 8).attr('y', 154)
+      .attr('fill', view.css('ink-mid')).attr('font-family', view.css('font-apparatus'))
+      .attr('font-size', '9').text('market lifetime (date)');
+    chartSvg.append('text').attr('x', 8).attr('y', 12)
+      .attr('fill', view.css('ink-mid')).attr('font-family', view.css('font-apparatus'))
+      .attr('font-size', '9').text('price (cents)');
 
     let rows = [];
     function renderRows(filter) {
@@ -245,17 +257,25 @@ export default {
     async function selectMarket(row) {
       chartWrap.style('display', null);
       chartMeta.text(`${row.ticker} · ${fmt.usd(row.dollars || 0)} traded · ${row.settlement || 'settlement pending'}`);
-      chartSvg.selectAll('*').remove();
+      // Only clear the previous pick's own mark, not the static axis
+      // titles appended once at chart setup (they carry the ".chart-mark"
+      // class so a bare selectAll('*') here can no longer wipe them).
+      chartSvg.selectAll('.chart-mark').remove();
       try {
         const series = await loadReplayShard(row.shard);
         const x = d3.scaleLinear().domain([0, series.length - 1]).range([8, 632]);
         const y = d3.scaleLinear().domain(d3.extent(series)).range([152, 8]);
         const line = d3.line().x((_, i) => x(i)).y((v) => y(v));
-        chartSvg.append('path').attr('d', line(series)).attr('fill', 'none')
+        chartSvg.append('path').attr('class', 'chart-mark').attr('d', line(series)).attr('fill', 'none')
           .attr('stroke', view.css('side-yes')).attr('stroke-width', 1.5);
+        // On pick, the key repopulates with this market's own grammar
+        // (design-revision-spec §2 S18 item 3): the line drawn above is a
+        // cyan price trace, so the key names exactly that mark.
+        view.setChip([{ token: 'side-yes', glyph: 'line', label: 'cyan = this market’s price over time' }]);
       } catch (e) {
         console.warn('[rt/s18] shard render failed', e);
-        chartSvg.append('text').attr('x', 8).attr('y', 80).attr('fill', view.css('ink-low')).text('price life unavailable');
+        chartSvg.append('text').attr('class', 'chart-mark')
+          .attr('x', 8).attr('y', 80).attr('fill', view.css('ink-low')).text('price life unavailable');
       }
       // Best-effort dot-lift (see file-header ENGINE ACCESS GAP note).
       try {
@@ -285,9 +305,14 @@ export default {
             });
             liftedRows = idxs;
             // Name what the lit dots are, so the reader reads amber as this
-            // market's money and not a bare color (chip is driver-owned; s18
-            // owns it past the coda handoff — see setChipDirect note above).
-            setChipDirect('amber: this contract’s money');
+            // market's money and not a bare color (chip is driver-owned;
+            // s18 owns it past the coda handoff via view.setChip, see the
+            // module-header NOTE above). Keeps the price-line row from the
+            // try block above so both marks on screen stay named.
+            view.setChip([
+              { token: 'side-yes', glyph: 'line', label: 'cyan = this market’s price over time' },
+              { token: 'accent-annotation', glyph: 'dot', label: 'amber = this market’s money, lifted' },
+            ]);
             engine.tween(lifted, { duration: 1200, stagger: 0.3, easing: 'ease.move' });
           }
         }
@@ -313,6 +338,16 @@ export default {
     const zoomOut = zoomWrap.append('div').attr('class', 's18-zoom-out').style('margin-top', view.css('space-16'));
     const zoomSvg = zoomOut.append('svg').attr('width', '100%').attr('height', 120)
       .attr('viewBox', '0 0 640 120').attr('preserveAspectRatio', 'none').style('display', 'none');
+    // Titled axes (design-revision-spec §2 S18 item 3: zoom scrubs reuse
+    // their source scene's titles verbatim; this coda zoom reuses S1's
+    // plain phrasing). Added once; renderZoomTicks() only ever touches
+    // its own keyed <circle> selection, so these persist across scrubs.
+    zoomSvg.append('text').attr('x', 8).attr('y', 116)
+      .attr('fill', view.css('ink-mid')).attr('font-family', view.css('font-apparatus'))
+      .attr('font-size', '9').text('the trades, in order');
+    zoomSvg.append('text').attr('x', 8).attr('y', 12)
+      .attr('fill', view.css('ink-mid')).attr('font-family', view.css('font-apparatus'))
+      .attr('font-size', '9').text('price (cents; 100 = certain)');
     const zoomScrub = zoomOut.append('input').attr('type', 'range').attr('min', 0).attr('max', 1000).attr('value', 0)
       .style('width', '100%').style('display', 'none')
       .attr('aria-label', 'Scrub through the match tick by tick');
@@ -341,7 +376,10 @@ export default {
       // own protocol (CONTRACT §4.3, §7).
       setGrainPlateDirect(zoomGrainText(data.manifest, key,
         Math.max(tagged, 1), `1 dot = 1 trade · showing every {n}th of {count} trades`));
-      setChipDirect('color: taker side');
+      view.setChip([
+        { token: 'side-yes', glyph: 'dot', label: 'cyan = money that bet yes' },
+        { token: 'side-no', glyph: 'dot', label: 'orange = money that bet no' },
+      ]);
       zoomStatus.text('loading tick tape…');
       zoomSvg.style('display', null); zoomScrub.style('display', null);
       try {
@@ -392,10 +430,14 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>The story is told; every dot above is still yours to open. Pick a contract and scrub its price life from listing, when the market opens, to settlement; open a zoom match and step through it tick by tick. Nothing here is a simulation. Every dot is money that moved.</p>',
+      html: '<p>The story is told. Every dot above is still yours to open. Pick a contract and step through its price, from the day it was listed to the day it settled. Open a zoom match and step through it trade by trade. Nothing here is a simulation. Every dot is money that moved. If you doubted anything above, or want to test your own read before kickoff, open a market and check it here.</p>',
       trigger: 'step',
       state: 'rest',
       kind: 'resort',
+      chip: [
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded' },
       overlayStep: 'b1',
     },
   ],

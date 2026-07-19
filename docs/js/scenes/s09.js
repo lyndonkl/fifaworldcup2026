@@ -75,7 +75,8 @@ const ARG = { code: 'ARG', color: 'identity-lavender', label: 'Argentina' };
 export default {
   id: 's09',
   act: 2,
-  title: 'Three shocks, three arithmetics',
+  title: 'Three upsets, one rule',
+  kicker: 'Skill 3, continued: prices watch the road ahead',
   layoutName: 'shock-align',
 
   needs: { scene: true, series: [], zoom: null },
@@ -186,20 +187,41 @@ export default {
     const { xPop, xFull, y } = scales;
     const g = container.svg;
 
+    // No amber anywhere in this scene (design-revision-spec S9: all four
+    // prior amber usages deleted). The shock line and the bracket-news
+    // markers are structural apparatus, the same ink-mid/ink-low dashed
+    // grammar S7's kickoff line already teaches -- not story points of
+    // their own.
     const shockLine = g.append('g').style('display', 'none');
     shockLine.append('line')
       .attr('x1', xPop(0)).attr('x2', xPop(0))
       .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
-      .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', 1.5);
+      .attr('stroke', 'var(--ink-mid)').attr('stroke-width', 1)
+      .attr('stroke-dasharray', '1,3');
     shockLine.append('text').attr('x', xPop(0) + 6).attr('y', view.region.y + 14)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-annotation-size)')
-      .attr('fill', 'var(--accent-annotation)').text('shock, t=0');
+      .attr('fill', 'var(--ink-mid)').text('shock, t=0');
 
     const divAxis = g.append('g').style('display', 'none');
     divAxis.append('g')
       .attr('transform', `translate(0,${view.region.y + view.region.h + 8})`)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
       .call(d3.axisBottom(xFull).ticks(6).tickFormat((d) => `${d}h`));
+    divAxis.append('text')
+      .attr('x', view.region.x + view.region.w / 2).attr('y', view.region.y + view.region.h + 8 + 24)
+      .attr('text-anchor', 'middle')
+      .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-mid)').text('hours after the shock');
+    // Y title: honest to the bound scale. The population's price_band
+    // carries the winner ticket's own price in cents (0-100), the same
+    // quantity every other scene's price axis uses -- it does not carry a
+    // pre-shock ratio, so the axis says what the dots actually are rather
+    // than the multiple quoted in prose (that multiple is a beat-copy
+    // fact, not a plotted channel).
+    divAxis.append('text')
+      .attr('x', view.region.x).attr('y', view.region.y - 6)
+      .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-mid)').text('winner-ticket price (cents)');
 
     const annoG = g.append('g').style('display', 'none');
     if (data.scene && Array.isArray(data.scene.annotations)) {
@@ -207,24 +229,31 @@ export default {
         const ax = xFull(a.t_hours);
         annoG.append('line').attr('x1', ax).attr('x2', ax)
           .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
-          .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', 1)
+          .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1)
           .attr('stroke-dasharray', '2,3');
         annoG.append('text').attr('x', ax + 4).attr('y', view.region.y + 24)
           .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-annotation-size)')
-          .attr('fill', 'var(--accent-annotation)').text(a.label);
+          .attr('fill', 'var(--ink-mid)').text(a.label);
       });
     }
 
+    // Zone K's one occupant for this scene (CR-9 wording exactly).
     const mirrorCaption = pinnedCaption(
       container,
-      'the tell: Norway’s blue leg spikes as Argentina’s lavender leg crashes, sharing one bracket’s arithmetic rather than one market driving the other',
+      'Norway rises as Argentina falls. One bracket, one sum.',
       's09-mirror-caption',
-    ).style('left', `${view.region.x}px`).style('top', `${view.region.y - 40}px`);
+    ).style('left', `${view.region.x}px`).style('top', `${view.region.y - 40}px`)
+      .style('display', 'none');
 
     function step(beatId) {
       if (beatId === 'b1') shockLine.style('display', null);
       if (beatId === 'b2') { divAxis.style('display', null); annoG.style('display', null); }
-      if (beatId === 'b3') mirrorCaption.style('display', null);
+      if (beatId === 'b3') {
+        // Both bracket annotations clear before the mirror callout lands
+        // (CR-9): the mirror gets an uncluttered pair of lines.
+        annoG.style('display', 'none');
+        mirrorCaption.style('display', null);
+      }
     }
 
     return {
@@ -239,27 +268,36 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>Three shocks, three different arithmetics. A team's price is
-        really a price on the route still in front of it: beat this side,
-        then probably that one. When a result changes who a team would meet
-        next, every price along that path moves even though the team itself
-        did nothing. That repricing is the bracket arithmetic. Paraguay's
-        winner leg popped fivefold when Germany went out, Norway's about 3.6x
-        over Brazil, Belgium's roughly twofold, and the 72-hour paths then
-        diverged with bracket news rather than fading from
-        excess.<sup><a href="#fn-14">14</a></sup></p>`,
+      html: `<p>Three upsets. Three different teams' prices, and all three
+        moved by the same rule.</p>
+        <p>A team's price is really a price on the road still ahead of it:
+        beat this team, then probably that one. When a result changes who a
+        team would play next, every price on that new road moves. That
+        happens even if the team itself did nothing that day. Call this
+        bracket math.</p>
+        <p>Watch it happen three times. When Germany went out, Paraguay's
+        champion ticket jumped five times higher. Paraguay had not gotten
+        better. Its road had gotten easier. Norway's ticket jumped about 3.6
+        times when Brazil went out. Belgium's jumped about two
+        times.<sup><a href="#fn-14">14</a></sup></p>`,
       trigger: 'step',
       state: 'pop',
       kind: 'resort',
-      chip: 'color: beneficiary team · Paraguay teal, Norway blue, Belgium pink',
-      grain: { text: '1 dot = $75,000 of matched volume', variant: 'return' },
+      chip: [
+        { token: 'identity-teal', glyph: 'dot', label: 'teal = Paraguay’s winner ticket' },
+        { token: 'identity-blue', glyph: 'dot', label: 'blue = Norway’s' },
+        { token: 'identity-pink', glyph: 'dot', label: 'pink = Belgium’s' },
+      ],
+      grain: { text: '1 dot = $75,000 traded again · this is the whole tournament · it never leaves', variant: 'return' },
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>Paraguay drifted as France was confirmed next, Belgium
-        converged on a known Spain quarterfinal.<sup><a
-        href="#fn-14">14</a></sup></p>`,
+      html: `<p>What happened next in each price followed bracket news, not
+        fading hype. Paraguay's price drifted once France was confirmed as
+        its next opponent. Belgium's price steadied once a Spain quarterfinal
+        was locked in.<sup><a href="#fn-14">14</a></sup> Next, watch two
+        lines move together: one up, one down.</p>`,
       trigger: 'step',
       state: 'divergence',
       kind: 'resort',
@@ -267,17 +305,31 @@ export default {
     },
     {
       id: 'b3',
-      html: `<p>The tell is Norway's winner leg, repriced off the same
-        Norway and Brazil upset the reader just watched tick by tick: its
-        spike to 10.8 cents at hour 43 mirrors, minute for minute,
-        Argentina's winner-leg crash while Egypt led.<sup><a
-        href="#fn-14">14</a></sup> Whatever the highlight reels were
-        celebrating, the tape was doing bracket arithmetic, repricing each
-        team's remaining path through the draw.</p>`,
+      html: `<p>The clearest proof is Norway. That is the team from the goal
+        scene: the Norway-Brazil match, the one with Haaland's second goal,
+        watched tick by tick. Norway's champion ticket spiked in the exact
+        minutes Argentina was losing to Egypt. Norway's price was not
+        reacting to Norway. It was watching Argentina's
+        match.<sup><a href="#fn-14">14</a></sup> Neither market was copying
+        the other. Both were doing the same bracket math.</p>
+        <p>A price is a bet on the road still ahead, not a grade on the game
+        just played. Argentina, tonight's team, is priced the same way right
+        now: by the one match left on its road.</p>
+        <div class="act-close scrim-card">
+          <p><strong>Skill unlocked:</strong> jumps are news, slides can be
+          rules, and every price watches the road still ahead.</p>
+          <p><strong>The receipt:</strong> every clean spike of this
+          tournament held. Every famous "panic" turned out to be fine print
+          or bracket math.</p>
+        </div>`,
       trigger: 'step',
       state: 'mirror',
       kind: 'resort',
-      chip: 'color: winner leg · Norway blue rising, Argentina lavender falling',
+      chip: [
+        { token: 'identity-blue', glyph: 'dot', label: 'blue = Norway, rising' },
+        { token: 'identity-lavender', glyph: 'dot', label: 'lavender = Argentina, falling' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
       overlayStep: 'b3',
     },
   ],

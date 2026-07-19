@@ -170,18 +170,27 @@ function tintOpponent(state, data, view) {
   }
 }
 
+// Retitled per the Gate-4 round-2 structure spec §5 S16: the five cards
+// are named, not renumbered (the "Skill N of 5" numbering belongs to the
+// acts that taught each skill, in scene order, and this recital runs in a
+// different order). The small-caps kicker therefore counts tonight's USE
+// order, never re-using the acts' skill numbers; l1's narrated line
+// bridges the order change. Each name is the literal instruction the
+// reader carries into tonight. S17 §5 enumerates these five names word
+// for word, so if you edit a title here, edit it there too.
 const LOCKUPS = [
-  { ordinal: 'Habit one', title: 'the number is the number' },
-  { ordinal: 'Habit two', title: 'where the money is' },
-  { ordinal: 'Habit three', title: 'the spike is the price' },
-  { ordinal: 'Habit four', title: 'attention is not belief' },
-  { ordinal: 'Habit five', title: 'this market holds opinions' },
+  { ordinal: 'First tonight', title: 'no one sharper' },
+  { ordinal: 'Second tonight', title: 'trust the pools, smile at the ladders' },
+  { ordinal: 'Third tonight', title: 'the spike is the price' },
+  { ordinal: 'Fourth tonight', title: 'the flags don’t move it' },
+  { ordinal: 'Fifth tonight', title: 'it holds opinions' },
 ];
 
 export default {
   id: 's16',
   act: 5,
   title: 'How to read the number',
+  kicker: 'The exam, part one: your five skills',
   layoutName: 'lens-carousel',
 
   needs: {
@@ -266,6 +275,23 @@ export default {
       .attr('font-family', view.css('font-apparatus')).attr('font-weight', 600)
       .attr('font-size', view.css('type-kicker-size'))
       .attr('opacity', 0);
+    // Unit ribbon (design-revision-spec §2 S16 item 3): one plain-words
+    // line under each anchor's lockup, naming what its two axes measure —
+    // the storyboard's promised mini-axes, at caption weight so the
+    // recap stays fast to read.
+    const unitRibbon = g.append('text').attr('class', 's16-ribbon')
+      .attr('x', view.region.x).attr('y', view.region.y + 14)
+      .attr('fill', view.css('ink-mid'))
+      .attr('font-family', view.css('font-tape')).attr('font-size', view.css('type-micro-size'))
+      .attr('letter-spacing', view.css('type-tape-tracking'))
+      .attr('opacity', 0);
+    const RIBBONS = [
+      'left axis: date of the knockout stage · right axis: price (1 point = 1 cent)',
+      'left axis: what the price implied (cents) · right axis: how often it happened (%)',
+      'left axis: hours since the shock · right axis: price (times its price before the shock)',
+      'left axis: fans who said win (%) · right axis: market price (cents)',
+      'left axis: five checkpoints · right axis: ticket price (cents), grey line is the model, devigged (bookmaker’s cut removed)',
+    ];
     const axesG = g.append('g').attr('class', 's16-axes');
 
     // L4's Argentina callback (storyboard S16 Data note; see file-footer
@@ -284,13 +310,14 @@ export default {
       .style('font-size', view.css('type-caption-size'))
       .style('color', view.css('ink-mid'))
       .style('opacity', 0)
-      .text('The 87% figure belongs to tonight’s opponent too; the price will hold it to the same standard.');
+      .text('That same 87% belongs to tonight’s crowd too. The price will not treat them any differently.');
 
     let currentAxes = null;
     function showLens(idx) {
       const l = LOCKUPS[idx];
       lockupOrd.text(l.ordinal.toUpperCase()).transition().duration(400).attr('opacity', 1);
       lockupTitle.text(l.title).transition().duration(400).attr('opacity', 1);
+      unitRibbon.text(RIBBONS[idx]).transition().duration(400).attr('opacity', 1);
       axesG.selectAll('*').remove();
       const a = anchors[idx];
       if (a && typeof a.drawAxes === 'function') {
@@ -313,33 +340,54 @@ export default {
   beats: [
     {
       id: 'l1',
-      html: '<p>The number, once the vig is stripped, is the number. At a day out the amateurs and the professionals scored the same all tournament,<sup class="fn"><a href="#fn-16">16</a></sup> and the two retail venues never sustained even a five-point disagreement for half an hour.<sup class="fn"><a href="#fn-15">15</a></sup> No one sharper is waiting behind this price.</p>',
+      html: '<p>Here are your five skills again. They come back in a new order now: the order you will need them tonight, not the order you learned them. First tonight: take the number at face value. Once you take out the bookmaker&rsquo;s fee, the price is the price. All tournament, the everyday crowd and the professional bookmakers scored the same, a day out from every match.<sup class="fn"><a href="#fn-16">16</a></sup> And the two crowd markets never drifted five cents apart for even half an hour.<sup class="fn"><a href="#fn-15">15</a></sup> No one sharper is hiding behind this number. Use it tonight: believe Spain&rsquo;s price.</p>',
       trigger: 'step', state: 'lens0', kind: 'resort',
-      chip: 'color: each venue’s price', overlayStep: 'l1',
+      chip: [
+        { token: 'side-yes', glyph: 'line', label: 'cyan = Kalshi’s price' },
+        { token: 'identity-lavender', glyph: 'line', label: 'lavender = Polymarket’s price' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded' },
+      overlayStep: 'l1',
     },
     {
       id: 'l2',
-      html: '<p>Trust the pools, not the ladders. The final’s three-way and the winner legs are the deepest markets of this exchange’s life, and weighted by dollars actually traded the big markets were nearly calibrated all tournament.<sup class="fn"><a href="#fn-20">20</a></sup> The first-scorer and exact-score ladders carry the one real mispricing the tape ever confirmed, a lottery tax bounded by the one-cent tick.<sup class="fn"><a href="#fn-20">20</a></sup></p>',
+      html: '<p>Second tonight: trust the deep pools, and smile at the penny ladders. Tonight&rsquo;s three-way market and the two teams&rsquo; championship tickets are the deepest pools this exchange has ever traded. Weighted by real dollars, those big markets priced almost perfectly all tournament.<sup class="fn"><a href="#fn-20">20</a></sup> The thin side bets, like first scorer or exact score, carried the one real flaw this study confirmed: a small tax on cheap longshot tickets.<sup class="fn"><a href="#fn-20">20</a></sup> Use it tonight: trust the big number, and shrug at the long-shot props.</p>',
       trigger: 'step', state: 'lens1', kind: 'resort',
-      chip: 'lit: the overpriced longshot money', overlayStep: 'l2',
+      chip: [
+        { token: 'field-rest', glyph: 'dim', label: 'pale = money at each price level' },
+        { token: 'accent-annotation', glyph: 'dot', label: 'amber = the overpriced penny longshots' },
+      ],
+      overlayStep: 'l2',
     },
     {
       id: 'l3',
-      html: '<p>If a shock lands, the spike is the price. Clean goal reactions held their post-jump level within friction at a thirty-minute horizon, and every shock of this tournament repriced to bracket arithmetic rather than fading from panic.<sup class="fn"><a href="#fn-12">12</a></sup> The same arithmetic that halved Kane’s price on 120 scoreless minutes prices a shock: remaining paths, not headlines.<sup class="fn"><a href="#fn-19">19</a></sup> One clause of fine print for a level final, carried from Act II: near minute ninety the regulation contract grinds to its tie-locked price by construction, and belief speaks through the winner legs.<sup class="fn"><a href="#fn-13">13</a></sup></p>',
+      html: '<p>Third tonight: if a goal lands, the jump is the new truth. Every clean goal spike this tournament held steady afterward; none of them snapped back like a panic.<sup class="fn"><a href="#fn-12">12</a></sup> The same math that cut Kane&rsquo;s price in half after 120 scoreless minutes prices any shock: what is left to happen, not what the highlight reel shows.<sup class="fn"><a href="#fn-19">19</a></sup> One rule for tonight, if the score is level near the ninetieth minute: the ninety-minute ticket has to slide toward zero by contract rules, not by belief. Watch the championship tickets instead.<sup class="fn"><a href="#fn-13">13</a></sup></p>',
       trigger: 'step', state: 'lens2', kind: 'resort',
-      chip: 'lit: Norway’s and Argentina’s money', overlayStep: 'l3',
+      chip: [
+        { token: 'identity-blue', glyph: 'dot', label: 'blue = Norway, rising' },
+        { token: 'identity-lavender', glyph: 'dot', label: 'lavender = Argentina, falling' },
+      ],
+      overlayStep: 'l3',
     },
     {
       id: 'l4',
-      html: '<p>Final day, the flags will be at their loudest, and the price will not care. Fans at 87% agreement met an 11-cent market, and a home crowd’s team traded at a cent and a half on its own country’s exchange.<sup class="fn"><a href="#fn-17">17</a></sup> Attention moved volume by multiples all tournament and never bought more than a point or two of price.<sup class="fn"><a href="#fn-18">18</a></sup></p>',
+      html: '<p>Fourth tonight: the flags in the stadium do not move the price. 87 percent of Argentine fans, polled, said Argentina would win it all again. The market priced that same ticket at 11 cents.<sup class="fn"><a href="#fn-17">17</a></sup> All tournament, love for the home team moved how much money showed up, and never moved the price by more than a point or two.<sup class="fn"><a href="#fn-18">18</a></sup> Tonight the flags will be loud. The price will not care.</p>',
       trigger: 'step', state: 'lens3', kind: 'resort',
-      chip: 'lit: Argentina’s money vs. the fans’ poll', overlayStep: 'l4',
+      chip: [
+        { token: 'ink-mid', glyph: 'box', label: 'outline = what fans said (poll %)' },
+        { token: 'ink-mid', glyph: 'dot', label: 'filled = what the money said (cents)' },
+      ],
+      overlayStep: 'l4',
     },
     {
       id: 'l5',
-      html: '<p>One habit is still an open bet. Once the vig is stripped, the market kept France above the model for thirteen months and Spain below it, and Spain is the team still standing.<sup class="fn"><a href="#fn-21">21</a></sup> Whether that discount was information or attachment is the one question the tape could not settle. The piece stakes it here: the epilogue will return to this number and say which it was.</p>',
+      html: '<p>Fifth tonight: this market can hold one opinion for a long time. Take out the bookmaker&rsquo;s fee, a step this piece calls <strong>devigged</strong> (the bookmaker&rsquo;s cut removed), and the market priced France above a computer model for thirteen months, and Spain below it.<sup class="fn"><a href="#fn-21">21</a></sup> Spain is the team still playing tonight. Was that year-long doubt real information, or just a habit? No one can answer that yet. Tonight&rsquo;s number carries the answer, whichever way it turns out.</p>',
       trigger: 'step', state: 'lens4', kind: 'resort',
-      chip: 'lit: France’s vs. Spain’s money (opponent lit)', overlayStep: 'l5',
+      chip: [
+        { token: 'state-dead', glyph: 'dead', label: 'grey = France, settled to zero' },
+        { token: 'identity-crimson', glyph: 'dot', label: 'red = Spain’s money' },
+      ],
+      overlayStep: 'l5',
     },
   ],
 

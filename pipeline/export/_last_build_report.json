@@ -2,31 +2,31 @@
   "tiles_written": [
     {
       "name": "manifest.json",
-      "bytes": 7460
+      "bytes": 7408
     },
     {
       "name": "markets.json",
-      "bytes": 609661
+      "bytes": 621041
     },
     {
       "name": "pop-250k.bin",
-      "bytes": 764596
+      "bytes": 790332
     },
     {
       "name": "pop-75k.bin",
-      "bytes": 2556980
+      "bytes": 2640700
     },
     {
       "name": "replay/index.json",
-      "bytes": 60417
+      "bytes": 60461
     },
     {
       "name": "scenes",
-      "bytes": 393357
+      "bytes": 393368
     },
     {
       "name": "series.bin",
-      "bytes": 184864
+      "bytes": 184904
     },
     {
       "name": "zoom/fraesp.bin",
@@ -45,15 +45,14 @@
       "bytes": 523920
     }
   ],
-  "total_bytes": 16800571,
-  "total_mb": 16.801,
+  "total_bytes": 16921450,
+  "total_mb": 16.921,
   "manifest_path": "/Users/kushaldsouza/Documents/Thinking/fifaworldcup2026/docs/data/manifest.json",
   "all_caps_ok": true,
-  "population_dots_desktop": 159809,
-  "population_dots_mobile": 47785,
+  "population_dots_desktop": 165042,
+  "population_dots_mobile": 49394,
   "finalists": [
     "ESP",
-    "ENG",
     "ARG"
   ]
 }

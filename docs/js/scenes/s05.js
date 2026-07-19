@@ -104,6 +104,7 @@ export default {
   id: 's05',
   act: 1,
   title: 'Where the dollars sat',
+  kicker: 'Skill 2, continued — depth decides trust',
   layoutName: 'lorenz-sweep',
 
   needs: { scene: true, series: [], zoom: null },
@@ -199,17 +200,73 @@ export default {
       .attr('stroke', view.css('ink-low')).attr('stroke-width', 0.5);
 
     const belowGrain = (data.manifest.census && data.manifest.census.below_grain) || { markets: 0, usd: 0 };
-    const bandLabel = g.append('text')
-      .attr('x', region.x + 4).attr('y', region.y + region.h - bandH - 6)
+    // Below-band chip wording (design-revision-spec S5 §3): plain
+    // "N markets · under one dot each · M combined" template; sits
+    // inside the band once it is tall enough to hold text, else just
+    // below it, left-aligned to region.x either way.
+    const bandLabelInside = bandH >= 20;
+    const bandLabel = g.append('text').attr('class', 's05-below-band-label')
+      .attr('x', region.x + 4)
+      .attr('y', bandLabelInside
+        ? region.y + region.h - bandH / 2 + 4
+        : region.y + region.h + 8 + 10)
       .attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-tape-size) var(--font-tape)`)
-      .text(`${fmt.count(belowGrain.markets)} markets traded less than one dot's worth ($75,000) over their whole lives, ${fmt.usd(belowGrain.usd)} combined`);
+      .text(`${fmt.count(belowGrain.markets)} markets · under one dot each ($75,000) · ${fmt.usd(belowGrain.usd)} combined`);
 
-    // Equality diagonal + real Lorenz reference line (optional).
+    // Axes (G3: "missing apparatus to add" -- S5 had none). Ticks at the
+    // five round percentages the spec calls out; titles name what each
+    // axis measures, in plain words, with its unit.
+    const pctTicks = [0, 0.25, 0.5, 0.75, 1];
+    const pctFmt = (d) => `${Math.round(d * 100)}%`;
+    const axisX = d3.axisBottom(x).tickValues(pctTicks).tickFormat(pctFmt).tickSizeOuter(0);
+    const axisY = d3.axisLeft(y).tickValues(pctTicks).tickFormat(pctFmt).tickSizeOuter(0);
+    g.append('g')
+      .attr('transform', `translate(0,${region.y + region.h})`)
+      .attr('class', 'axis axis-x')
+      .style('color', view.css('ink-low'))
+      .style('font', `var(--type-micro-size) var(--font-apparatus)`)
+      .call(axisX);
+    g.append('g')
+      .attr('transform', `translate(${region.x},0)`)
+      .attr('class', 'axis axis-y')
+      .style('color', view.css('ink-low'))
+      .style('font', `var(--type-micro-size) var(--font-apparatus)`)
+      .call(axisY);
+    g.append('text').attr('class', 'axis-title axis-title-x')
+      .attr('x', region.x + region.w / 2).attr('y', region.y + region.h + 36)
+      .attr('text-anchor', 'middle')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+      .style('font-weight', 500)
+      .text('all markets, smallest to biggest (% of markets)');
+    g.append('text').attr('class', 'axis-title axis-title-y')
+      .attr('x', region.x).attr('y', region.y - 12)
+      .attr('text-anchor', 'start')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+      .style('font-weight', 500)
+      .text('share of all the money (%)');
+
+    // Concentration figures (structure-spec S5 b2: the Gini numbers move
+    // out of body prose into a caption). Footnote-weight, ink-low.
+    const giniCaption = g.append('text').attr('class', 's05-gini-caption')
+      .attr('x', region.x).attr('y', region.y + region.h + 58)
+      .attr('fill', view.css('ink-low'))
+      .style('font', `var(--type-micro-size) var(--font-apparatus)`)
+      .text('market concentration (Gini): 0.930 overall, 0.44 within one family')
+      .style('display', 'none');
+
+    // Equality diagonal + real Lorenz reference line.
     g.append('line').attr('class', 's05-diagonal')
       .attr('x1', x(0)).attr('y1', y(0)).attr('x2', x(1)).attr('y2', y(1))
-      .attr('stroke', view.css('ink-low')).attr('stroke-width', 1).attr('stroke-dasharray', '2,3')
-      .style('display', 'none');
+      .attr('stroke', view.css('ink-low')).attr('stroke-width', 1).attr('stroke-dasharray', '2,3');
+    g.append('text').attr('class', 's05-diagonal-label')
+      .attr('x', x(1) - 4).attr('y', y(1) + 12)
+      .attr('text-anchor', 'end')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `var(--type-micro-size) var(--font-apparatus)`)
+      .text('if every market traded equally');
     let lorenzPath = null;
     if (sj.lorenz_curve && sj.lorenz_curve.length) {
       const line = d3.line().x((d) => x(d.market_frac)).y((d) => y(d.value_frac));
@@ -221,10 +278,10 @@ export default {
     // Tail bracket: "19,640 markets, 0.36% of the money."
     const tail = sj.tail || { markets: belowGrain.markets, share_pct: null };
     const tailBracket = g.append('g').attr('class', 's05-tail-bracket').style('display', 'none');
-    tailBracket.append('path')
+    const tailBracketPath = tailBracket.append('path')
       .attr('d', `M${region.x},${region.y + region.h - bandH - 14} L${region.x},${region.y + region.h - bandH - 20} L${region.x + bandW},${region.y + region.h - bandH - 20} L${region.x + bandW},${region.y + region.h - bandH - 14}`)
       .attr('fill', 'none').attr('stroke', view.css('ink-mid')).attr('stroke-width', 1);
-    tailBracket.append('text')
+    const tailBracketLabel = tailBracket.append('text')
       .attr('x', region.x + bandW / 2).attr('y', region.y + region.h - bandH - 26)
       .attr('text-anchor', 'middle').attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
@@ -244,6 +301,14 @@ export default {
     }
 
     // Novelty-market callout (de-politicize swap; see prose-plan Part 3).
+    // REVISION (design-revision-spec CR-15 / S5 §2): two-line amber +
+    // ink-mid block. Note: CR-15's literal draft text ("rank 1,083 of
+    // 30,133") describes the (removed) Trump-mention market from R14, not
+    // this ad-market family -- reusing that number here would print a
+    // false rank for the wrong market. Structure-spec §5/§6/§7.6 both say
+    // the built ad-market beat stands (no political content), so this
+    // keeps CR-15's two-line amber/ink-mid FORM but fills it with this
+    // family's own data-bound rank instead.
     // The loudest off-pitch novelty of the tournament is the KXWCADS ad
     // family ("which brands advertise around the final"). It is sub-grain:
     // 35 markets, none large enough to earn a single $75k dot, so it owns
@@ -269,17 +334,26 @@ export default {
         .attr('x1', anchorX - 4).attr('y1', bandTopY)
         .attr('x2', anchorX - 4).attr('y2', labelY + 6)
         .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
+      const noveltyRank = fmt.count(novelty.rank || 10500);
+      const noveltyTotal = fmt.count(ml.totalMarkets || sj.total_markets || 30133);
       noveltyG.append('text')
         .attr('x', anchorX).attr('y', labelY).attr('text-anchor', 'end')
         .attr('fill', view.css('accent-annotation'))
         .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
-        .text(`the loudest off-pitch novelty: ${fmt.count(novelty.n_markets || 0)} ad markets`);
+        .text(`biggest ad market: rank ${noveltyRank} of ${noveltyTotal}`);
       noveltyG.append('text')
         .attr('x', anchorX).attr('y', labelY + 18).attr('text-anchor', 'end')
         .attr('fill', view.css('ink-mid'))
         .style('font', `var(--type-caption-size) var(--font-apparatus)`)
-        .text(`~${fmt.count(novelty.contracts || 0)} contracts, too small to earn a single $75k dot`);
+        .text('lit because it is surprising, not because it is big');
     }
+
+      // Emphasis decay ledger (G4 "one-change-per-step"): step 1 shows
+      // only the below-band chip, at ink-mid. Step 2 brings in the tail
+      // bracket + core label at ink-mid and demotes the below-band chip
+      // to ink-low. Step 3 brings in the one amber unit (the ad-market
+      // callout) and demotes the tail bracket + core label to ink-low.
+      const dim = view.reducedMotion ? 0 : 550;
 
     return {
       step(beatId) {
@@ -288,12 +362,19 @@ export default {
           coreLabel && coreLabel.style('display', 'none');
           noveltyG && noveltyG.style('display', 'none');
           lorenzPath && lorenzPath.style('display', 'none');
+          giniCaption.style('display', 'none');
+          bandLabel.attr('fill', view.css('ink-mid'));
         } else if (beatId === 'b2') {
           tailBracket.style('display', null);
           coreLabel && coreLabel.style('display', null);
           lorenzPath && lorenzPath.style('display', null);
+          giniCaption.style('display', null);
+          bandLabel.transition().duration(dim).attr('fill', view.css('ink-low'));
         } else if (beatId === 'b3') {
           noveltyG && noveltyG.style('display', null);
+          tailBracketPath.transition().duration(dim).attr('stroke', view.css('ink-low'));
+          tailBracketLabel.transition().duration(dim).attr('fill', view.css('ink-low'));
+          coreLabel && coreLabel.transition().duration(dim).attr('fill', view.css('ink-low'));
         }
       },
       exit() { g.remove(); },
@@ -303,24 +384,30 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>Kalshi lists the outcome space; dollars find the plausible outcomes.</p>',
+      html: '<p>Kalshi is the exchange running this market, the place where all this real money trades. It is a company regulated in the United States. It lists a market for almost anything that could happen in this World Cup. The dollars do not spread out evenly. They find the outcomes people think are plausible, and pile in there.</p>',
       trigger: 'step',
       state: 'sweep',
       kind: 'resort',
-      chip: 'color: neutral; position is market size',
+      chip: [
+        { token: 'field-rest', glyph: 'dot', label: 'pale blue = markets, sorted by size' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded' },
     },
     {
       id: 'b2',
-      html: '<p>A series is Kalshi&rsquo;s name for a family of related markets, such as every three-way in the tournament. A leg is one outcome-contract inside a market: the France-wins bet is one leg of the winner market, and a single match splits into three legs, home win, draw, away win. Three core series, 414 of those legs, absorb 63.5% of all dollars, while 19,640 markets, more than half the catalog, carry 0.36% of volume; on the Gini scale, where zero is an equal share for every market and one is a single market holding all of it, the pooled concentration reads as extreme at 0.930, and the within-family reality is ordinary at 0.44.<sup><a href="#fn-7">7</a></sup></p>',
+      html: '<p>A market can split into more than one ticket. A single match splits into three: home win, draw, and away win. Each one of those tickets is called a leg. Just three big families of markets, 414 legs in all, took 63.5% of every dollar bet.<sup><a href="#fn-7">7</a></sup> Meanwhile, more than half the catalog, 19,640 tiny markets, shared just 0.36% of all the money.<sup><a href="#fn-7">7</a></sup> Next, one dot lights up deep in the thin tail.</p>',
       trigger: 'step',
     },
     {
       id: 'b3',
-      html: '<p>The loudest market that had nothing to do with football was a bet on advertising: which brands would run a spot around the final. Every one of those 35 ad markets put together drew about 594,000 contracts, five thousandths of one percent of the tape, and the most-traded of them, whether Pepsi would advertise, could not crack the top ten thousand markets.<sup><a href="#fn-8">8</a></sup> The whole family was more than two hundred times smaller than a single knockout-night match market.<sup><a href="#fn-8">8</a></sup> Loud in imagination, faint in money.</p>',
+      html: '<p>The loudest market with nothing to do with football was a bet on advertising: which brands would run a commercial around the final. All 35 of those ad markets put together drew about 594,000 contracts, five thousandths of one percent of the whole tape.<sup><a href="#fn-8">8</a></sup> The single biggest of them, whether Pepsi would advertise, could not crack the top ten thousand markets by size. The whole ad family was more than two hundred times smaller than one real match night.<sup><a href="#fn-8">8</a></sup> Loud in imagination, faint in money. Remember these near-empty markets. They come back later, in the one place this market got something wrong.</p><div class="scrim-card" style="margin-top:var(--space-16); padding:var(--space-8) var(--space-12);"><p style="margin:0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">Skill unlocked.</strong> <span style="color:var(--ink-mid);">You can now tell attention from knowledge: depth decides which prices to trust.</span></p><p style="margin:var(--space-8) 0 0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">The receipt.</strong> <span style="color:var(--ink-mid);">The tape counted $12.3 billion a week before the press did, and the money skipped the silly bets.</span></p></div>',
       trigger: 'step',
       state: 'sweepDimmed',
       kind: 'recolor',
-      chip: 'field at rest; amber marks the ad family',
+      chip: [
+        { token: 'accent-annotation', glyph: 'dot', label: 'amber = the ad market, lit for surprise' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
     },
   ],
 

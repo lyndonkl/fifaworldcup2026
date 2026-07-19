@@ -8,6 +8,14 @@
  * Design: research/design-system.md §9 "S2" (Grain Plate "return" variant;
  * family color muted/low-sat; mobile timeline rotates vertical).
  *
+ * GATE-4 ROUND-2 REVISION (structure-spec §5 S2 / design-revision-spec §2
+ * S2): kicker "Skill 1, continued — a price needs a crowd"; prose
+ * rewritten to eighth-grade level, closing the act with two one-line
+ * "skill unlocked" / "receipt" cards; the June 11 kickoff wall becomes the
+ * scene's one amber unit, withheld until the final scroll increment (a
+ * "keep your eye on the far right" cue precedes it); the December 5 draw
+ * marker demotes from amber to ink-mid so amber stays a true singleton.
+ *
  * Object constancy: this scene's resting-field position formula is
  * DELIBERATELY identical to s01.js's (same bucket/stack algorithm, same
  * view.region, same per-dot identity = population tile row index), so
@@ -23,6 +31,7 @@ import { registry, makeState, setColor, durationMs } from '../shared.js';
 
 const BUCKET_PX = 4;
 const DRAW_WEEK_MS = Date.UTC(2025, 11, 5);      // Dec 5, 2025 — fixed WC-2026 draw date
+const WALL_MS = Date.UTC(2026, 5, 11);           // Jun 11, 2026 — the tournament's opening match, the density wall
 const FINAL_MS = Date.UTC(2026, 6, 19);          // Jul 19, 2026 — fixed WC-2026 final date
 
 function hash01(i) {
@@ -78,6 +87,9 @@ export default {
   id: 's02',
   act: 0,
   title: 'Thirteen months, asleep',
+  // Piece-wide spine (structure-spec §2/§3): S2 finishes the skill S1
+  // opened.
+  kicker: 'Skill 1, continued — a price needs a crowd',
   layoutName: 'timeline-ribbon',
 
   needs: { scene: false, series: [], zoom: null },
@@ -115,30 +127,26 @@ export default {
 
     const BASE_PX = view.tokens.dot['radius-base-px'] * 2;
     const restColor = view.state('rest'); // 0.35 -> rest-tier: engine dims it
-    // Color: contract family (futures vs everything else). REVISION
-    // (perception-brief §9b, §10.1): the winner-futures family is this scene's
-    // subject, so it is the ACTIVE subset and has to pick out of the field.
-    // The prior build tinted it muted cyan at alpha 0.30 -- below even the rest
-    // field's 0.35, separated from it by hue alone, which the brief showed
-    // reads ~isoluminant (side.yes vs field.rest ~1.20:1) and does not pop.
-    // The fix keeps the same cyan hue (the chip re-narrates it away from S1's
-    // "taker YES" meaning, per design-system §6's team-vs-semantic discipline)
-    // and lifts its alpha into the active band (opacity-alive), so the engine
-    // boosts the winner-book thread's luminance above the dimmed rest of the
-    // market. Hue unchanged, luminance fixed -- exactly the brief's fix. Dot
-    // size stays fixed (unit grammar); the pop rides on alpha and the shader.
+    // Color: contract family (futures vs everything else). This scene's
+    // subject is the winner-futures book, so it is the ACTIVE subset and
+    // has to pick out of the field. Per perception-brief §9b/§10.1: keep
+    // the cyan hue (the key re-narrates it away from S1's "yes" meaning)
+    // but lift its alpha into the active band (opacity-alive) so the
+    // engine boosts the winner-book thread's luminance above the dimmed
+    // rest of the market — hue unchanged, luminance fixed. Dot size stays
+    // fixed (unit grammar); the pop rides on alpha and the shader.
     const futuresColor = view.color('side-yes', view.tokens.dot['opacity-alive']); // active-tier
     const invisible = [0, 0, 0, 0];
     const futuresIdx = manifest.enums.family.indexOf('winner_futures');
 
     // Reveal envelope: draw week is already visible at k0 ("one visible
-    // flicker at draw week" is the FIRST thing on screen); the June-11
-    // wall is withheld until the final increments (storyboard Scroll
-    // spec: "the June 11 wall is deliberately withheld until the final
-    // scroll increment — gold-coin placement"). Dots beyond the reveal
-    // cutoff are never moved or destroyed (population constancy) — they
-    // simply sit at alpha 0 at their already-final bucket position until
-    // their moment in history is reached, then fade in in place.
+    // flicker at draw week" is the FIRST thing on screen); the June 11
+    // wall is deliberately withheld until the final scroll increment
+    // (design-revision-spec §2 S2: "keep your eye on the far right").
+    // Dots beyond the reveal cutoff are never moved or destroyed
+    // (population constancy) — they simply sit at alpha 0 at their
+    // already-final bucket position until their moment in history is
+    // reached, then fade in in place.
     const bp = [
       { at: 0.00, cutoff: DRAW_WEEK_MS + 14 * 86400000 },
       { at: 0.30, cutoff: Date.UTC(2026, 2, 1) },
@@ -188,14 +196,54 @@ export default {
       .style('font-size', view.css('type-micro-size'));
     axisG.selectAll('path,line').attr('stroke', view.css('ink-low'));
 
-    // Three reference marks (storyboard overlay spec): draw-week (a real
-    // narrative beat, so it gets the amber "look here" treatment), "you
-    // are here" (the deploy snapshot), and a dimmed "the final" marker.
-    // These cascade in at different scrub thresholds rather than
-    // appearing simultaneously, so the token guidance on annotation count
-    // per discrete step (CONTRACT §4.5, tokens layout.max-annotations-
-    // per-step = 2) is respected in spirit for a continuous scrub scene.
-    function markerAt(ms, color, dash, label, weight) {
+    // G3 axis-label standard: a titled unit on every axis, plain words.
+    function titleStyle(sel) {
+      sel.attr('fill', view.css('ink-mid'))
+        .style('font-family', view.css('font-apparatus'))
+        .style('font-size', view.css('type-caption-size'))
+        .style('font-weight', 500);
+    }
+    if (view.mobile) {
+      const tx = view.region.x - 8 - 24;
+      const ty = view.region.y + view.region.h / 2;
+      titleStyle(g.append('text').attr('class', 'axis-title axis-title-time')
+        .attr('x', tx).attr('y', ty).attr('text-anchor', 'middle')
+        .attr('transform', `rotate(-90, ${tx}, ${ty})`)
+        .text('from listing to the final (May 2025 to July 2026)'));
+    } else {
+      titleStyle(g.append('text').attr('class', 'axis-title axis-title-time')
+        .attr('x', view.region.x + view.region.w / 2)
+        .attr('y', view.region.y + view.region.h + 8 + 24)
+        .attr('text-anchor', 'middle')
+        .text('from listing to the final (May 2025 to July 2026)'));
+    }
+
+    // One stack-direction label at the ribbon's thickest point
+    // (design-revision-spec §2 S2 item 4): the tournament's own opening
+    // week is where the money piles up densest (Act 2's "the flood").
+    const thickLabel = g.append('text').attr('class', 's02-thick-label')
+      .style('opacity', 0);
+    titleStyle(thickLabel);
+    thickLabel.text('thicker = more money that day');
+    if (view.mobile) {
+      thickLabel.attr('x', view.region.x + view.region.w / 2 + 12)
+        .attr('y', timeX(WALL_MS))
+        .attr('text-anchor', 'start');
+    } else {
+      thickLabel.attr('x', timeX(WALL_MS))
+        .attr('y', view.region.y + view.region.h / 2 - 12)
+        .attr('text-anchor', 'middle');
+    }
+
+    // Reference marks (design-revision-spec §2 S2): draw-week and "you are
+    // here" sit in ink-mid; the June 11 wall is the scene's one amber
+    // unit, withheld until the final scroll increment; "the final" stays
+    // dimmed, a future date. All sit above the ribbon (or left/right of
+    // it on mobile) with an 8px standoff, never on it. "you are here" and
+    // "the final" fall within days of each other on the time axis, so
+    // they split above/below the ribbon rather than colliding.
+    function markerAt(ms, color, dash, label, weight, opts) {
+      opts = opts || {};
       const pos = timeX(ms);
       const grp = g.append('g').attr('class', 'marker').style('opacity', 0);
       if (view.mobile) {
@@ -209,13 +257,19 @@ export default {
           .attr('text-anchor', 'end').attr('fill', color).attr('opacity', weight)
           .text(label);
       } else {
+        const standoff = 8;
+        const ly = opts.vpos === 'below'
+          ? view.region.y + view.region.h + standoff + 14
+          : view.region.y - standoff - 4;
         grp.append('line')
           .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
           .attr('x1', pos).attr('x2', pos)
           .attr('stroke', color).attr('stroke-dasharray', dash || null)
           .attr('opacity', weight);
         grp.append('text')
-          .attr('x', pos + 6).attr('y', view.region.y + 14)
+          .attr('x', pos + (opts.mirror ? -6 : 6))
+          .attr('y', ly)
+          .attr('text-anchor', opts.mirror ? 'end' : 'start')
           .attr('fill', color).attr('opacity', weight)
           .text(label);
       }
@@ -226,21 +280,45 @@ export default {
     }
 
     const drawWeekMarker = markerAt(
-      DRAW_WEEK_MS, view.css('accent-annotation'), null, 'December 5: the twitch', 1,
+      DRAW_WEEK_MS, view.css('ink-mid'), null, 'December 5: the twitch', 1,
+    );
+    const wallMarker = markerAt(
+      WALL_MS, view.css('accent-annotation'), null, 'June 11: the wall', 1, { mirror: true },
     );
     const hereMarker = markerAt(
-      frozenMs, view.css('ink-mid'), '2,3', 'you are here', 1,
+      frozenMs, view.css('ink-mid'), '2,3', 'you are here', 1, { vpos: 'above' },
     );
     const finalMarker = markerAt(
-      FINAL_MS, view.css('ink-low'), '1,4', 'the final', 0.6, // dimmed: a future date
+      FINAL_MS, view.css('ink-low'), '1,4', 'the final', 0.6, { vpos: 'below' }, // dimmed: a future date
     );
 
+    // Withholding + cue (design-revision-spec §2 S2 / perception-brief
+    // §7): the last visible caption before the wall bursts into view.
+    // Never names the wall before it appears.
+    const watchCue = g.append('text').attr('class', 's02-watch-cue')
+      .style('opacity', 0);
+    titleStyle(watchCue);
+    watchCue.attr('fill', view.css('ink-low')).text('Keep your eye on the far right.');
+    if (view.mobile) {
+      watchCue.attr('x', view.region.x).attr('y', view.region.y + view.region.h + 24)
+        .attr('text-anchor', 'start');
+    } else {
+      watchCue.attr('x', view.region.x + view.region.w).attr('y', view.region.y - 24)
+        .attr('text-anchor', 'end');
+    }
+
     function fadeIn(sel) { sel.transition().duration(drawIn).style('opacity', 1); }
+    function fadeOut(sel) { sel.transition().duration(drawIn).style('opacity', 0); }
 
     return {
-      step() { fadeIn(drawWeekMarker); },
+      step() {
+        fadeIn(drawWeekMarker);
+        fadeIn(thickLabel);
+      },
       scrub(t) {
-        if (t > 0.02) fadeIn(drawWeekMarker);
+        if (t > 0.02) { fadeIn(drawWeekMarker); fadeIn(thickLabel); }
+        if (t > 0.7 && t < 0.92) fadeIn(watchCue); else fadeOut(watchCue);
+        if (t >= 0.92) fadeIn(wallMarker); else fadeOut(wallMarker);
         if (t > 0.85) fadeIn(hereMarker);
         if (t > 0.95) fadeIn(finalMarker);
       },
@@ -256,23 +334,26 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>A book is one market's running ledger of live orders, and the winner book is the single market for who lifts the trophy. It opened in May 2025 and then did almost nothing for a year. The December draw, the moment the tournament became concrete, registers as a twitch: 190,000 contracts on the day, and the cleaner fingerprint is participation, 176 mostly small trades in the reveal hour.<sup><a href="#fn-3">3</a></sup> A market can be sized two ways: by contracts, each a one-dollar bet, and by premium, the dollars actually paid at the prices those bets traded. The two move apart when prices themselves climb. Peak match day would eventually run about 3,400 times larger in contracts and roughly 21,000 times larger in premium dollars.<sup><a href="#fn-3">3</a></sup> A market is not a poll that runs continuously; it is a crowd that shows up when something is at stake.</p>`,
+      html: `<p>This market is a bet on who lifts the trophy, and it is the only market on that question. It opened in May 2025. For almost a year, it barely moved. Even the December draw, the day teams learned their groups, only caused a small stir: 176 mostly small trades in the hour the draw happened.<sup><a href="#fn-3">3</a></sup> There are two ways to measure how busy a market is: count the tickets that changed hands, or add up the dollars that did. By the tournament's busiest match day, the market was trading about twenty-one thousand times more money each day than it had all the months before.<sup><a href="#fn-3">3</a></sup> A market like this is not a poll that runs all day, every day. It is a crowd. And a crowd only shows up when something is actually at stake.</p><p><strong>Skill unlocked.</strong> You can now read any price on this page as a chance out of a hundred, and check whether a real crowd of money stands behind it.</p><p><strong>The receipt.</strong> This market held a live price on France for thirteen months, then settled it to zero the moment the belief died. No poll can do that.</p>`,
       trigger: { type: 'scrub', span: 3 },
       state: 'k0',
       kind: 'instant', // see s01.js comment: scrub fine-motion is driven by keyframes, not `kind`
-      // Micro-legend names the color's referent, not just "contract family":
-      // the lit cyan thread is the winner book (grounded by this beat's own
-      // opening gloss); the dimmed field is everything else trading.
-      chip: 'cyan: the winner book · grey: every other market',
+      // Micro-legend (G1): the lit cyan thread is the market on the
+      // champion, grounded by this beat's own opening line; "book" is
+      // untaught at this point in the piece (structure-spec §5 S2 item 1),
+      // so the key avoids it too. The dimmed field is everything else
+      // trading.
+      chip: [
+        { token: 'side-yes', glyph: 'dot', label: 'cyan = the market on the champion' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = every other market' },
+      ],
       grain: {
-        // Storyboard-verbatim "return" narration (CONTRACT §7 "return"
-        // variant on re-merge). The literal $75,000 figure is the value
-        // this storyboard drafted and matches CONTRACT §5.1's own
-        // manifest.population.desktop.grain_text example; it is a
-        // deploy-frozen figure like the rest of this beat's prose (see
-        // module data_requests note on beat.grain.text being a static
-        // field with no data-slot equivalent today).
-        text: 'one dot again stands for $75,000 of traded volume; the population on this screen is the entire tournament, and it never leaves',
+        // "Return" variant (CONTRACT §7 / design-revision-spec CR-20): the
+        // literal $75,000 figure matches CONTRACT §5.1's own manifest
+        // example and is a deploy-frozen figure like the rest of this
+        // beat's prose (see module data_requests note on beat.grain.text
+        // being a static field with no data-slot equivalent today).
+        text: '1 dot = $75,000 traded again · this is the whole tournament · it never leaves',
         variant: 'return',
       },
       overlayStep: 'b1',

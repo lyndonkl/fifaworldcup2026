@@ -26,6 +26,7 @@ export default {
   id: 's17',
   act: 5,
   title: 'The number',
+  kicker: 'The exam, part two: your read',
   layoutName: 'settle',
 
   needs: {
@@ -103,6 +104,12 @@ export default {
   overlay(container, data, view, scales) {
     const { manifest } = data;
     const hero = manifest.hero || { legs: [], threeway: [] };
+    // Display-only mapping (Gate-4 QA fix #18b): the manifest ships FIFA
+    // codes as hero leg labels (ESP/ARG); the reader gets plain names.
+    // The manifest itself is untouched — this rewrites nothing but the
+    // rendered text, and unknown labels pass through unchanged.
+    const TEAM_NAMES = { ESP: 'Spain', ARG: 'Argentina' };
+    const teamName = (label) => TEAM_NAMES[label] || label || '—';
     const underlineY = (this._lastLayoutMeta && this._lastLayoutMeta.underlineY) || view.H * 0.62;
 
     const wrap = container.html.append('div').attr('class', 's17-wrap')
@@ -110,6 +117,7 @@ export default {
       .style('left', '50%').style('top', `${view.H * 0.30}px`)
       .style('transform', 'translateX(-50%)')
       .style('text-align', 'center')
+      .style('max-width', '60vw')
       .style('opacity', 0);
 
     const legsRow = wrap.append('div').style('display', 'flex').style('gap', view.css('space-64'))
@@ -121,7 +129,7 @@ export default {
         .style('font-family', view.css('font-apparatus'))
         .style('font-size', view.css('type-caption-size'))
         .style('color', view.css('ink-mid'))
-        .text(leg.label || '—');
+        .text(teamName(leg.label));
       col.append('div').attr('class', 's17-hero-number')
         .style('font-family', view.css('font-apparatus'))
         .style('font-weight', view.css('type-hero-number-weight'))
@@ -131,15 +139,16 @@ export default {
         .style('font-variant-numeric', 'tabular-nums lining-nums')
         .text(fmt.cents(leg.price_c || 0));
       col.append('div').attr('class', 's17-devig')
+        .style('margin-top', view.css('space-8'))
         .style('font-family', view.css('font-apparatus'))
         .style('font-weight', view.css('type-devig-line-weight'))
         .style('font-size', view.css('type-devig-line-size'))
         .style('color', view.css('accent-annotation'))
-        .text(`stripped of the vig: ${fmt.pct(leg.devig_pct || 0)}`);
+        .text(`stripped of the vig: ${fmt.pct(leg.devig_pct || 0)} (bookmaker’s cut removed)`);
     });
 
     const threeway = wrap.append('div').attr('class', 's17-threeway')
-      .style('margin-top', view.css('space-32'))
+      .style('margin-top', view.css('space-24'))
       .style('display', 'flex').style('gap', view.css('space-24'))
       .style('justify-content', 'center')
       .style('font-family', view.css('font-apparatus'))
@@ -147,12 +156,12 @@ export default {
       .style('color', view.css('ink-mid'));
     (hero.threeway || []).forEach((leg) => {
       threeway.append('span').text(
-        `${leg.label || '—'} ${fmt.cents(leg.price_c || 0)} (devig ${fmt.pct(leg.devig_pct || 0)})`,
+        `${teamName(leg.label)} ${fmt.cents(leg.price_c || 0)} (devig ${fmt.pct(leg.devig_pct || 0)})`,
       );
     });
 
     const timestamp = wrap.append('div').attr('class', 's17-timestamp')
-      .style('margin-top', view.css('space-24'))
+      .style('margin-top', view.css('space-32'))
       .style('font-family', view.css('font-tape'))
       .style('font-size', view.css('type-tape-size'))
       .style('letter-spacing', view.css('type-tape-tracking'))
@@ -160,7 +169,7 @@ export default {
       .text(`frozen ${fmt.iso(manifest.frozen_at || '')}`);
 
     const provenance = wrap.append('div').attr('class', 's17-provenance')
-      .style('margin-top', view.css('space-12'))
+      .style('margin-top', view.css('space-4'))
       .style('max-width', '52ch')
       .style('margin-left', 'auto').style('margin-right', 'auto')
       .style('font-family', view.css('font-tape'))
@@ -179,11 +188,15 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>This is where the piece stops narrating and starts holding still. The number below is the market’s price for the final, frozen and timestamped on the morning of July 19; it will not update, and that is the point.<sup class="fn"><a href="#fn-23">23</a></sup> It is a raw traded price, and the piece says so where it matters most: the winner book’s legs sum above one hundred percent before the vig is removed, so the devigged implied probability prints directly beneath it, same freeze, same timestamp.<sup class="fn"><a href="#fn-23">23</a></sup> The reader now knows what this number is made of: two venues enforced into one price, a spike that holds once it lands, depth where it can be trusted, a lottery tax where it cannot, attention that never bought a point of loyalty, and one year-long conviction that just lost its favorite. Read it with those habits. The epilogue will read it with the result.</p>',
+      html: '<p>This is where the piece stops talking and holds still. The numbers below are the market&rsquo;s prices for tonight&rsquo;s final, frozen and time-stamped this morning. They will not update again, and that is the point.<sup class="fn"><a href="#fn-23">23</a></sup> Start with the discipline the Germany-Paraguay shootout taught you: check which ticket is talking. Spain&rsquo;s 58.8 is the lift-the-trophy ticket, the winner ticket. It pays one dollar only if Spain is champion at the end of the night, extra time and penalties included.</p><p>These are raw prices, and a raw price carries a small built-in fee, the vig. Add up all of a match&rsquo;s prices and they land a little above a dollar; that extra is the vig. Strip the vig out, a step this piece calls <strong>devigged</strong> (the bookmaker&rsquo;s cut removed), and the true chance for each side prints just beneath the raw price, same freeze, same time-stamp.<sup class="fn"><a href="#fn-23">23</a></sup></p><p>Now read it yourself, one skill at a time. <strong>No one sharper</strong> stands behind this number, once the fee is stripped out. <strong>Trust the pools, smile at the ladders</strong>: this is the deepest market this exchange has ever run. <strong>The spike is the price</strong>, so if someone scores tonight, believe the jump; and if the score is level near the ninetieth minute, check which ticket is talking. <strong>The flags don&rsquo;t move it</strong>, however loud the stadium gets tonight. And <strong>it holds opinions</strong>: this market carries one year-old opinion about Spain into tonight, the same one that just lost its favorite.</p><p>Agree with the number, or don&rsquo;t. But now you would be disagreeing for a reason. Tomorrow morning, the epilogue will grade the market. It will grade you too.</p>',
       trigger: 'step',
       state: 'settle',
       kind: 'ceremonial',
-      chip: 'amber: the final’s own contracts',
+      chip: [
+        { token: 'accent-annotation', glyph: 'dot', label: 'amber = the final’s own contracts' },
+        { token: 'field-rest', glyph: 'dim', label: 'dim = the rest, at rest' },
+      ],
+      grain: { text: 'dots at rest · the lit dots underline tonight’s price' },
       overlayStep: 'b1',
     },
   ],

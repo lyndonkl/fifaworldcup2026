@@ -89,21 +89,55 @@
     }
     #html-overlay .interactive { pointer-events: auto; }
 
-    /* ---- Micro-legend chip + grain plate (CONTRACT §7) ---- */
+    /* ---- Persistent color key + grain plate ----
+       (CONTRACT §7; key rebuilt per design-revision-spec G1, Gate-4 round 2)
+       Placement (CR-2): desktop top-right, one apparatus band with the
+       grain plate at top-left; mobile bottom-right, above the prose sheet
+       (see the mobile media query below). Container keeps the pre-existing
+       chip treatment (bg-card @ composite-capped alpha, 8px blur, hairline
+       border) -- only the internal structure (header + swatch rows) and
+       position are new. */
     #chip {
-      position: fixed; right: var(--space-24); bottom: var(--space-24);
+      position: fixed; right: var(--space-24); top: var(--space-24);
       z-index: var(--z-chip-and-grain-plate);
+      display: flex; flex-direction: column; gap: var(--space-4);
+      /* KEY RECT (design-revision-spec G5/CR-2): reserves
+         --layout-key-exclusion-w-px x --layout-key-exclusion-h-px desktop
+         so no scene-placed element may intersect it; width caps to match. */
+      max-width: calc(var(--layout-key-exclusion-w-px) - var(--space-24));
       font-family: var(--font-apparatus);
-      font-size: var(--type-micro-size);
-      font-weight: var(--type-micro-weight);
-      letter-spacing: var(--type-micro-tracking);
-      color: var(--ink-mid);
+      color: var(--ink-hi);
       background: rgba(16, 21, 29, 0.82); /* bg-card @ composite-capped alpha */
       -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
       border: 1px solid rgba(124, 135, 148, 0.25);
       border-radius: var(--space-4);
-      padding: var(--space-4) var(--space-8);
-      visibility: hidden;                 /* debuts in S1; never disappears after */
+      padding: var(--space-8) var(--space-12);
+      /* No visibility gate (G1): visible from first paint with the standing
+         rest-field row baked into the static markup above; setChip()/
+         view.setChip() repopulate #key-rows from here on and never hide it. */
+    }
+    #chip .key-header {
+      font-size: var(--type-micro-size);
+      font-weight: var(--type-micro-weight);
+      letter-spacing: var(--type-micro-tracking);
+      text-transform: uppercase;
+      color: var(--ink-low);
+    }
+    #chip .key-rows {
+      display: flex; flex-direction: column; gap: var(--space-4);
+      transition: opacity var(--dur-recolor-min) ease;
+    }
+    #chip .key-row {
+      display: flex; align-items: center; gap: var(--space-8);
+      font-size: var(--type-caption-size);
+      font-weight: 500;
+      line-height: var(--type-caption-leading);
+      color: var(--ink-hi);
+    }
+    #chip .key-swatch {
+      flex: 0 0 auto;
+      width: 10px; height: 10px;
+      border-radius: 50%;
     }
     #chip.pulse { animation: chip-pulse var(--dur-chip-pulse) ease-out 1; }
     @keyframes chip-pulse {
@@ -129,8 +163,24 @@
       border: 1px solid rgba(124, 135, 148, 0.25);
       border-radius: var(--space-4);
       padding: var(--space-8) var(--space-12);
-      max-width: min(72ch, calc(100vw - 2 * var(--space-24)));
+      /* G2: clamped so the plate never crosses region.x into the caption
+         slot (36vw is the desktop rail width; space-48 clears its inset). */
+      max-width: min(72ch, calc(36vw - var(--space-48)));
       visibility: hidden;                 /* main.js shows it at the S1 pre-title */
+    }
+
+    /* ---- Shared scrim utility (design-revision-spec G5) ----
+       Any amber annotation or act-close card sitting inline with ink-hi
+       prose or over a dense particle cluster must sit on this scrim
+       (perception brief §9a: accent.annotation vs ink.hi is 1.29:1, vs a
+       bloomed dense cluster 1.41:1 -- placement/local-ground is the fix,
+       not a hue change). Scene modules apply this class rather than each
+       hand-rolling the same background/blur/padding recipe. */
+    .scrim-card {
+      background: rgba(16, 21, 29, 0.82);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border-radius: var(--space-4);
+      padding: var(--space-4) var(--space-8);
     }
 
     /* ---- Skip control (accessibility; z 5) ---- */
@@ -172,12 +222,24 @@
       line-height: var(--type-act-title-leading);
       color: var(--ink-hi);
     }
+    #title-screen .subtitle {
+      /* Apparatus voice (Inter), not prose serif: this line is the
+         instructional tagline, not the narrator -- same Gestalt
+         classification the kicker/annotation voice uses elsewhere
+         (design-system.md §3), previewing the "Skill N of 5" kickers the
+         reader meets once they scroll. */
+      font-family: var(--font-apparatus);
+      font-size: var(--type-lede-size);
+      font-weight: 500;
+      color: var(--ink-mid);
+      max-width: 46ch;
+    }
     #title-screen .deck {
       font-family: var(--font-prose);
       font-size: var(--type-lede-size);
       line-height: var(--type-lede-leading);
       color: var(--ink-mid);
-      max-width: 46ch;
+      max-width: 52ch;
     }
     #title-screen .boot-status {
       font-family: var(--font-apparatus);
@@ -210,7 +272,10 @@
     }
 
     .card {
-      width: var(--layout-card-width-desktop-px);
+      /* G5 card clamp: guarantees a >= 32px gutter between the card edge
+         and the stage edge at every desktop width (was 2px at 1280px). */
+      width: min(var(--layout-card-width-desktop-px),
+        calc(36vw - var(--layout-card-inset-desktop-px) - var(--space-32)));
       margin-left: var(--layout-card-inset-desktop-px);
       background: rgba(16, 21, 29, 0.82);   /* translucent bg-card; worst-case
                                                composite capped by tokens */
@@ -249,8 +314,22 @@
         border-bottom: none;
         padding: var(--space-16) var(--space-16);
       }
-      #chip { right: var(--space-16); bottom: calc(var(--layout-card-max-height-mobile-vh) + var(--space-8)); }
-      #grain-plate { left: var(--space-16); top: var(--space-16); }
+      /* G1 CR-2: mobile key sits bottom-right, above the prose sheet;
+         rows wrap to one line when more than two. */
+      #chip {
+        right: var(--space-16); top: auto;
+        bottom: calc(var(--layout-card-max-height-mobile-vh) + var(--space-8));
+        max-width: 50vw;
+      }
+      #chip .key-rows { flex-direction: row; flex-wrap: wrap; gap: var(--space-8); }
+      #chip .key-row { flex: 0 0 auto; }
+      /* G2: mobile plate caps at two lines. */
+      #grain-plate {
+        left: var(--space-16); top: var(--space-16);
+        max-width: calc(100vw - 2 * var(--space-16) - 72px);
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
     }
 
     /* ---- Coda + end matter ---- */
@@ -309,6 +388,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       #chip.pulse { animation: none; }
+      #chip .key-rows { transition: none; }
       #dim-scrim { transition: none; }
     }
   </style>
@@ -327,25 +407,56 @@
 
   <!-- Driver-owned chrome (CONTRACT §7). main.js reveals, fills, pulses. -->
   <div id="grain-plate" role="note">
-    <!-- refrozen at deploy -->
-    1 dot = <span data-slot="population.desktop.grain_usd" data-format="usd">$75,000</span> of matched volume
+    <!-- refrozen at deploy; wording FIX (design-revision-spec G2/CR-19):
+         "of matched volume" -> "of real money traded" (jargon ban). -->
+    1 dot = <span data-slot="population.desktop.grain_usd" data-format="usd">$75,000</span> of real money traded
   </div>
-  <div id="chip" role="note">color: —</div>
 
-  <!-- ============ Title screen: the S1 pre-title frame (CONTRACT §8.2) ============ -->
+  <!-- REVISION (Gate-4 round 2, design-revision-spec G1): #chip rebuilt from
+       a one-line micro-legend into a persistent COLOR KEY -- a stacked list,
+       one row per active color meaning, each row a rendered swatch + plain
+       color word + meaning. Recognition over recall: a swatch is matched
+       preattentively, a color word alone forces a verbal-to-visual
+       translation. Visibility gate removed (G1: "debuts on S1's pre-title
+       frame ... never disappears after") -- the header row and the standing
+       rest-field row render statically here so the key is never empty
+       before main.js finishes booting; main.js's setChip(rows) (exposed as
+       view.setChip) repopulates #key-rows on every beat's chip meaning
+       change from here on. Row content beyond this initial debut state is
+       scene-owned (per-scene rows, design-revision-spec §2). -->
+  <div id="chip" class="key" role="note" aria-label="Color key">
+    <div class="key-header">Key</div>
+    <div class="key-rows" id="key-rows">
+      <div class="key-row">
+        <span class="key-swatch key-swatch-dot" style="background:rgba(159,182,204,0.35); border:1px solid rgba(124,135,148,0.4);" aria-hidden="true"></span>
+        <span>grey = money at rest, the whole tournament</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Title screen: the S1 pre-title frame (CONTRACT §8.2) ============
+       REVISION (Gate-4 round 2, structure-spec §4): the new opening, replacing
+       the census-only pre-title framing. Three sentences, split for the FK<=9
+       accessibility floor (structure-spec §7 rule 1: split, don't drop facts).
+       The grain sentence keeps its data-slot spans so the deploy-morning
+       refreeze still lands (structure-spec §4). Author decision flag carried
+       forward unresolved: the opening names "about 59 in 100" so the
+       through-line is legible from sentence one; the exact frozen 58.8/42.0
+       devig line still lands only at S17. Title stays the author's editorial
+       call (storyboard §1) and is unchanged here. -->
   <header id="title-screen" data-scene="s01">
     <p class="pretitle">
-      <!-- Storyboard S1 pre-title caption; numbers refrozen at deploy -->
-      every dot on this screen is
-      <span data-slot="population.desktop.grain_usd" data-format="usd">$75,000</span>
-      that actually changed hands on the 2026 World Cup ·
-      <span data-slot="population.desktop.dots" data-format="count">164,000</span> dots ·
-      <span data-slot="census.total_usd" data-format="usd">$12.3B</span> ·
-      thirteen months
+      Tonight in New Jersey, Spain plays Argentina for the World Cup.
+      A market where people trade real money says Spain's chance is about 59 in 100.
     </p>
     <h1>Regulation Time</h1>
-    <p class="deck">How the market priced the goals, the upsets, and the favorite
-      that died in ninety minutes.</p>
+    <p class="subtitle">Learn to read the market before tonight's final.</p>
+    <p class="deck">
+      By the end of this page, you will be able to judge that number for yourself.
+      It does not matter if you have never placed a bet in your life.
+      Every dot below is <span data-slot="population.desktop.grain_usd" data-format="usd">$75,000</span> that actually changed hands on this World Cup.
+      Altogether, that is <span data-slot="census.total_usd" data-format="usd">$12.3B</span> across thirteen months, and it is going to teach you how, one skill at a time.
+    </p>
     <p class="boot-status" id="boot-status" role="status"></p>
     <p class="scroll-cue" aria-hidden="true">scroll ↓</p>
   </header>
@@ -386,7 +497,7 @@
       </p>
 
       <h3>The unit</h3>
-      <p>One dot is money that actually moved: a fixed grain of matched notional
+      <p>One dot is money that actually moved: a fixed grain of real money traded
         at population scale, one trade at zoom scale. Grain changes are narrated
         on screen, never silent. Dots never stand for scores, statistics, or
         probabilities; derived quantities are drawn as outline marks above the
@@ -426,7 +537,7 @@
         <li id="fn-13">Germany-Paraguay instrument switch: regulation-leg expiry decay against the advancement leg trading on through the shootout (R4).</li>
         <li id="fn-14">Post-upset drift: winner-leg repricing for Paraguay, Norway, and Belgium, and the Norway-Argentina mirror (R9).</li>
         <li id="fn-15">Kalshi-Polymarket braid and the Pinnacle terminations, across 84 knockout three-way legs (R2).</li>
-        <li id="fn-16">Brier scores by source and horizon on the same 84 legs: Kalshi, Polymarket, and the de-vigged professional book (R5, R19).</li>
+        <li id="fn-16">Brier scores by source and horizon on the same 84 legs: Kalshi, Polymarket, and the devigged professional book (R5, R19).</li>
         <li id="fn-17">Poll-versus-market gaps: Ipsos and Pew agreement shares set against tradable winner-leg prices (R10).</li>
         <li id="fn-18">Host-nation attention premium and the settlement-sweep zombie money: the pre-tournament peer band and the knockout-loser wind-downs (R12, R21).</li>
         <li id="fn-19">Golden Boot book: daily prices and the snapshot of scoring paths (R13).</li>

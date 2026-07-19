@@ -213,17 +213,22 @@ function overlay(container, data, view, scalesObj) {
 
   const g = container.svg.append('g').attr('class', 's13-overlay');
 
-  // Units caption, pinned through the pair steps (storyboard: "stays
-  // pinned"). Repositioned to the top on mobile per the storyboard note.
+  // Units caption: the scene's one standing Zone K occupant, on screen for
+  // the whole scene, not just the poll-vs-price steps (design-revision-spec
+  // CR-12) -- "the dot columns are money" stays true through the host-peer
+  // step too. Repositioned to the top on mobile per the storyboard note.
   const unitsCaption = g.append('text')
     .attr('class', 's13-units-caption')
     .attr('x', view.mobile ? view.region.x : view.region.x)
-    .attr('y', view.mobile ? view.region.y - 8 : view.region.y - 20)
+    .attr('y', view.mobile ? view.region.y - 8 : view.region.y - 32)
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('fill', view.css('ink-mid'))
-    .text('agreement shares are not probabilities')
     .style('opacity', 0);
+  unitsCaption.append('tspan').attr('x', view.region.x).attr('dy', '0em')
+    .text('Poll bars are agreement, not probability.');
+  unitsCaption.append('tspan').attr('x', view.region.x).attr('dy', '1.15em')
+    .text('The dot columns are money.');
 
   const pairG = g.append('g').attr('class', 's13-pair').style('opacity', 0);
   const hostG = g.append('g').attr('class', 's13-hosts').style('opacity', 0);
@@ -240,6 +245,24 @@ function overlay(container, data, view, scalesObj) {
     pairG.selectAll('*').remove();
     const pair = pairs.find((p) => p.key === key);
     if (!pair) return;
+
+    // Scale titles, redrawn with the pair (design-revision-spec G3: "s13
+    // scale titles at first pair" -- shown on every pair so the units are
+    // never more than one screen away from the marks they describe).
+    pairG.append('text')
+      .attr('x', pairX.poll).attr('y', view.region.y - 48)
+      .attr('text-anchor', 'middle')
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-micro-size'))
+      .style('fill', view.css('ink-low'))
+      .text('fans who said their team would win (poll %)');
+    pairG.append('text')
+      .attr('x', pairX.price).attr('y', view.region.y - 48)
+      .attr('text-anchor', 'middle')
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-micro-size'))
+      .style('fill', view.css('ink-low'))
+      .text('market price (cents)');
 
     // Poll bar: outline-only D3 mark (respondents are not trades, §0).
     const barW = 64;
@@ -296,6 +319,18 @@ function overlay(container, data, view, scalesObj) {
       .attr('y1', view.region.y + view.region.h).attr('y2', view.region.y + view.region.h)
       .style('stroke', view.css('ink-low')).style('stroke-width', 1);
 
+    // Unit label for this panel (G3: every chart names its units). Column
+    // height here is a dot count, not a price, so the honest label ties
+    // back to the piece's own grain grammar rather than borrowing a price
+    // axis this panel does not actually have.
+    hostG.append('text')
+      .attr('x', view.region.x + view.region.w).attr('y', view.region.y + view.region.h - 8)
+      .attr('text-anchor', 'end')
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-micro-size'))
+      .style('fill', view.css('ink-low'))
+      .text('each dot: $75,000 of real money, before kickoff');
+
     hostTeams.forEach((t) => {
       const cx = hostX(t.key);
       if (cx === undefined) return;
@@ -310,42 +345,45 @@ function overlay(container, data, view, scalesObj) {
 
       if (typeof t.price_ratio_x === 'number') {
         // Derived quantity (a ratio, not money): D3 mark, not a dot.
+        // No amber here (design-revision-spec CR: "b3: NO amber") -- the
+        // beat's point is that attention bought volume, not belief, so the
+        // ratio reads as plain fact, not a flagged anomaly.
         const markerY = view.region.y + view.region.h * 0.25;
         hostG.append('circle')
           .attr('cx', cx + bw / 2).attr('cy', markerY)
           .attr('r', 4)
-          .style('fill', view.css('accent-annotation'));
+          .style('fill', view.css('ink-hi'));
         hostG.append('text')
           .attr('x', cx + bw / 2).attr('y', markerY - 10)
           .attr('text-anchor', 'middle')
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-caption-size'))
-          .style('fill', view.css('accent-annotation'))
-          .text(`${t.price_ratio_x}x model odds`);
+          .style('fill', view.css('ink-hi'))
+          .text(`${t.price_ratio_x}x the model's price`);
       }
     });
 
     hostG.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
     pairG.style('opacity', 0);
-    unitsCaption.style('opacity', 0);
   }
 
   function drawZombieFootnote() {
     const z = sceneJson.zombie_money;
     if (!z) return;
-    footnoteChip.text(`${z.n_trades} trades, ~$${Math.round(z.total_usd).toLocaleString('en-US')}, all ≤${z.max_price_c}c`);
+    const cents = z.max_price_c === 1 ? '1 cent' : `${z.max_price_c} cents`;
+    footnoteChip.text(`${z.n_trades} trades, about $${Math.round(z.total_usd).toLocaleString('en-US')}, all at ${cents} or less.`);
     footnoteChip.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
   }
 
   function step(beatId) {
+    // The standing units caption (CR-12) stays lit for the whole scene, so
+    // it only needs to fade in once, on first entry.
+    unitsCaption.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
     if (beatId === 'b1') {
-      unitsCaption.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
       drawPair('argentina');
     } else if (beatId === 'b2') {
-      unitsCaption.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
       drawPair('usa');
     } else if (beatId === 'b3') {
-      unitsCaption.style('opacity', 0);
       drawHostPeers();
     } else if (beatId === 'b4') {
       drawZombieFootnote();
@@ -366,6 +404,9 @@ const s13 = {
   id: 's13',
   act: 4,
   title: 'The flags and the price',
+  // Gate-4 round 2 (structure-spec §3): S13 is the course's second fake
+  // flaw, on Argentina-flag night: fan love never got a vote in the price.
+  kicker: 'Skill 5, continued — the patriotism alarm is false too',
   layoutName: 'flag-pairs',
 
   needs: { scene: true, series: [], zoom: null },
@@ -377,52 +418,69 @@ const s13 = {
   beats: [
     {
       id: 'b1',
-      html: `<p>The fans never got a vote on the price. 87% of Argentine
-        respondents said Argentina would repeat while the winner leg traded
-        at 11 cents, and agreement shares are not probabilities in the
-        first place, a units caption the scene keeps on
-        screen.<sup><a href="#fn-17">17</a></sup></p>`,
+      html: `<p>The fans never got a vote on the price. In one poll, 87 out
+        of 100 Argentine fans said Argentina would win the World Cup again.
+        At the same time, this market priced that exact outcome at 11
+        cents. A poll counts how many people agree. A price is real money
+        betting on what will actually happen. Here, the two told very
+        different stories.<sup><a href="#fn-17">17</a></sup></p>`,
       trigger: 'step',
       state: 'argentina',
       kind: 'resort',
-      chip: 'color: Argentina\'s winner-market money',
+      chip: [
+        { token: 'identity-teal', glyph: 'dot', label: "teal = Argentina's money" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded', variant: 'return' },
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>7% of Americans named the USA while the US-listed exchange
-        held the contract at a cent and a
-        half.<sup><a href="#fn-17">17</a></sup></p>`,
+      html: `<p>The same gap showed up at home. 7 out of 100 Americans
+        picked the USA to win it all. The exchange that lists this market
+        is built in the United States, and it still priced the USA's
+        ticket at a cent and a half.<sup><a href="#fn-17">17</a></sup></p>`,
       trigger: 'step',
       state: 'usa',
       kind: 'resort',
-      chip: 'color: the USA\'s winner-market money',
+      chip: [
+        { token: 'identity-blue', glyph: 'dot', label: "blue = the USA's money" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>Host attention was real money. The model here is Opta's
-        supercomputer, which plays the tournament out thousands of times to
-        give each team a simulated chance, and two teams count as
-        model-equivalent when it rates them about the same. Mexico and the
-        USA drew two to two and a half times the pre-tournament contracts of
-        those model-equivalent peers, and the attention bought price as well
-        as volume, Mexico at roughly 1.8 times and the USA at roughly 1.5
-        times their model odds on tournament
-        eve.<sup><a href="#fn-18">18</a></sup> Loud in volume, faint in
-        price.</p>`,
+      html: `<p>Playing host was real money, just not real belief. One
+        computer model, built by Opta, plays out the tournament thousands
+        of times to rate each team's true chance. Mexico and the USA are
+        the hosts. Against teams the model rated about the same, they each
+        pulled in roughly two to two and a half times the money before the
+        tournament even began. That attention did nudge the price: Mexico
+        traded at about 1.8 times its model chance, and the USA at about
+        1.5 times its model chance, on the eve of
+        kickoff.<sup><a href="#fn-18">18</a></sup> Those model chances were
+        tiny to start with. Multiply a tiny chance by 1.8 and you still get
+        a tiny number, a point or two of price, not ten. Loud in volume,
+        faint in price.</p>`,
       trigger: 'step',
       state: 'peers',
       kind: 'resort',
-      chip: 'color: each host team\'s money',
+      chip: [
+        { token: 'identity-blue', glyph: 'dot', label: "blue = the USA's money" },
+        { token: 'identity-pink', glyph: 'dot', label: "pink = Mexico's money" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
       overlayStep: 'b3',
     },
     {
       id: 'b4',
-      html: `<p>When the losers died, the money left within the settlement
-        sweep: all 28 knockout losers' winner legs wound down in 277 trades
-        worth about $2,190, everything at or below a
-        cent.<sup><a href="#fn-18">18</a></sup></p>`,
+      html: `<p>When a team lost, the loyal money did not linger. All 28
+        knockout losers' championship tickets wound down together: 277
+        trades, about $2,190 in total, every one of them at a penny or
+        less.<sup><a href="#fn-18">18</a></sup> Tonight the flags at MetLife
+        Stadium will be Argentina's, and loud. Now you know the price will
+        not care. It never did.</p>`,
       trigger: 'step',
       // No state key: dots stay at the host-peer arrangement from b3; this
       // beat only adds the zombie-money footnote chip.
@@ -495,7 +553,7 @@ const s13 = {
           ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
             .attr('fill', view.css('ink-mid'))
             .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))
-            .text('agreement shares are not probabilities');
+            .text('poll bars are agreement, not probability');
         },
       };
     },

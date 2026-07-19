@@ -180,6 +180,7 @@ export default {
   id: 's15',
   act: 5,
   title: 'Thirteen months above the line',
+  kicker: 'Skill 5, continued: the open question, and it is about Spain',
   layoutName: 'stage-strip',
 
   needs: {
@@ -225,6 +226,29 @@ export default {
       .attr('font-size', view.css('type-micro-size'));
     axisG.selectAll('path,line').attr('stroke', view.css('ink-low'));
 
+    // Axis titles (design-revision-spec G3 / S15 "Axes" directive). The
+    // plotted quantity is each dot's own traded price (0-100, cents), with
+    // the model line drawn on the same scale for comparison — the title
+    // below describes what is actually bound to y (raw price), matching
+    // the S1 axis-title convention, rather than a differenced "premium"
+    // series this scene's data layer does not compute (CLAUDE.md: keep
+    // every data binding intact; a label rewrite must stay truthful to it).
+    const xRange = scales.x.range ? scales.x.range() : [view.region.x, view.region.x + view.region.w];
+    axisG.append('text').attr('class', 's15-x-title')
+      .attr('x', (xRange[0] + xRange[1]) / 2).attr('y', 24)
+      .attr('text-anchor', 'middle')
+      .attr('fill', view.css('ink-mid'))
+      .attr('font-family', view.css('font-apparatus')).attr('font-weight', 500)
+      .attr('font-size', view.css('type-caption-size'))
+      .text('five checkpoints in the tournament (stage)');
+    g.append('text').attr('class', 's15-y-title')
+      .attr('x', view.region.x + view.region.w).attr('y', view.region.y - 12)
+      .attr('text-anchor', 'end')
+      .attr('fill', view.css('ink-mid'))
+      .attr('font-family', view.css('font-apparatus')).attr('font-weight', 500)
+      .attr('font-size', view.css('type-caption-size'))
+      .text('ticket price (cents; 100 = certain)');
+
     // Model reference line (Opta): a D3 outline mark, never dots — a
     // simulation snapshot is not money (storyboard §0 / CONTRACT rule 3).
     const modelLine = d3.line()
@@ -238,6 +262,20 @@ export default {
       .attr('stroke-dasharray', '2 3')
       .attr('opacity', 0)
       .attr('d', stages.length ? modelLine(stages) : null);
+
+    // Direct label at the model line's right end (design-revision-spec
+    // S15 item 4): names the grey line so its meaning never depends on
+    // recall alone.
+    const modelLineLabel = g.append('text').attr('class', 's15-model-label')
+      .attr('fill', view.css('neutral-data'))
+      .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-caption-size'))
+      .attr('text-anchor', 'end')
+      .attr('opacity', 0)
+      .text('the model’s odds (devigged)');
+    if (stages.length) {
+      const lastStage = stages[stages.length - 1];
+      modelLineLabel.attr('x', scales.x(lastStage.id)).attr('y', scales.y(lastStage.opta_pct) - 8);
+    }
 
     const labelFrance = g.append('text').attr('class', 's15-label-france')
       .text('France’s money').attr('fill', view.css('identity-blue'))
@@ -271,26 +309,44 @@ export default {
       .attr('fill', view.css('accent-annotation'))
       .attr('font-family', view.css('font-tape')).attr('font-size', view.css('type-tape-size'))
       .text('July 14 · settled');
+    // Devig annotation (design-revision-spec S15 item 4): must appear
+    // BEFORE the drain, never during it, and sit near France's mid-stage
+    // cluster rather than the corner. "devigged" carries its plain-words
+    // gloss inline (CR-19), and the number stays storyboard-verbatim.
     const devigNote = g.append('text').attr('class', 's15-devig')
-      .attr('x', view.region.x + view.region.w).attr('y', view.region.y + view.region.h + 36)
-      .attr('text-anchor', 'end')
+      .attr('text-anchor', 'middle')
       .attr('fill', view.css('ink-mid'))
       .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-caption-size'))
       .attr('opacity', 0)
-      .text('devigged premium: +3 to +5pp France, ~−3pp Spain');
+      .text('+3 to +5 points above the model, devigged (bookmaker’s cut removed)');
+    if (stages.length) {
+      const midStage = stages[Math.floor(stages.length / 2)];
+      devigNote.attr('x', scales.x(midStage.id)).attr('y', scales.y(midStage.opta_pct) - 40);
+    }
 
     const fade = (sel, on) => sel.transition().duration(400).attr('opacity', on ? 1 : 0);
+    const ceremonialMs = view.tokens.motion.durations_ms['ceremonial-max'];
 
     return {
       step(beatId) {
         if (beatId === 'b1') {
-          fade(modelPath, true); fade(labelFrance, true); fade(labelSpain, true);
-          fade(pinnedCaption, false); fade(settleMark, false); fade(devigNote, false);
+          fade(modelPath, true); fade(modelLineLabel, true);
+          fade(labelFrance, true); fade(labelSpain, true);
+          fade(devigNote, true);
+          fade(pinnedCaption, false); fade(settleMark, false);
+          // Reversible: snapping back to the assemble step (a reverse
+          // scrub) restores France's label color, undoing the b3 recolor.
+          labelFrance.interrupt().attr('fill', view.css('identity-blue'));
         } else if (beatId === 'b2') {
           fade(pinnedCaption, true);
         } else if (beatId === 'b3') {
           fade(pinnedCaption, false);
-          fade(settleMark, true); fade(devigNote, true);
+          fade(devigNote, false);
+          fade(settleMark, true);
+          // Common fate (design-revision-spec S15 item 2): the France
+          // label recolors to ink-low in the same beat its dots drain to
+          // state.dead grey, so label and dots read as one dying event.
+          labelFrance.transition().duration(ceremonialMs).attr('fill', view.css('ink-low'));
         }
       },
       exit() { g.remove(); },
@@ -300,26 +356,38 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>For thirteen months the market held one opinion the model never talked it out of. At all five published simulation snapshots, the devigged price put France three to five points above Opta and Spain at or below the line, near-symmetric and robust across venues.<sup class="fn"><a href="#fn-21">21</a></sup></p>',
+      html: '<p>For thirteen months, this market held one steady opinion. Bookmakers add a small fee to every price. Strip that fee out, a step this piece calls <strong>devigged</strong>, the bookmaker&rsquo;s cut removed, and the market&rsquo;s real belief shows. At five points during the tournament, the devigged price put France a few cents above a computer model&rsquo;s guess. It put Spain a few cents below that same guess, almost every time.<sup class="fn"><a href="#fn-21">21</a></sup></p>',
       trigger: 'step',
       state: 'assemble',
       kind: 'resort',
-      chip: 'blue = France’s money · red = Spain’s money',
+      chip: [
+        { token: 'identity-blue', glyph: 'dot', label: 'blue = France’s money' },
+        { token: 'identity-crimson', glyph: 'dot', label: 'red = Spain’s money' },
+        { token: 'neutral-data', glyph: 'line', label: 'grey line = the computer model’s guess' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded' },
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: '<p>That is one persistent level disagreement read five times, not five confirmations.</p>',
+      html: '<p>That is one opinion, checked five times. Five snapshots of one held opinion do not add up to five independent opinions.</p>',
       trigger: 'step',
       // no state: dots hold; this step is the pinned-caption beat only
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: '<p>On July 14 in Arlington, Spain won in ninety minutes and the conviction settled to zero.<sup class="fn"><a href="#fn-1">1</a></sup> A single match cannot falsify a forty-percent price. It can, however, hand the trophy game to the team the market spent a year discounting, and that is the situation the final’s number now has to price.</p>',
+      html: '<p>On July 14 in Arlington, Spain beat France in ninety minutes. The conviction this market held for over a year <strong>settled to zero</strong> the moment the game ended.<sup class="fn"><a href="#fn-1">1</a></sup> One match cannot prove a forty-percent price wrong. But tonight&rsquo;s final belongs to the very team this market spent a year doubting. Was that doubt real information, or just a blind spot? No skill in this course can answer that for you. It is the one open question inside tonight&rsquo;s number.</p><div class="act-close scrim-card" style="margin-top:var(--space-16)"><p><strong>Skill unlocked:</strong> you now know the market&rsquo;s two real flaws. It taxes cheap tickets where almost no one is trading. And it can hold one stubborn opinion for a year.</p><p><strong>The receipt:</strong> the one confirmed flaw lived in the aisles almost nobody shopped. The one open opinion is playing tonight.</p></div>',
       trigger: 'step',
       state: 'drain',
       kind: 'ceremonial',
+      chip: [
+        { token: 'state-dead', glyph: 'dead', label: 'grey = settled to zero, dead money' },
+        { token: 'identity-crimson', glyph: 'dot', label: 'red = Spain’s money' },
+        { token: 'neutral-data', glyph: 'line', label: 'grey line = the computer model’s guess' },
+        { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
+      ],
       overlayStep: 'b3',
     },
   ],

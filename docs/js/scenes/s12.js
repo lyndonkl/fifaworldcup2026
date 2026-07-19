@@ -224,12 +224,57 @@ function overlay(container, data, view, scalesObj) {
   const axisG = g.append('g')
     .attr('class', 's12-axis-x')
     .attr('transform', `translate(0, ${view.region.y + view.region.h + 8})`)
-    .call(d3.axisBottom(x).ticks(6))
+    .call(d3.axisBottom(x).ticks(6).tickFormat(d3.utcFormat('%b %d')))
     .call((sel) => sel.selectAll('text')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
       .style('fill', view.css('ink-low')))
     .call((sel) => sel.selectAll('line, path').style('stroke', view.css('ink-low')));
+
+  // Axis titles (design-revision-spec G3/G4: every D3 axis names what it
+  // measures and its unit; s12 previously shipped with no titled axis at
+  // all). X title sits centered below the tick labels, the standard slot.
+  g.append('text')
+    .attr('class', 's12-axis-x-title')
+    .attr('x', view.region.x + view.region.w / 2)
+    .attr('y', view.region.y + view.region.h + 30)
+    .attr('text-anchor', 'middle')
+    .style('font-family', view.css('font-apparatus'))
+    .style('font-size', view.css('type-caption-size'))
+    .style('font-weight', 500)
+    .style('fill', view.css('ink-mid'))
+    .text('date (July 2026)');
+
+  // Per-lane price axis (G3: "s12 has no y-axis" was the named gap). Each
+  // player's row is its own 0-100c scale within its band, so the axis is
+  // drawn once per lane at the chart's own left edge rather than as one
+  // shared vertical scale; a single shared title names the unit for all of
+  // them at once, placed in the footer row so it never contests the
+  // rewrite-on-screen caption block pinned above the stage.
+  const yAxisG = g.append('g').attr('class', 's12-axis-y');
+  players.forEach((p) => {
+    const y0 = lane(p.key);
+    if (y0 === undefined) return;
+    const h = lane.bandwidth();
+    const laneScale = d3.scaleLinear().domain([0, 100]).range([y0 + h, y0]);
+    yAxisG.append('g')
+      .attr('transform', `translate(${view.region.x + 96}, 0)`)
+      .call(d3.axisLeft(laneScale).tickValues([0, 50, 100]).tickFormat((d) => `${d}c`))
+      .call((sel) => sel.selectAll('text')
+        .style('font-family', view.css('font-apparatus'))
+        .style('font-size', view.css('type-micro-size'))
+        .style('fill', view.css('ink-low')))
+      .call((sel) => sel.selectAll('line, path').style('stroke', view.css('ink-low')));
+  });
+  g.append('text')
+    .attr('class', 's12-axis-y-title')
+    .attr('x', view.region.x)
+    .attr('y', view.region.y + view.region.h + 44)
+    .style('font-family', view.css('font-apparatus'))
+    .style('font-size', view.css('type-caption-size'))
+    .style('font-weight', 500)
+    .style('fill', view.css('ink-mid'))
+    .text('price of winning the Golden Boot (cents)');
 
   // The pinned caption whose text rewrites itself between steps — this is
   // the scene's signature (storyboard: "the rewrite-on-screen").
@@ -240,7 +285,9 @@ function overlay(container, data, view, scalesObj) {
     .style('font-family', view.css('font-tape'))
     .style('font-size', view.css('type-tape-size'))
     .style('letter-spacing', view.css('type-tape-tracking'))
-    .style('fill', view.css('accent-annotation'));
+    // Naive-frame label starts ink-low, not amber (design-revision-spec
+    // CR-11): amber on a debunked claim is an anchoring bug, not emphasis.
+    .style('fill', view.css('ink-low'));
   const captionQuestion = captionG.append('text')
     .attr('class', 's12-caption-question')
     .attr('dy', '1.6em')
@@ -277,26 +324,24 @@ function overlay(container, data, view, scalesObj) {
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-annotation-size'))
           .style('fill', view.css('accent-annotation'))
-          .text('July 7–8: traded level, one goal behind');
+          .text('July 7–8: traded level, Mbappe one goal behind');
       }
     }
 
+    // Kane's callout loses its amber halo (design-revision-spec CR-11,
+    // deletion checklist): only the July 7-8 mark keeps amber in this
+    // beat, so Kane's annotation demotes to a plain ink-mid at-mark label.
     if (anno.kane_halving && kane) {
       const y0 = lane('kane');
       if (y0 !== undefined) {
         const px = x(secToDate(manifest, anno.kane_halving.after_day_s));
-        annoG.append('circle')
-          .attr('cx', px).attr('cy', y0 + lane.bandwidth() / 2)
-          .attr('r', view.tokens.dot['radius-annotated-core-px'])
-          .style('fill', 'none')
-          .style('stroke', view.css('accent-annotation'))
-          .style('stroke-width', view.css('dot-halo-stroke-px'));
         annoG.append('text')
-          .attr('x', px + 12).attr('y', y0 + lane.bandwidth() / 2 - 14)
+          .attr('x', px + 12).attr('y', y0 + lane.bandwidth() / 2)
+          .attr('dy', '0.35em')
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-annotation-size'))
-          .style('fill', view.css('accent-annotation'))
-          .text('120 scoreless minutes: the price halved');
+          .style('fill', view.css('ink-mid'))
+          .text('Kane: 120 scoreless minutes, price halved');
       }
     }
 
@@ -315,17 +360,30 @@ function overlay(container, data, view, scalesObj) {
       .style('opacity', 1);
   }
 
+  // Holds the pending b2 caption-swap so rapid back-and-forth scrolling
+  // never stacks two swaps on top of each other.
+  let captionSwapTimer = null;
+
   function step(beatId) {
+    if (captionSwapTimer) { window.clearTimeout(captionSwapTimer); captionSwapTimer = null; }
     if (beatId === 'b1') {
-      captionLabel.text('THE NAIVE READ');
-      captionQuestion.text('Same goals, double the price?');
+      captionLabel.style('fill', view.css('ink-low')).text('the naive read');
+      captionQuestion.style('fill', view.css('ink-hi')).text('Same goals, double the price?');
       annoG.style('opacity', 0);
     } else if (beatId === 'b2') {
-      captionLabel
-        .transition().duration(view.tokens.motion.durations_ms['overlay-draw-in'])
-        .style('fill', view.css('ink-hero'));
-      captionLabel.text('THE RESOLUTION');
-      captionQuestion.text('Same goals. Different expected paths to more.');
+      // The dot recolor (naive -> resolved) is this beat's one motion
+      // event; the caption text trails it as a short crossfade so color
+      // and words never change in the same instant (CR-11). Positions are
+      // frozen throughout -- only color, then text.
+      captionLabel.style('fill', view.css('ink-mid'));
+      captionQuestion.style('fill', view.css('ink-hi'));
+      const recolorMs = view.reducedMotion
+        ? 0
+        : (view.tokens.motion.durations_ms['recolor-min'] + view.tokens.motion.durations_ms['recolor-max']) / 2;
+      captionSwapTimer = window.setTimeout(() => {
+        captionLabel.text('the resolved read');
+        captionQuestion.text('Different futures, different price.');
+      }, recolorMs);
       drawAnnotations();
     }
   }
@@ -343,7 +401,10 @@ function overlay(container, data, view, scalesObj) {
 const s12 = {
   id: 's12',
   act: 4,
-  title: 'The market was not fooled by the scoreline',
+  title: 'The false alarm',
+  // Gate-4 round 2 (structure-spec §3): S12 opens Skill 5, the course's
+  // last lesson -- most "the market is wrong" alarms are false alarms.
+  kicker: 'Skill 5 of 5 — its fake flaws, and its real ones',
   layoutName: 'boot-ladder',
 
   needs: { scene: true, series: [], zoom: null },
@@ -355,36 +416,52 @@ const s12 = {
   beats: [
     {
       id: 'b1',
-      html: `<p>The naive read says the market ignored the scoreboard; the
-        resolution says it priced the future. In the Golden Boot market,
-        the book on who finishes as the tournament's top scorer, Mbappe
-        traded at 61 cents
-        against Messi's 31 to 32 on identical eight-goal tallies, and the
-        gap resolves first through expected remaining goals, the two having
-        traded level on July 7 and 8 with Mbappe still a goal behind, and
-        second through the contract's own assist tiebreak.<sup><a href="#fn-19">19</a></sup></p>`,
+      html: `<p>Here is a trap you can dodge. In the Golden Boot market,
+        the book on who finishes as the tournament's top scorer, Mbappe's
+        ticket cost 61 cents. Messi's ticket cost 31 to 32 cents. Both men
+        had scored eight goals. Same goals, double the price. It looks
+        broken.<sup><a href="#fn-19">19</a></sup> The full-color answer is
+        next.</p>`,
       trigger: 'step',
       state: 'naive',
       kind: 'resort',
+      chip: [
+        { token: 'identity-blue', glyph: 'dot', label: "blue = Mbappe's Golden Boot money" },
+        { token: 'identity-teal', glyph: 'dot', label: "teal = Messi's Golden Boot money" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
+      grain: { text: '1 dot = $75,000 of real money traded', variant: 'return' },
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>Read as a Poisson process, meaning goals arrive at a
-        roughly steady rate, a player's remaining chances scale with the
-        minutes he has left. On that reading Kane's four cents on six goals
-        is fair, and his price halved on the day England won because he
-        burned 120 scoreless minutes.<sup><a href="#fn-19">19</a></sup>
-        The Golden Boot book is a ladder, one ranked rung of contracts per
-        contender, and it reprices the way a bracket does, on goals still
-        to come rather than goals already scored. France's elimination
-        re-runs the same lesson live: the ladder reprices paths, and the
-        final decides the race. Every figure on this screen refreezes on
-        deploy morning.</p>`,
+      html: `<p>It wasn't broken. The market was pricing goals still to
+        come, not goals already scored. On July 7 and 8 the two tickets had
+        traded at the same price, back when Mbappe was still a goal behind;
+        he simply kept scoring faster after that. The contract's own
+        tiebreak rule, based on assists, decided the
+        rest.<sup><a href="#fn-19">19</a></sup></p>
+        <p>Goals tend to arrive at a fairly steady rate. So the more
+        minutes a player has left to play, the more chances he has left to
+        score. That is why Harry Kane, England's striker, was fairly priced
+        at four cents on six goals. It is also why his ticket halved on the
+        very day England won the match: he had just played 120 scoreless
+        minutes, so his remaining chances
+        shrank.<sup><a href="#fn-19">19</a></sup> This top-scorer market is
+        a ladder, one rung of tickets for each contender, and it climbs on
+        goals still to come, not goals already banked.</p>
+        <p>Before you call any price crazy tonight, ask two questions: what
+        do the rules actually pay for, and what does the road ahead look
+        like?</p>`,
       trigger: 'step',
       state: 'resolved',
       kind: 'recolor',
-      chip: 'color: each contender\'s Golden Boot money',
+      chip: [
+        { token: 'identity-blue', glyph: 'dot', label: "blue = Mbappe's Golden Boot money" },
+        { token: 'identity-teal', glyph: 'dot', label: "teal = Messi's Golden Boot money" },
+        { token: 'identity-pink', glyph: 'dot', label: "pink = Kane's Golden Boot money" },
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+      ],
       overlayStep: 'b2',
     },
   ],
