@@ -247,19 +247,32 @@ export default {
     const wb = sj.waking_band;
     let bandG = null;
     if (wb) {
-      bandG = g.append('g').attr('class', 's04-waking-band').style('display', 'none');
+      // visibility (not display) so getBBox() below can measure the
+      // label while the group is still hidden.
+      bandG = g.append('g').attr('class', 's04-waking-band').style('visibility', 'hidden');
       const bandX = hour(wb.start_hour);
       const bandW = hour(wb.end_hour) - hour(wb.start_hour) + hour.bandwidth();
       bandG.append('rect')
         .attr('x', bandX).attr('width', bandW)
         .attr('y', gridRect.y).attr('height', gridRect.h)
         .attr('fill', view.css('accent-annotation')).attr('stroke', 'none').attr('opacity', 0.10);
-      bandG.append('text')
+      const bandLabel = bandG.append('text')
         .attr('x', bandX + bandW - 12).attr('y', gridRect.y + 14)
         .attr('text-anchor', 'end')
         .attr('fill', view.css('accent-annotation'))
         .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
         .text('US waking hours: about twice the schedule alone');
+      // Gate-4 visual-story review (s04 critical): this amber label sat
+      // directly on the bright teal/white cell field at ~1.4:1 contrast
+      // (perception-brief §9a) — the scene's headline insight was
+      // functionally invisible. A bg-canvas scrim behind the glyphs
+      // restores figure-vs-figure luminance contrast for the text.
+      const bandBB = bandLabel.node().getBBox();
+      bandG.insert('rect', 'text')
+        .attr('x', bandBB.x - 8).attr('y', bandBB.y - 4)
+        .attr('width', bandBB.width + 16).attr('height', bandBB.height + 8)
+        .attr('rx', 3)
+        .attr('fill', view.css('bg-canvas')).attr('opacity', 0.85);
     }
 
     // Rest-day row markers + caption (structure-spec S4 §2: the 5-15x /
@@ -282,12 +295,12 @@ export default {
       step(beatId) {
         if (beatId === 'b1') {
           stripG.style('display', 'none');
-          bandG && bandG.style('display', 'none');
+          bandG && bandG.style('visibility', 'hidden');
           restG.style('display', 'none');
         } else if (beatId === 'b2') {
           stripG.style('display', null);
         } else if (beatId === 'b3') {
-          bandG && bandG.style('display', null);
+          bandG && bandG.style('visibility', 'visible');
           restG.style('display', null);
         }
       },

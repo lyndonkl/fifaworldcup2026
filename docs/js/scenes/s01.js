@@ -276,10 +276,19 @@ export default {
     // 0.42-0.90 gap and did not pop). Amber = the reserved "story points here"
     // hue naming tonight's match.
     const amber = view.color('accent-annotation', ACTIVE_A);
-    const dimColor = view.state('dimmed-field-max');   // 0.40 -> rest-tier (dimmed)
     const yesColor = view.color('side-yes', ACTIVE_A); // real ticks: active-tier
     const noColor = view.color('side-no', ACTIVE_A);
     const waitColor = view.color('field-rest', 0.10);  // staged/not-yet-arrived: below rest band
+    // Gate-4 visual-story review (s01 critical, "un-keyed near-white
+    // column"): during the zoom the resting field is CONTEXT, not story,
+    // but its end-of-tournament density wall at the right edge was
+    // accumulating past the tone-map cap and rendering as a full-height
+    // near-white mass that out-shone the tick stream in every frame and
+    // matched no key entry. Drop the in-zoom field to the same 0.10
+    // alpha the staging tier uses (precedent: waitColor above) so the
+    // summed wall stays a dim grey ground and the key's "grey = money at
+    // rest" is true of what is rendered (perception-brief §4, §9b).
+    const zoomFieldColor = view.color('field-rest', 0.10);
     const deadColor = view.state('dead');              // 0.55 -> unclassified receding state, engine leaves it
 
     const stageX = clockX(0) - 14; // "not yet arrived" staging point
@@ -326,7 +335,7 @@ export default {
       const s = makeState(N);
       for (let i = 0; i < N; i++) {
         s.x[i] = restPos.x[i]; s.y[i] = restPos.y[i];
-        setColor(s.color, i, dimColor);
+        setColor(s.color, i, zoomFieldColor);
         s.size[i] = BASE_PX;
       }
       for (let d = 0; d < D; d++) {
@@ -485,8 +494,13 @@ export default {
     // One pre-title caption line (storyboard overlay spec), lifted
     // verbatim from the beat's own narration. Retimed (CR-18) to be
     // visible from kf0 rather than gated behind a t>0.005 threshold.
+    // Gate-4 visual-story review (s01 critical, caption collision): the
+    // two narration captions each get the SAME lane, 34px above the
+    // stage, clear of the price-axis title at region.y - 12 — and they
+    // are sequenced below so at most one is visible at a time (one
+    // change on screen at a time; Mayer coherence).
     const caption = g.append('text').attr('class', 'pretitle-caption')
-      .attr('x', view.region.x).attr('y', view.region.y - 16)
+      .attr('x', view.region.x).attr('y', view.region.y - 34)
       .attr('fill', view.css('ink-mid'))
       .style('font-family', view.css('font-tape'))
       .style('font-size', view.css('type-tape-size'))
@@ -500,7 +514,7 @@ export default {
     // appear, then clears before the goal so it never competes with the
     // scene's one amber unit.
     const companionCaption = g.append('text').attr('class', 'companion-caption')
-      .attr('x', view.region.x).attr('y', view.region.y - 40)
+      .attr('x', view.region.x).attr('y', view.region.y - 34)
       .attr('fill', view.css('ink-mid'))
       .style('font-family', view.css('font-tape'))
       .style('font-size', view.css('type-tape-size'))
@@ -627,8 +641,10 @@ export default {
         lastCutoff = cutoff;
       }
       updateChip(cutoff, t);
-      // Pretitle caption: visible from kf0 (CR-18), not gated on t>0.005.
-      if (t < 0.5) fadeIn(caption); else fadeOut(caption);
+      // Pretitle caption: visible from kf0 (CR-18); it now clears the
+      // moment trades start flowing (cutoff > 0) so it never shares its
+      // lane with the companion caption (one caption at a time).
+      if (cutoff <= 0) fadeIn(caption); else fadeOut(caption);
       // Companion-stream caption: transient, appears once trades start
       // flowing and clears before the goal so it never shares a frame
       // with the scene's one amber unit.

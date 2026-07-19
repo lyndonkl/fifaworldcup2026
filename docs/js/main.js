@@ -381,8 +381,17 @@ function zoomGrainText(scene, template) {
   const buildStride = (tile && tile.build_stride) || spec.build_stride || 1;
   const runtimeStride = Math.max(1, Math.ceil(tileCount / Math.max(tagged, 1)));
   const n = buildStride * runtimeStride;
+  // Ordinal-correct sampling text (Gate-4 visual-story review, s08 grain
+  // plate read "every 243th"): templates write "every {n}th"; the whole
+  // '{n}th' unit is replaced first so the suffix agrees with the number
+  // (243rd, 132nd, 101st). Bare '{n}' still substitutes plainly.
+  const nTxt = formatSlot(n, 'count');
+  const v = n % 100;
+  const ordSuffix = (v >= 11 && v <= 13) ? 'th'
+    : (n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th');
   return (template || scene.zoom.grainText)
-    .replace('{n}', formatSlot(n, 'count'))
+    .replace('{n}th', nTxt + ordSuffix)
+    .replace('{n}', nTxt)
     .replace('{count}', formatSlot(spec.trades * (spec.build_stride || 1), 'count'));
 }
 

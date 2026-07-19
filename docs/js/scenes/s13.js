@@ -280,7 +280,9 @@ function overlay(container, data, view, scalesObj) {
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-annotation-size'))
       .style('fill', view.css('ink-hi'))
-      .text(`${pair.poll_pct}% poll`);
+      // Round to one decimal so pipeline float artifacts (e.g.
+      // 7.000000000000001) never render (Gate-4 visual-story review).
+      .text(`${Math.round(pair.poll_pct * 10) / 10}% poll`);
 
     // Price reference line at the dot column's traded level.
     pairG.append('line')

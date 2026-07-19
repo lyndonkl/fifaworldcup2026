@@ -333,12 +333,16 @@ export default {
         .attr('x1', chartRect.x).attr('x2', chartRect.x + chartRect.w)
         .attr('y1', y(pf.usd)).attr('y2', y(pf.usd))
         .attr('stroke', view.css('ink-mid')).attr('stroke-dasharray', '4,4').attr('stroke-width', 1);
+      // Gate-4 visual-story review (s03 critical, "$7.4B crossing is
+      // mute"): the reference line now carries its dollar figure and its
+      // meaning in the label, anchored at the LEFT end of the line where
+      // the KEY panel (top-right) can never occlude it.
       pfLabel = g.append('text')
-        .attr('x', chartRect.x + chartRect.w).attr('y', y(pf.usd) - 4)
-        .attr('text-anchor', 'end')
+        .attr('x', chartRect.x + 8).attr('y', y(pf.usd) - 6)
+        .attr('text-anchor', 'start')
         .attr('fill', view.css('ink-mid'))
         .style('font', `${view.tokens.typography.scale.find((s) => s.name === 'caption').size} var(--font-apparatus)`)
-        .text(pf.label || 'press floor, about one week stale');
+        .text(`${fmt.usd(pf.usd)}: the press number, about one week stale`);
     }
 
     // Crossover annotation. The scene's one amber unit, step 2 only

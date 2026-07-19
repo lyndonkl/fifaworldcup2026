@@ -208,14 +208,16 @@ export default {
   // screenshot-ready").
 };
 
-/* manifest.hero.provenance ships as a template string containing the
- * literal placeholder "{frozen_at}" in the CONTRACT's own manifest
- * example (docs/CONTRACT.md §5.1). Substituting defensively here covers
- * both a pipeline that pre-fills the string and one that ships the
- * template verbatim — no new text is invented, only the manifest's own
- * frozen_at value is spliced into the manifest's own template. */
+/* Gate-4 visual-story review (s17 major, "PROVISIONAL debug caption"):
+ * the manifest's hero.provenance string is internal pipeline language
+ * (build-run/G3-refresh mechanics) and was rendering as a six-line
+ * caption at the ceremony's center, the second-largest text block in
+ * the frame. The reader-facing line is now ALWAYS the short authored
+ * sentence below (Mayer coherence: delete extraneous material); the
+ * full pipeline provenance stays in the manifest and the methods
+ * section, untouched. Only the manifest's own frozen_at value is
+ * spliced in. */
 function resolveProvenance(template, frozenAt) {
-  const fallback = 'raw traded price, frozen at pipeline run {frozen_at}; multi-way legs sum above 100% before the vig is removed; this number does not update';
-  const t = template || fallback;
-  return t.replace('{frozen_at}', fmt.iso(frozenAt || ''));
+  const short = 'raw traded price, frozen at pipeline run {frozen_at}; multi-way legs sum above 100% before the vig is removed; this number does not update';
+  return short.replace('{frozen_at}', fmt.iso(frozenAt || ''));
 }
