@@ -356,7 +356,9 @@ const s12 = {
     {
       id: 'b1',
       html: `<p>The naive read says the market ignored the scoreboard; the
-        resolution says it priced the future. Mbappe traded at 61 cents
+        resolution says it priced the future. In the Golden Boot market,
+        the book on who finishes as the tournament's top scorer, Mbappe
+        traded at 61 cents
         against Messi's 31 to 32 on identical eight-goal tallies, and the
         gap resolves first through expected remaining goals, the two having
         traded level on July 7 and 8 with Mbappe still a goal behind, and

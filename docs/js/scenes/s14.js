@@ -399,7 +399,9 @@ const s14 = {
       html: `<p>Weight the same curve by dollars actually traded and the
         sag flattens to about half a
         point.<sup><a href="#fn-20">20</a></sup> The dots sagging here are
-        the same dots that sat in the Lorenz tail three acts ago.</p>`,
+        the same dots that sat in the barely-traded tail three acts ago,
+        the thousands of markets that never drew one dot's worth of
+        money.</p>`,
       trigger: 'step',
       state: 'assemble-dollars',
       kind: 'recolor',

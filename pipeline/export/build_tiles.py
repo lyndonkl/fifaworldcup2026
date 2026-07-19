@@ -2118,6 +2118,12 @@ def check_cap(name, nbytes):
 
 
 def main():
+    # --freeze: the G3 morning-of-final refresh pass. Stamps manifest.frozen_at
+    # with this run's UTC instant so S17's provenance line ("raw traded price,
+    # frozen at {frozen_at}; ... this number does not update") renders the real
+    # freeze moment instead of the pre-G3 placeholder.
+    freeze = "--freeze" in sys.argv
+
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(os.path.join(OUT, "zoom"), exist_ok=True)
     os.makedirs(os.path.join(OUT, "scenes"), exist_ok=True)
@@ -2232,8 +2238,10 @@ def main():
     manifest = {
         "version": 1,
         "generated": generated_iso,
-        "frozen_at": None,
-        "frozen_at_note": "set by the G3 morning-of-final refresh pass; this build predates it",
+        "frozen_at": generated_iso.replace("+00:00", "Z") if freeze else None,
+        "frozen_at_note": ("G3 morning-of-final refresh: hero legs + every scene figure frozen at this run"
+                           if freeze else
+                           "set by the G3 morning-of-final refresh pass; this build predates it"),
         "epoch": EPOCH.isoformat().replace("+00:00", "Z"),
         "population": {
             "desktop": {

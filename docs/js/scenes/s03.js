@@ -407,14 +407,14 @@ export default {
     },
     {
       id: 'b2',
-      html: '<p>Match markets out-traded the entire futures book on day one, 49.4 million contracts to 31.6 million, and passed its thirteen-month cumulative stock on day two; the futures book set its own record the same day, at roughly ninety times its pre-tournament pace.<sup><a href="#fn-4">4</a></sup></p>',
+      html: '<p>Match markets out-traded the entire futures book, the same winner market the piece has followed since May 2025, on day one, 49.4 million contracts to 31.6 million, and passed its thirteen-month cumulative stock on day two; the futures book set its own record the same day, at roughly ninety times its pre-tournament pace.<sup><a href="#fn-4">4</a></sup></p>',
       trigger: 'step',
       state: 'crossover',
       kind: 'resort',
     },
     {
       id: 'b3',
-      html: '<p>The tape is the exchange&rsquo;s own trade-by-trade receipt, every transaction it ever cleared, and this counter is its running total. That total reaches $10.94 billion through July 8 and $12.3 billion at the July 14 snapshot. The widely reported &ldquo;$7.4 billion&rdquo; matches the tape&rsquo;s own cumulative as of roughly June 30, a floor about a week stale, since a tape only ever adds trades and any dated total is a number a later reading can only raise.<sup><a href="#fn-5">5</a></sup> 98.6% of everything ever traded here traded in-tournament, largely because three quarters of the notional sits in per-match products that did not exist before kickoff.<sup><a href="#fn-5">5</a></sup></p>',
+      html: '<p>The tape is the exchange&rsquo;s own trade-by-trade receipt, every transaction it ever cleared, and this counter is its running total. That total reaches $10.94 billion through July 8 and $12.3 billion at the July 14 snapshot. The widely reported &ldquo;$7.4 billion&rdquo; matches the tape&rsquo;s own cumulative as of roughly June 30, a floor about a week stale, since a tape only ever adds trades and any dated total is a number a later reading can only raise.<sup><a href="#fn-5">5</a></sup> 98.6% of everything ever traded here traded in-tournament, largely because three quarters of the dollars sit in per-match products that did not exist before kickoff.<sup><a href="#fn-5">5</a></sup></p>',
       trigger: 'step',
       state: 'snapshot',
       kind: 'resort',

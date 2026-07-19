@@ -362,6 +362,20 @@ function enterScene(scene) {
   if (activeOverlay) { activeOverlay.exit(); activeOverlay = null; }
   if (activeScene) registry.clearScene(activeScene.id);
   activeScene = scene;
+  // Fast-scroll data race: a quick scroll can outrun the one-scene
+  // lookahead, mounting a scene before its lazy JSON/zoom tile arrived
+  // (observed as s05 rendering with a collapsed band + console warn).
+  // Scenes degrade gracefully on missing data, so render now with what we
+  // have, then re-enter once the fetch lands if the reader is still here —
+  // computeActive() re-runs the normal enter + beat-activation path.
+  const n = scene.needs || {};
+  const missing = (n.scene && manifest.scenes[scene.id] && !DATA.scenes[scene.id])
+    || (n.zoom && !DATA.zoom[n.zoom]);
+  if (missing) {
+    loadSceneNeeds(scene).then(() => {
+      if (activeScene === scene) { activeScene = null; computeActive(); }
+    }).catch(() => {});
+  }
   const data = sceneData(scene);
   const scales = scene.scales ? scene.scales(data, view) : {};
   activeLayout = scene.layout(data, view);

@@ -267,12 +267,13 @@ export default {
     },
     {
       id: 'b3',
-      html: `<p>The tell is Norway, the same match the reader just watched at
-        tick grain: its spike to 10.8 cents at hour 43 mirrors, minute for
-        minute, Argentina's winner-leg crash while Egypt led.<sup><a
+      html: `<p>The tell is Norway's winner leg, repriced off the same
+        Norway and Brazil upset the reader just watched tick by tick: its
+        spike to 10.8 cents at hour 43 mirrors, minute for minute,
+        Argentina's winner-leg crash while Egypt led.<sup><a
         href="#fn-14">14</a></sup> Whatever the highlight reels were
-        celebrating, the tape was doing bracket arithmetic on the paths
-        that remained.</p>`,
+        celebrating, the tape was doing bracket arithmetic, repricing each
+        team's remaining path through the draw.</p>`,
       trigger: 'step',
       state: 'mirror',
       kind: 'resort',
