@@ -19,17 +19,23 @@
  * DATA_REQUEST (flagged to the tile builder; not in CONTRACT §5's generic
  * shape): docs/data/scenes/s06.json, built from
  * pipeline/data/analysis/volume-anatomy/mexeng_summary.json and
- * pipeline/data/analysis/ingame-microstructure/size_regime.parquet (R8/R16):
+ * pipeline/data/analysis/ingame-microstructure/size_regime.parquet (R8/R16).
+ * Gate-5 item 5 fix: kickoff_step_multiplier / pre_kick_rate_per_s /
+ * peak_minute_rate_per_s are a class-A recompute off THIS leg's own tape --
+ * this market's real numbers, not the tournament-generic R16 constants (the
+ * old placeholder 5.4x / 1/s values below were wrong for MEXENG and have
+ * been replaced piece-wide by this scene's honest, data-derived reads):
  *   {
  *     "_provenance": { "sources": [...], "generated": ISO },
  *     "window": { "kickoff_ts": ISO },   // manifest.zoom.mexeng.window gives
  *                                         // start/end but not the kickoff
  *                                         // instant itself -- needed for the
- *                                         // dwell keyframe and the ~5.4x step
+ *                                         // dwell keyframe and the kickoff step
  *     "rate_curve": [ { "t_s": <seconds from window start>, "rate_per_s": f }, ... ],
  *     "size_sparkline": [ { "t_s": <seconds>, "avg_notional_usd": f }, ... ],
- *     "kickoff_step_multiplier": 5.4,
- *     "pre_kick_rate_per_s": 1.0,
+ *     "kickoff_step_multiplier": 2.11,
+ *     "pre_kick_rate_per_s": 26.42,
+ *     "peak_minute_rate_per_s": 182.4,
  *     "size_growth_pct": 15.0
  *   }
  * Until this lands, the scene degrades gracefully: reveal collapses to a
@@ -155,7 +161,20 @@ export default {
     const stageBottom = view.region.y + view.region.h;
     const y = d3.scaleLinear().domain([0, 100])
       .range([stageBottom, stageTop]);
-    const rate = d3.scaleLinear().domain([0, 6]) // trades/second, headroom above the ~5.4x step
+    // Honest axis (Gate-5 item 5): domain fits THIS market's own real
+    // range, not a generic cross-tournament clamp. The 15-minute rate
+    // curve peaks near 119 trades/s late in the match; take the curve's
+    // actual max with a little headroom so the true shape -- including
+    // the kickoff step -- draws in full, at its real height, never
+    // clipped flat. The old fixed [0,6] domain is the fake-flatline bug
+    // this replaces. Falls back to a small placeholder domain only if
+    // the curve hasn't loaded yet (graceful degrade, DATA_REQUEST above).
+    const rateCurveForDomain = (data.scene && Array.isArray(data.scene.rate_curve))
+      ? data.scene.rate_curve : null;
+    const rateMax = (rateCurveForDomain && rateCurveForDomain.length)
+      ? d3.max(rateCurveForDomain, (d) => d.rate_per_s)
+      : 6;
+    const rate = d3.scaleLinear().domain([0, rateMax * 1.05]) // trades/second, true range + 5% headroom
       .range([paceBottom, paceTop]);
     registry.register('s06.x', x);
     registry.register('s06.y', y);
@@ -233,7 +252,7 @@ export default {
       ? [
         { at: 0.0, cutoff: domainStartMs },
         { at: 0.55, cutoff: kickoffTs - 3600000 },   // T-1h: dwell begins
-        { at: 0.80, cutoff: kickoffTs },              // whistle: the ~5.4x step
+        { at: 0.80, cutoff: kickoffTs },              // whistle: the kickoff step
         { at: 1.0, cutoff: domainEndMs },
       ]
       : [
@@ -263,6 +282,7 @@ export default {
     } = scales;
     const g = container.svg;
     const [rangeMin, rangeMax] = x.range();
+    const rateDomainMax = rate.domain()[1] || 6;
 
     // ET tick format: the tape is stored in UTC; the reader is told
     // "Eastern Time" (G3), so ticks apply a fixed UTC-4 (EDT, July) shift
@@ -341,15 +361,13 @@ export default {
     let rateClipRect = null;
     let ratePlayhead = null;
     if (rateCurve && rateCurve.length && rateT0 !== null) {
-      // Clamped to the axis's own [0,6] headroom: the tape's tail carries
-      // a settlement-flurry outlier far above the "~5.4x step" the axis
-      // was sized for, which otherwise draws a near-vertical shoot off
-      // the top of the pace lane right where the kickoff climax should
-      // read cleanly (part of design review M5's "line behaves oddly
-      // near kickoff"). Capping keeps the curve inside its own lane.
+      // Honest axis (Gate-5 item 5): the pace scale's own domain now
+      // stretches to this market's real peak (scales(), d3.max over
+      // rate_curve), so every value plots at its true height -- no clamp,
+      // no manufactured flatline.
       const line = d3.line()
         .x((d) => x(rateT0 + d.t_s * 1000))
-        .y((d) => rate(Math.min(d.rate_per_s, 6)));
+        .y((d) => rate(d.rate_per_s));
       // Progressive reveal (design review C1): the line was previously
       // fully drawn the instant the beat activated, so scrub25/50/90
       // captured the identical fully-drawn curve. A clip-rect whose width
@@ -414,19 +432,18 @@ export default {
         .attr('stroke-opacity', 0.15);
       const mult = data.scene.kickoff_step_multiplier;
       const label = mult
-        ? `kickoff: 1 trade a second becomes ${mult}x`
+        ? 'kickoff: the whistle doubles an already-flooding tape'
         : 'kickoff: the pace steps up';
       // Anchored to the rate curve's own value at kickoff (design review
       // M5: the marker previously sat fixed near the pace lane's zero
       // baseline, detached from the step it claimed to describe). Falls
       // back to the old bottom-edge anchor only if the curve is missing.
-      // Clamped for the same reason as the curve/playhead: the tail
-      // outlier can otherwise fling this callout thousands of px above
-      // the visible frame, making the whole singleton invisible even
-      // though the crossing logic fires correctly.
+      // No clamp (Gate-5 item 5): the pace scale's domain already covers
+      // this market's true range (scales()), so the marker's real height
+      // is always on-canvas.
       const kickoffRate = rateNear(kickoffTs);
       const calloutY = kickoffRate !== null
-        ? rate(Math.min(kickoffRate, 6)) - 14 : paceBottom - 10;
+        ? rate(kickoffRate) - 14 : paceBottom - 10;
       // Kickoff lands late in the trailing-24h window (near the capped
       // right edge, short of the KEY exclusion zone per scales()), so the
       // label mirrors left once past 70% of the *drawable* width -- not
@@ -510,12 +527,10 @@ export default {
       }
       const curRate = rateNear(cxTs);
       if (ratePlayhead && curRate !== null) {
-        // Clamp before mapping through `rate` (domain [0,6]): the tape's
-        // own tail carries a settlement-flurry outlier well above the
-        // "~5.4x step" headroom the axis was sized for, which would
-        // otherwise fling this marker thousands of px off-canvas instead
-        // of just riding the top of the pace lane.
-        ratePlayhead.attr('cx', cx).attr('cy', rate(Math.min(curRate, 6)));
+        // No clamp (Gate-5 item 5): the pace scale's domain already spans
+        // this market's true range, so the playhead rides its real value
+        // the whole way, kickoff spike included.
+        ratePlayhead.attr('cx', cx).attr('cy', rate(curRate));
       }
       if (kickoffX !== null) {
         const reached = cx >= kickoffX;
@@ -523,7 +538,9 @@ export default {
         if (kickoffCallout) kickoffCallout.style('opacity', reached ? 1 : 0);
       }
       if (metronome && curRate !== null) {
-        const alpha = Math.min(1, 0.25 + curRate / 6);
+        // Normalized against this market's own real peak (the pace
+        // scale's domain, Gate-5 item 5), not a hardcoded 6.
+        const alpha = Math.min(1, 0.25 + curRate / rateDomainMax);
         metronome.style('opacity', alpha);
       }
     }
@@ -552,13 +569,16 @@ export default {
         were typical. More people bought yes than no, the same pattern found
         everywhere on this exchange. Trading ran heavier before kickoff than
         in a typical knockout match.<sup><a href="#fn-9">9</a></sup></p>
-        <p>The tape can say that money moved. It cannot say why. It cannot
-        tell a Mexico fan betting with hope apart from a Mexico fan
-        protecting against heartbreak.</p>
-        <p>The pace tells its own story. Before kickoff, a trade was landing
-        about once a second, one print, one executed trade. Watch for the
-        kickoff line: the pace steps up about 5.4 times the moment the whistle
-        blows.<sup><a href="#fn-10">10</a></sup></p>
+        <p>The tape can say that money moved. It cannot say why. One buyer
+        may be backing the team they love. Another may be buying the other
+        side as insurance: if their team loses, the payout softens the
+        blow. The tape prints both trades the same way. What moved is
+        certain. Why it moved is not.</p>
+        <p>The pace tells its own story. Before kickoff, the tape was
+        already flooding: about twenty-six trades landed every second.
+        Watch for the kickoff line: the whistle doubled that pace. The
+        busiest single minute of the match printed 182 trades a
+        second.<sup><a href="#fn-10">10</a></sup></p>
         <p>Volume tells you where the crowd is watching. It does not tell you
         what the crowd knows. For that, you have to watch prices move during
         a match itself. That is next.</p>`,

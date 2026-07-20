@@ -420,12 +420,22 @@ export default {
       .attr('fill', view.css('ink-mid'))
       .style('font', '12px var(--font-apparatus)')
       .text('gap between Kalshi and Polymarket (points)');
+    // Text-collision sweep (Gate-5 item 3 disposition 2): centered under
+    // the axis, this title's row sat right on top of Zone F's gap-meter
+    // card (region.y + region.h + footer-slot-offset-px, spec'd in
+    // design-revision-spec.md G5 and shared by every scene, so its own
+    // offset isn't the thing to move) -- the card's left ~380px, this
+    // title's centered ~160px, both starting near region.x, left no way
+    // to stack them with the little vertical room this footer has.
+    // Right-aligning to the region's edge moves it clear of the card
+    // horizontally instead, same row, same convention everywhere else
+    // reads it (bottom of its own axis).
     axisLayer.append('text')
-      .attr('x', view.region.x + view.region.w / 2)
+      .attr('x', view.mobile ? view.region.x + view.region.w / 2 : view.region.x + view.region.w)
       .attr('y', view.mobile
         ? view.region.y + view.region.h - spacing[6]
         : view.region.y + view.region.h + spacing[4] + 14)
-      .attr('text-anchor', 'middle')
+      .attr('text-anchor', view.mobile ? 'middle' : 'end')
       .attr('fill', view.css('ink-mid'))
       .style('font', '12px var(--font-apparatus)')
       .text('the knockout stage (date)');

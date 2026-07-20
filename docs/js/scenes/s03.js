@@ -39,7 +39,7 @@
  * the dots on screen and needs no extra network payload — see
  * `buildCumulativeSeries()` below. The final snapshot total is instead
  * read from `manifest.census.total_usd` (the deploy-frozen, reconciled
- * figure the beat prose quotes as "$12.3 billion"), since that is the
+ * figure the beat prose quotes as "$12.75 billion"), since that is the
  * authoritative number, not a $75k-grain-quantized approximation of it.
  */
 
@@ -707,7 +707,7 @@ export default {
     },
     {
       id: 'b3',
-      html: '<p>The counter just passed the press number and kept climbing. The tape is the exchange&rsquo;s complete receipt: every trade it ever cleared, kept forever. This counter is the tape&rsquo;s running total. By July 8 that total reached $10.94 billion. By the July 14 snapshot, it reached $12.3 billion.<sup><a href="#fn-5">5</a></sup> Newspapers had reported &ldquo;$7.4 billion,&rdquo; a number that matched the tape about a week earlier, around June 30. A receipt only ever grows, so any dated total is really a floor, not a ceiling. The market knew its own size before the press did.</p>',
+      html: '<p>The counter just passed the press number and kept climbing. The tape, the exchange&rsquo;s trade-by-trade record you met at the start, is also its complete receipt: every trade it ever cleared, kept forever. This counter is the tape&rsquo;s running total. By July 8 that total reached $10.94 billion. By the July 14 snapshot, it reached $12.75 billion.<sup><a href="#fn-5">5</a></sup> Each contract is a one-dollar box: the yes side puts in its price, the no side puts in the rest. Count the filled boxes and you have counted the dollars: $12.75 billion means 12.75 billion boxes. Newspapers had reported &ldquo;$7.4 billion,&rdquo; which is 7.4 billion boxes.<sup><a href="#fn-5">5</a></sup> That number was not the press measuring the market. It was the exchange&rsquo;s own running total from around June 30. Newspapers republished it about a week later, on July 8. A receipt only ever grows, so any dated total is really a floor, not a ceiling.</p>',
       trigger: 'step',
       state: 'snapshot',
       kind: 'resort',

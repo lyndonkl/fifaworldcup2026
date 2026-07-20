@@ -221,6 +221,27 @@ export default {
     // One stack-direction label at the ribbon's thickest point
     // (design-revision-spec §2 S2 item 4): the tournament's own opening
     // week is where the money piles up densest (Act 2's "the flood").
+    // Text-collision sweep (Gate-5 item 3 disposition 2): this label used
+    // to sit at the ribbon's vertical center (region.y + region.h/2),
+    // which is exactly where the June-11 bucket's dot column grows toward
+    // as more of the tournament reveals -- by late scroll the tall stack
+    // of dots grows through the label's own row and swallows it mid-word.
+    // restingFieldPositions() caps a bucket's half-spread just 4px short
+    // of the full region height, so no position *inside* the region is
+    // safe once that bucket is dense.
+    // FIRST FIX ATTEMPT (kept as a cautionary note): moving the label
+    // above the region, like the reference marks below, looked right on
+    // paper but WALL_MS's own x (June 11, close to this domain's end)
+    // lands inside the fixed KEY panel's x-range -- an above-region y put
+    // it inside the KEY's y-range too, and the label rendered, in the DOM,
+    // fully opaque, and completely invisible under the KEY's opaque card
+    // (verified via a headless DOM probe, not just a screenshot re-read).
+    // Below the region has no such trap: the KEY only ever occupies the
+    // top-right corner, so a below-region y is safe at ANY x, including
+    // WALL_MS's. This is the fourth of the four below-ribbon rows the
+    // reference marks below now use (standoff+14/+34/+54 for wall/here/
+    // this label) -- WALL_MS is this label's own x too, so it needs a
+    // row wallMarker isn't already sitting on.
     const thickLabel = g.append('text').attr('class', 's02-thick-label')
       .style('opacity', 0);
     titleStyle(thickLabel);
@@ -231,7 +252,7 @@ export default {
         .attr('text-anchor', 'start');
     } else {
       thickLabel.attr('x', timeX(WALL_MS))
-        .attr('y', view.region.y + view.region.h / 2 - 12)
+        .attr('y', view.region.y + view.region.h + 8 + 54)
         .attr('text-anchor', 'middle');
     }
 
@@ -258,9 +279,13 @@ export default {
           .text(label);
       } else {
         const standoff = 8;
-        const ly = opts.vpos === 'below'
-          ? view.region.y + view.region.h + standoff + 14
-          : view.region.y - standoff - 4;
+        // yOverride (text-collision sweep, Gate-5 item 3 disposition 2):
+        // an explicit row for markers that can't use either stock slot --
+        // see hereMarker below.
+        const ly = typeof opts.yOverride === 'number' ? opts.yOverride
+          : opts.vpos === 'below'
+            ? view.region.y + view.region.h + standoff + 14
+            : view.region.y - standoff - 4;
         grp.append('line')
           .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
           .attr('x1', pos).attr('x2', pos)
@@ -282,14 +307,36 @@ export default {
     const drawWeekMarker = markerAt(
       DRAW_WEEK_MS, view.css('ink-mid'), null, 'December 5: the twitch', 1,
     );
+    // Text-collision sweep (Gate-5 item 3 disposition 2), all three marks
+    // below: WALL_MS, frozenMs and FINAL_MS land in the domain's last
+    // ~6 weeks, which is also exactly the KEY panel's own x-range on
+    // desktop (the KEY sits top-right, above.the ribbon; these dates are
+    // near its right edge). The stock "above" row (drawWeekMarker's row)
+    // is fully claimed by the KEY for any x past ~1130px of a 1440px
+    // viewport, so a label anchored there is opaque in the DOM and
+    // invisible on screen, painted over by the KEY's own higher z-index
+    // card (confirmed with a headless DOM probe, not just a screenshot
+    // read -- a garbled screenshot can be misread as "mostly fine", an
+    // element with real geometry sitting fully behind an opaque, higher
+    // z-index panel cannot). "Below the ribbon" has no KEY to dodge, so
+    // all three move there, each on its own row (standoff+14, +34, +54)
+    // so the three text runs -- which cluster within ~70px of each other
+    // on this axis, frozenMs and FINAL_MS within about a day -- clear
+    // each other too. thickLabel (above) takes the fourth row.
     const wallMarker = markerAt(
-      WALL_MS, view.css('accent-annotation'), null, 'June 11: the wall', 1, { mirror: true },
+      WALL_MS, view.css('accent-annotation'), null, 'June 11: the wall', 1,
+      { mirror: true, vpos: 'below' },
     );
     const hereMarker = markerAt(
-      frozenMs, view.css('ink-mid'), '2,3', 'you are here', 1, { vpos: 'above' },
+      frozenMs, view.css('ink-mid'), '2,3', 'you are here', 1,
+      // yOverride is only read on the desktop branch of markerAt (mobile
+      // ignores opts.vpos/yOverride entirely and lays its own axis out
+      // along pos - 6), so this is a no-op on mobile, not a live bug there.
+      { mirror: true, yOverride: view.region.y + view.region.h + 8 + 34 },
     );
     const finalMarker = markerAt(
-      FINAL_MS, view.css('ink-low'), '1,4', 'the final', 0.6, { vpos: 'below' }, // dimmed: a future date
+      FINAL_MS, view.css('ink-low'), '1,4', 'the final', 0.6,
+      { vpos: 'below', mirror: true }, // dimmed: a future date
     );
 
     // Withholding + cue (design-revision-spec §2 S2 / perception-brief

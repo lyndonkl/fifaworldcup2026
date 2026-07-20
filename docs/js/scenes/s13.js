@@ -29,8 +29,9 @@
  *      surfaced as JSON with a `team` code matching manifest.teams'
  *      convention (see #3).
  *   2. `host_peers.teams[]` needs `pretournament_contracts`,
- *      `model_odds_pct`, and `price_ratio_x` (~1.8 Mexico, ~1.5 USA per
- *      R12) restricted to the dossier's "clean pre-tournament window."
+ *      `model_odds_pct`, and `price_ratio_x` (2.0 Mexico, 1.42 USA in the
+ *      shipped JSON; R12's pre-recompute estimates were ~1.8/~1.5)
+ *      restricted to the dossier's "clean pre-tournament window."
  *      GAP: pipeline/data/analysis/bias-forensics/us_home_bias_futures_peer.parquet
  *      (inspected during this build) carries only LIFETIME
  *      `volume_contracts` (USA 83.2M, Mexico 82.4M, Ecuador 22.3M) — about
@@ -529,10 +530,10 @@ const s13 = {
         the hosts. Against teams the model rated about the same, they each
         pulled in roughly two to two and a half times the money before the
         tournament even began. That attention did nudge the price: Mexico
-        traded at about 1.8 times its model chance, and the USA at about
-        1.5 times its model chance, on the eve of
+        traded at about 2 times its model chance, and the USA at about
+        1.4 times its model chance, on the eve of
         kickoff.<sup><a href="#fn-18">18</a></sup> Those model chances were
-        tiny to start with. Multiply a tiny chance by 1.8 and you still get
+        tiny to start with. Multiply a tiny chance by 2 and you still get
         a tiny number, a point or two of price, not ten. Loud in volume,
         faint in price.</p>`,
       trigger: 'step',

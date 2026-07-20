@@ -1337,17 +1337,42 @@ def build_s04_scene(con):
     """s04.js reads grid.{day0,days}, in_window[day][hour], kickoff_hist.hours,
     rest_days[], waking_band. All schedule facts (never per-dot properties,
     per the scene's own header note), built from match_windows.parquet (R11)
-    converted to US Eastern -- the storyboard's own axis unit ('ET hour')."""
+    converted to US Eastern -- the storyboard's own axis unit ('ET hour').
+
+    Gate-5 item 2 addition: hourly_money/hourly_credit/waking_residual --
+    the beat-2 comparison chart's two drawn curves plus the exact residual
+    figure. hourly_money is a class-A live recompute off the full trade
+    tape (con, TRADES_GLOB), summed by ET clock-hour across the tournament
+    window [day0, grid_end) -- same query shape as the dead build_clock_grid()
+    helper above, narrowed to a 24-length hour-of-day vector. hourly_credit
+    is the null model by counting: every one of the 93 known-kickoff match
+    windows (win_start..win_end, a fixed ~3.5h bracket) contributes its
+    overlap-seconds to whichever ET clock-hour(s) it touches, summed across
+    all matches, then rescaled so sum(hourly_credit) == sum(hourly_money) --
+    "if trading only followed the schedule, this is the hour-of-day shape
+    it would draw." waking_residual is the ratio of the waking band's
+    (8am-11pm ET) share of money to its share of credit. Computed value
+    lands at ~1.2x, not the ~2x figure in the piece's earlier ad hoc read --
+    verified stable (1.21-1.24x) across several credit-granularity variants
+    (window-minutes vs binary hour-presence, rest-days in/out) because the
+    schedule itself already credits ~24% of all window-time to overnight ET
+    hours (West Coast kickoffs whose 3.5h windows run past midnight ET);
+    this pulls the credit side's own waking share down and the honest
+    residual with it. Reported here as the exact recomputed value, per the
+    Gate-5 brief's own "report the exact value" instruction, not force-fit
+    to the earlier estimate."""
     mw = _read_parquet_safe(os.path.join(ANALYSIS, "volume-anatomy", "match_windows.parquet"))
     tz = "America/New_York"
     day0 = pd.Timestamp("2026-06-11T00:00:00", tz=tz)  # tournament kickoff day, ET midnight
     grid_end = pd.Timestamp("2026-07-20T00:00:00", tz=tz)  # one day past the final: settlement tail
     tournament_end = pd.Timestamp("2026-07-19T23:59:59", tz=tz)
     days = int((grid_end - day0).days)
+    waking_start_hour, waking_end_hour = 8, 23  # documented convention, waking_band below
 
     in_window = [[0] * 24 for _ in range(days)]
     kickoff_hours = [0] * 24
     match_days = set()
+    credit_seconds = [0.0] * 24
 
     for _, r in mw.iterrows():
         try:
@@ -1361,10 +1386,14 @@ def build_s04_scene(con):
         match_days.add(ko.normalize())
         cur = lo.floor("h")
         while cur < hi:
+            nxt = cur + pd.Timedelta(hours=1)
             day_idx = int((cur.normalize() - day0).days)
             if 0 <= day_idx < days:
                 in_window[day_idx][int(cur.hour)] = 1
-            cur += pd.Timedelta(hours=1)
+            overlap_s = (min(nxt, hi) - max(cur, lo)).total_seconds()
+            if overlap_s > 0:
+                credit_seconds[int(cur.hour)] += overlap_s
+            cur = nxt
 
     rest_days = []
     d = day0
@@ -1373,6 +1402,38 @@ def build_s04_scene(con):
             rest_days.append(d.tz_convert("UTC").isoformat().replace("+00:00", "Z"))
         d += pd.Timedelta(days=1)
 
+    # class-A: hourly_money -- live recompute off the full trade tape, same
+    # dow/hour-in-ET query pattern as build_clock_grid() above, narrowed to
+    # an hour-of-day vector and bounded to the tournament window.
+    log("series[s04]: recomputing hourly_money (ET clock-hour, live tape) + hourly_credit (schedule null model)")
+    day0_unix = int(day0.tz_convert("UTC").timestamp())
+    grid_end_unix = int(grid_end.tz_convert("UTC").timestamp())
+    hourly = con.execute(f"""
+        SELECT hour(timezone('America/New_York', to_timestamp(created_ts))) AS hour_et,
+               SUM(count_contracts) AS contracts
+        FROM parquet_scan('{TRADES_GLOB}')
+        WHERE created_ts >= {day0_unix} AND created_ts < {grid_end_unix}
+        GROUP BY 1
+    """).df()
+    hourly_money = [0.0] * 24
+    for _, r in hourly.iterrows():
+        hourly_money[int(r["hour_et"])] = float(r["contracts"])
+
+    total_money = sum(hourly_money)
+    total_credit_s = sum(credit_seconds)
+    scale = (total_money / total_credit_s) if total_credit_s else 0.0
+    hourly_credit = [c * scale for c in credit_seconds]
+
+    waking_hours = range(waking_start_hour, waking_end_hour + 1)
+    money_waking_share = sum(hourly_money[h] for h in waking_hours) / total_money if total_money else None
+    credit_waking_share = sum(hourly_credit[h] for h in waking_hours) / total_money if total_money else None
+    waking_residual = (
+        round(money_waking_share / credit_waking_share, 4)
+        if money_waking_share is not None and credit_waking_share
+        else None
+    )
+    log(f"series[s04]: waking_residual={waking_residual} (money_share={money_waking_share}, credit_share={credit_waking_share})")
+
     return {
         "grid": {"day0": day0.tz_convert("UTC").isoformat().replace("+00:00", "Z"), "days": days},
         "in_window": in_window,
@@ -1380,7 +1441,10 @@ def build_s04_scene(con):
         "rest_days": rest_days,
         # Documented convention (also the shape s04.js's own header comment
         # ships as its example): US waking hours, 8am-11pm ET.
-        "waking_band": {"start_hour": 8, "end_hour": 23},
+        "waking_band": {"start_hour": waking_start_hour, "end_hour": waking_end_hour},
+        "hourly_money": [round(v, 2) for v in hourly_money],
+        "hourly_credit": [round(v, 2) for v in hourly_credit],
+        "waking_residual": waking_residual,
     }
 
 
@@ -1474,9 +1538,17 @@ def build_s06_scene(con, mexeng_meta):
     kickoff_step_multiplier, size_growth_pct (R8+R16). rate_curve/
     size_sparkline are class-A recomputes off the MEXENG MEX leg's full raw
     trade tape (never the LOD-thinned zoom tile), binned at 15-minute
-    resolution across the same window the zoom tile covers. The three
-    constants are the dossier's own adversarially-verified R16 figures
-    (class B, same convention as press_floor_usd elsewhere in this file)."""
+    resolution across the same window the zoom tile covers.
+
+    Gate-5 item 5 fix: pre_kick_rate_per_s, kickoff_step_multiplier and
+    peak_minute_rate_per_s are now class-A recomputes off THIS market's own
+    tape (trades in the hour before/after kickoff_ts, and the busiest single
+    minute), not the tournament-generic R16 constants (1 trade/s -> 5.4x)
+    that were being applied to the tournament's single biggest market and
+    manufacturing a fake flatline on a y-axis sized for a smaller one. The
+    generic R16 figures belong to the cross-tournament microstructure scene,
+    not here. size_growth_pct is untouched (still the R16 class-B figure --
+    out of this item's scope)."""
     ticker = "KXWCADVANCE-26JUL05MEXENG-MEX"
     path = os.path.join(DATA, "kalshi", "trades", "series_ticker=KXWCADVANCE", f"{ticker}.parquet")
     window_lo, window_hi = mexeng_meta["window"]
@@ -1496,12 +1568,40 @@ def build_s06_scene(con, mexeng_meta):
         {"t_s": int(r["bucket"] * bucket_s), "avg_notional_usd": round(float(r["avg_notional"]), 2)}
         for _, r in df.iterrows()
     ]
+
+    log("series[s06]: recomputing pre/post-kickoff hour rates + peak-minute rate off MEXENG's own tape")
+    kickoff_ts = int(pd.Timestamp(mexeng_meta["kickoff_iso"]).timestamp())
+    pre_kick_n = con.execute(f"""
+        SELECT COUNT(*) FROM parquet_scan('{path}')
+        WHERE created_ts >= {kickoff_ts - 3600} AND created_ts < {kickoff_ts}
+    """).fetchone()[0]
+    post_kick_n = con.execute(f"""
+        SELECT COUNT(*) FROM parquet_scan('{path}')
+        WHERE created_ts >= {kickoff_ts} AND created_ts < {kickoff_ts + 3600}
+    """).fetchone()[0]
+    peak_minute_n = con.execute(f"""
+        SELECT MAX(n) FROM (
+            SELECT CAST(floor(created_ts / 60) AS BIGINT) AS minute, COUNT(*) AS n
+            FROM parquet_scan('{path}')
+            GROUP BY 1
+        )
+    """).fetchone()[0]
+    pre_kick_rate_raw = (pre_kick_n or 0) / 3600.0
+    post_kick_rate_raw = (post_kick_n or 0) / 3600.0
+    pre_kick_rate_per_s = round(pre_kick_rate_raw, 2)
+    kickoff_step_multiplier = round(post_kick_rate_raw / pre_kick_rate_raw, 2) if pre_kick_rate_raw else None
+    peak_minute_rate_per_s = round((peak_minute_n or 0) / 60.0, 1)
+    log(f"series[s06]: pre_kick_rate_per_s={pre_kick_rate_per_s}, "
+        f"kickoff_step_multiplier={kickoff_step_multiplier}, "
+        f"peak_minute_rate_per_s={peak_minute_rate_per_s}")
+
     return {
         "window": {"kickoff_ts": mexeng_meta["kickoff_iso"]},
         "rate_curve": rate_curve,
         "size_sparkline": size_sparkline,
-        "kickoff_step_multiplier": 5.4,
-        "pre_kick_rate_per_s": 1.0,
+        "kickoff_step_multiplier": kickoff_step_multiplier,
+        "pre_kick_rate_per_s": pre_kick_rate_per_s,
+        "peak_minute_rate_per_s": peak_minute_rate_per_s,
         "size_growth_pct": 15.0,
     }
 
@@ -2050,6 +2150,8 @@ def build_scene_s04(con):
         "_provenance": provenance([
             "build_tiles.py: build_s04_scene() (class A)",
             "pipeline/data/analysis/volume-anatomy/match_windows.parquet (R11)",
+            "hourly_money/hourly_credit/waking_residual: class-A live recompute off "
+            "the full trade tape + match_windows.parquet overlap-seconds (Gate-5 item 2)",
         ]),
     }, **grid)
 
@@ -2070,8 +2172,10 @@ def build_scene_s06(con, mexeng_meta):
     return dict({
         "_provenance": provenance([
             "build_tiles.py: build_s06_scene(), live rate/size recompute off the MEXENG trade tape (class A)",
+            "pre_kick_rate_per_s/kickoff_step_multiplier/peak_minute_rate_per_s: class-A "
+            "recompute off this leg's own tape, kickoff_ts=2026-07-06T01:00:00Z (Gate-5 item 5)",
             "pipeline/data/analysis/volume-anatomy/mexeng_summary.json (R8, class B cross-check)",
-            "pipeline/data/analysis/ingame-microstructure/size_regime.parquet (R16, class B constants)",
+            "pipeline/data/analysis/ingame-microstructure/size_regime.parquet (R16, class B constant: size_growth_pct only)",
         ]),
     }, **s06)
 

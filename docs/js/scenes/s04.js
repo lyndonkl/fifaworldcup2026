@@ -44,12 +44,42 @@
  *                                          // not a population flags bit.
  *     "kickoff_hist": { "hours": [24 ints] },  // scheduled kickoffs per ET hour
  *     "rest_days": ["<iso date>", ...],
- *     "waking_band": { "start_hour": 8, "end_hour": 23 }
+ *     "waking_band": { "start_hour": 8, "end_hour": 23 },
+ *     "hourly_money": [24 floats],   // dollars traded, summed by ET hour of
+ *                                     // day across the whole grid window
+ *     "hourly_credit": [24 floats],  // the NULL MODEL's own count: every
+ *                                     // scheduled match gets a ~3.5h window
+ *                                     // around its kickoff (built from
+ *                                     // 93/102 fixtures with known kickoff
+ *                                     // times); each hour is credited the
+ *                                     // total dollar pool in proportion to
+ *                                     // its share of window-minutes, so
+ *                                     // sum(hourly_credit) == sum(hourly_money).
+ *                                     // A counting exercise, not a regression.
+ *     "waking_residual": <float>     // sum(hourly_money[wake]) /
+ *                                     // sum(hourly_credit[wake]) over the
+ *                                     // waking_band hours -- ships pre-
+ *                                     // computed but re-derivable from the
+ *                                     // two arrays above (Gate-5 item 2).
  *   }
  * If `in_window` is absent, the step-3 recolor falls back to classifying
  * by `kickoff_hist[hour] > 0` alone (ignores per-day rest-day gaps) and
  * logs a console warning — a coarser but still data-grounded substitute,
  * never an invented split.
+ *
+ * REVISION (Gate-5 author feedback, item 2, all five dispositions): b3
+ * ("beat 2" in the author's own count -- the scene's first beat with a
+ * real reading to take away) now draws the comparison instead of only
+ * asserting it. A small two-line chart (`hourly_money` vs `hourly_credit`,
+ * both by ET hour) lives in its own reserved lane between the kickoff
+ * strip and the grid; the amber "US waking hours" bracket anchors to that
+ * chart's shaded gap, not to the grid's teal cells (the prior placement
+ * read as annexing the teal columns, per the author's screenshot). The
+ * old "about twice" figure was a pre-recompute estimate; the shipped
+ * `waking_residual` (1.2161) says the real number is about 1.2x, and the
+ * beat now quotes that instead. The unprompted strawman ("not that anyone
+ * knows the result early") and the undecoded "wide awake" metaphor are
+ * both replaced with plain sentences per the author's own wording.
  */
 
 import { registry, particleState, colorOf, makeState } from '../shared.js';
@@ -96,14 +126,27 @@ export default {
     // reads these exact numbers back via the registry so the rest
     // population and the strip can never drift back into overlap.
     const restBandH = region.h * 0.05;
-    const stripH = region.h * 0.09;
+    const stripH = region.h * 0.08;
     const stripTop = region.y + restBandH;
-    // Gap widened from the prior 0.04 to 0.06 (Gate-4 blind re-review, s04
-    // major "amber budget"/bracket redesign): the US-waking-hours bracket
-    // and its label now live in this gap, above the grid, instead of
-    // washing over the cells -- they need the extra room to clear both
-    // the strip above and the grid below without new collisions.
-    const gridTop = stripTop + stripH + region.h * 0.06;
+    // REVISION (Gate-5 item 2, disposition 1): the prior 0.06 gap held only
+    // the amber bracket, anchored to the grid's own top edge -- which is
+    // exactly what the author's screenshot flagged as visually annexing
+    // the teal columns below it. That gap is now a full reserved lane (the
+    // "comparison lane") for the two-curve money-vs-credit chart, with the
+    // amber bracket anchored to ITS drawn gap instead. compGapTop/Bottom
+    // keep clear air between the strip above and the grid below so the
+    // new lane never touches either.
+    const compGapTop = region.h * 0.02;
+    const compH = region.h * 0.17;
+    const compTop = stripTop + stripH + compGapTop;
+    // Kept at the pre-revision 0.06 (not shrunk to make room for the new
+    // lane): this gap is where BOTH grid axis titles now live (see
+    // overlay()'s `compRect.curveBottom + 16` placement) as well as the
+    // hour axis's own tick row immediately above the grid -- a tighter
+    // gap here reproduced the exact "title collides with tick text"
+    // defect disposition 1 exists to fix, just one lane lower.
+    const compGapBottom = region.h * 0.06;
+    const gridTop = compTop + compH + compGapBottom;
     const gridH = region.y + region.h - gridTop;
 
     const hour = registry.register('s04.hour',
@@ -114,10 +157,28 @@ export default {
       d3.scaleLinear().domain([0, 1]).range([stripTop + stripH, stripTop]));
     const restBand = registry.register('s04.restBand', { y: region.y, h: restBandH });
 
+    // Comparison-lane y scale (Gate-5 item 2): "money per hour" and "what
+    // the schedule's credit predicts" share one domain so the two curves
+    // are directly comparable. The domain's 1.25x headroom over the true
+    // max reserves clean space for each curve's own direct label -- never
+    // fabricated padding data, just chart margin.
+    const hm0 = (sj.hourly_money && sj.hourly_money.length === 24) ? sj.hourly_money : new Array(24).fill(0);
+    const hc0 = (sj.hourly_credit && sj.hourly_credit.length === 24) ? sj.hourly_credit : new Array(24).fill(0);
+    const compMax = Math.max(1, ...hm0, ...hc0) * 1.25;
+    const bracketZoneH = compH * 0.32;
+    const curveTop = compTop + bracketZoneH;
+    const curveBottom = compTop + compH;
+    const compY = registry.register('s04.compY',
+      d3.scaleLinear().domain([0, compMax]).range([curveBottom, curveTop]));
+
     return {
-      hour, day, stripY,
+      hour, day, stripY, compY,
       gridRect: { x: region.x, y: gridTop, w: region.w, h: gridH },
       stripRect: { x: region.x, y: stripTop, w: region.w, h: stripH },
+      compRect: {
+        x: region.x, y: compTop, w: region.w, h: compH,
+        bracketZoneH, curveTop, curveBottom,
+      },
       restBand,
     };
   },
@@ -289,7 +350,7 @@ export default {
   overlay(container, data, view, scales) {
     const { svg } = container;
     const sj = data.scene || {};
-    const { hour, day, stripY, gridRect, stripRect } = scales;
+    const { hour, day, stripY, compY, gridRect, stripRect, compRect } = scales;
     const g = svg.append('g').attr('class', 's04-overlay');
 
     // Grid frame axes: hour ticks along the top, sparse day ticks on the left.
@@ -301,8 +362,20 @@ export default {
       .call(axisHour);
     // Axis titles (G3): the top hour axis and the left day axis both name
     // what they measure, in plain words, with their unit.
+    // REVISION (Gate-5 item 2, disposition 1, "fix the colliding axis
+    // titles"): `gridRect.y - 28` was tuned for the pre-revision layout,
+    // where the only thing above the grid was open air. Now the
+    // comparison lane's own curves and their direct labels occupy that
+    // same space right up to `compRect.curveBottom` -- at the old offset,
+    // both titles rendered ON TOP of the curves and the hour-tick row
+    // (confirmed in a re-capture: research/design-review/screens/
+    // s04-b3-settled.png). Anchoring to `compRect.curveBottom + 16`
+    // instead keeps both titles in the reserved gap below the chart and
+    // above the tick row, regardless of exactly how tall the comparison
+    // lane ends up.
+    const titleY = compRect.curveBottom + 16;
     g.append('text').attr('class', 'axis-title axis-title-hour')
-      .attr('x', gridRect.x + gridRect.w / 2).attr('y', gridRect.y - 28)
+      .attr('x', gridRect.x + gridRect.w / 2).attr('y', titleY)
       .attr('text-anchor', 'middle')
       .attr('fill', view.css('ink-mid'))
       .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
@@ -320,8 +393,13 @@ export default {
       .style('color', view.css('ink-low'))
       .style('font', `var(--type-micro-size) var(--font-apparatus)`)
       .call(axisDay);
+    // Shares `titleY` with the hour title above (both anchored to
+    // `compRect.curveBottom`, see that comment). The two titles do not
+    // collide with EACH OTHER because they occupy different x-ranges:
+    // this one starts at gridRect.x, the hour title is centered on the
+    // grid's full width, ~150px+ apart at any stage width this piece ships.
     g.append('text').attr('class', 'axis-title axis-title-day')
-      .attr('x', gridRect.x).attr('y', gridRect.y - 8)
+      .attr('x', gridRect.x).attr('y', titleY)
       .attr('text-anchor', 'start')
       .attr('fill', view.css('ink-mid'))
       .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
@@ -345,55 +423,118 @@ export default {
       .style('font', `var(--type-caption-size) var(--font-apparatus)`)
       .text('scheduled kickoffs, by hour (Eastern Time)');
 
-    // "US waking hours" band -- the scene's one amber unit (design-
-    // revision-spec S4 §1), label rewritten to plain words, right-aligned
-    // inside the band per §2 placement.
-    // REVISION (Gate-4 blind re-review, s04 major, "amber budget
-    // violated"): the previous full-height, 0.10-opacity fill was a large
-    // second amber SHAPE competing with the annotation text, and once b3
-    // sits on top of a bright teal cell field it alpha-blends into a
-    // murky olive band (perception-brief §9a's own field-luminance
-    // collision, self-inflicted by fill + bloom). A slim bracket at the
-    // grid's top edge -- not a wash over the cells -- carries the same
-    // "which hours" information as one fused unit with its label, without
-    // ever overlapping (and recoloring) the data it is annotating.
-    const wb = sj.waking_band;
-    let bandG = null;
-    if (wb) {
-      // visibility (not display) so getBBox() below can measure the
-      // label while the group is still hidden.
-      bandG = g.append('g').attr('class', 's04-waking-band').style('visibility', 'hidden');
-      const bandX = hour(wb.start_hour);
-      const bandW = hour(wb.end_hour) - hour(wb.start_hour) + hour.bandwidth();
-      const bracketY = gridRect.y - 6;
-      bandG.append('rect')
-        .attr('x', bandX).attr('width', bandW)
-        .attr('y', bracketY - 3).attr('height', 3)
-        .attr('fill', view.css('accent-annotation'));
-      bandG.append('line').attr('x1', bandX).attr('x2', bandX)
-        .attr('y1', bracketY - 3).attr('y2', bracketY + 8)
-        .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
-      bandG.append('line').attr('x1', bandX + bandW).attr('x2', bandX + bandW)
-        .attr('y1', bracketY - 3).attr('y2', bracketY + 8)
-        .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
-      const bandLabel = bandG.append('text')
-        .attr('x', bandX + bandW - 12).attr('y', bracketY - 10)
-        .attr('text-anchor', 'end')
-        .attr('fill', view.css('accent-annotation'))
-        .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
-        .text('US waking hours: about twice the schedule alone');
-      // Gate-4 visual-story review: this amber label previously sat
-      // directly on the bright teal/white cell field at ~1.4:1 contrast
-      // (perception-brief §9a). It now sits above the grid, next to the
-      // bracket rather than over any cell, and keeps the bg-canvas scrim
-      // behind the glyphs as a second line of defense.
-      const bandBB = bandLabel.node().getBBox();
-      bandG.insert('rect', 'text')
-        .attr('x', bandBB.x - 8).attr('y', bandBB.y - 4)
-        .attr('width', bandBB.width + 16).attr('height', bandBB.height + 8)
-        .attr('rx', 3)
-        .attr('fill', view.css('bg-canvas')).attr('opacity', 0.85);
+    // Comparison lane (Gate-5 item 2, disposition 1: "draw the
+    // comparison"). Two small labeled curves -- money per hour vs. what
+    // the schedule's credit predicts -- share the strip's hour x-axis in
+    // their own reserved lane. The amber "US waking hours" bracket
+    // (the scene's one amber unit, design-revision-spec S4 §1) anchors to
+    // THIS lane's shaded gap, never to the grid's teal cells below -- the
+    // prior placement (bracket sitting right at the grid's own top edge)
+    // read as annexing the teal columns, per the author's screenshot.
+    const hm = (sj.hourly_money && sj.hourly_money.length === 24) ? sj.hourly_money : new Array(24).fill(0);
+    const hc = (sj.hourly_credit && sj.hourly_credit.length === 24) ? sj.hourly_credit : new Array(24).fill(0);
+    const wb = sj.waking_band || { start_hour: 8, end_hour: 23 };
+    // visibility (not display) so getBBox() below can measure the bracket
+    // label while the group is still hidden -- same reason the prior band
+    // group used visibility (Gate-4 blind re-review).
+    const compG = g.append('g').attr('class', 's04-comparison').style('visibility', 'hidden');
+    const lineX = (h) => hour(h) + hour.bandwidth() / 2;
+    const moneyPts = hm.map((v, h) => ({ h, v }));
+    const creditPts = hc.map((v, h) => ({ h, v }));
+
+    // Shaded gap, waking-band hours only (8am-11pm ET, disposition 1):
+    // the null-model disclosure's visual half. d3.area fills whatever the
+    // two counted series actually do -- money ahead of credit in the
+    // midday hours, credit ahead of money by primetime -- never a
+    // one-sided dramatization of the gap.
+    const gapPts = [];
+    for (let h = wb.start_hour; h <= wb.end_hour; h++) gapPts.push({ h, m: hm[h] || 0, c: hc[h] || 0 });
+    const gapArea = d3.area().x((d) => lineX(d.h)).y0((d) => compY(d.m)).y1((d) => compY(d.c));
+    compG.append('path').attr('class', 's04-gap-area')
+      .attr('d', gapArea(gapPts))
+      .attr('fill', view.css('accent-annotation')).attr('fill-opacity', 0.16).attr('stroke', 'none');
+
+    // The two curves. Money in identity-teal -- the same "this is real
+    // money" hue the grid's in-window cells use, so the color grammar
+    // stays one meaning piece-wide. The schedule's credit in ink-mid
+    // dashes: a counted, never-traded quantity, so it takes the key's
+    // own "dashed reads as derived" grammar instead of a second solid hue.
+    const moneyLine = d3.line().x((d) => lineX(d.h)).y((d) => compY(d.v));
+    const creditLine = d3.line().x((d) => lineX(d.h)).y((d) => compY(d.v));
+    compG.append('path').attr('fill', 'none')
+      .attr('stroke', view.css('identity-teal')).attr('stroke-width', 1.75)
+      .attr('d', moneyLine(moneyPts));
+    compG.append('path').attr('fill', 'none')
+      .attr('stroke', view.css('ink-mid')).attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', '2,3')
+      .attr('d', creditLine(creditPts));
+
+    // Direct labels (each curve names itself, per the beat's own "two
+    // small labeled curves"), placed where that series most clearly
+    // leads the other -- data-derived positions, not a fixed corner that
+    // could land mid-line on a re-pulled tape.
+    function biggestLead(pts, other) {
+      let best = 0;
+      for (let h = 0; h < pts.length; h++) {
+        const lead = pts[h].v - other[h].v;
+        if (lead > pts[best].v - other[best].v) best = h;
+      }
+      return pts[best];
     }
+    const moneyLabelAt = biggestLead(moneyPts, creditPts);
+    const creditLabelAt = biggestLead(creditPts, moneyPts);
+    compG.append('text')
+      .attr('x', lineX(moneyLabelAt.h)).attr('y', compY(moneyLabelAt.v) - 8)
+      .attr('text-anchor', 'middle')
+      .attr('fill', view.css('identity-teal'))
+      .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
+      .text('money per hour');
+    compG.append('text')
+      .attr('x', lineX(creditLabelAt.h)).attr('y', compY(creditLabelAt.v) - 8)
+      .attr('text-anchor', creditLabelAt.h < 4 ? 'start' : 'middle')
+      .attr('fill', view.css('ink-mid'))
+      .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
+      .text("what the schedule's credit predicts");
+
+    // The amber bracket itself: same slim tick-and-label shape the prior
+    // grid-top version used, now anchored to the comparison lane's own
+    // reserved bracket zone, directly above the shaded gap it describes.
+    const bandX = hour(wb.start_hour);
+    const bandW = hour(wb.end_hour) - hour(wb.start_hour) + hour.bandwidth();
+    const bracketY = compRect.y + compRect.bracketZoneH - 10;
+    compG.append('rect')
+      .attr('x', bandX).attr('width', bandW)
+      .attr('y', bracketY - 3).attr('height', 3)
+      .attr('fill', view.css('accent-annotation'));
+    compG.append('line').attr('x1', bandX).attr('x2', bandX)
+      .attr('y1', bracketY - 3).attr('y2', bracketY + 10)
+      .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
+    compG.append('line').attr('x1', bandX + bandW).attr('x2', bandX + bandW)
+      .attr('y1', bracketY - 3).attr('y2', bracketY + 10)
+      .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
+    // REVISION (Gate-5 item 2): "about twice the schedule alone" was a
+    // pre-recompute estimate. The shipped `waking_residual` (1.2161) is
+    // the real, class-A-recomputed figure -- the label now quotes that
+    // instead, matching the beat's own prose exactly.
+    const residual = typeof sj.waking_residual === 'number' ? sj.waking_residual : null;
+    const residualText = residual ? `${residual.toFixed(1)}x` : 'more';
+    const bandLabel = compG.append('text')
+      .attr('x', bandX + bandW - 12).attr('y', bracketY - 10)
+      .attr('text-anchor', 'end')
+      .attr('fill', view.css('accent-annotation'))
+      .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
+      .text(`US waking hours: about ${residualText} the schedule's credit`);
+    // Gate-4 visual-story review: this amber label previously sat
+    // directly on the bright teal/white cell field at ~1.4:1 contrast
+    // (perception-brief §9a). It now sits inside its own reserved lane,
+    // clear of every cell, and keeps the bg-canvas scrim behind the
+    // glyphs as a second line of defense.
+    const bandBB = bandLabel.node().getBBox();
+    compG.insert('rect', 'text')
+      .attr('x', bandBB.x - 8).attr('y', bandBB.y - 4)
+      .attr('width', bandBB.width + 16).attr('height', bandBB.height + 8)
+      .attr('rx', 3)
+      .attr('fill', view.css('bg-canvas')).attr('opacity', 0.85);
 
     // Rest-day row markers + caption (structure-spec S4 §2: the 5-15x /
     // 3x-futures ratios demote out of prose into this caption).
@@ -415,12 +556,12 @@ export default {
       step(beatId) {
         if (beatId === 'b1') {
           stripG.style('display', 'none');
-          bandG && bandG.style('visibility', 'hidden');
+          compG.style('visibility', 'hidden');
           restG.style('display', 'none');
         } else if (beatId === 'b2') {
           stripG.style('display', null);
         } else if (beatId === 'b3') {
-          bandG && bandG.style('visibility', 'visible');
+          compG.style('visibility', 'visible');
           restG.style('display', null);
         }
       },
@@ -454,21 +595,37 @@ export default {
       trigger: 'step',
       state: 'recolored',
       kind: 'recolor',
+      // REVISION (Gate-5 item 2, disposition 1): the kickoff-histogram
+      // strip has been on screen since this beat started but had no key
+      // row of its own (the author's own observation: "the top bar chart
+      // is absent from the key"). Added here, once, so it stays on
+      // screen unchanged through b3 (see the b3 comment below) instead of
+      // re-triggering the key's pulse when the amber annotation lands.
       chip: [
         { token: 'identity-teal', glyph: 'dot', label: 'teal = money inside match windows' },
         { token: 'identity-ref', glyph: 'dim', label: 'dim = the off-peak clock' },
+        { token: 'neutral-data', glyph: 'block', label: 'grey bars = scheduled kickoffs per hour' },
       ],
     },
     {
-      // REVISION: b3 no longer redefines the chip (the teal/dim key from
-      // b2 stays on screen unchanged), so entering b3 does not re-fire
-      // the key's amber pulse alongside the amber annotation -- amber
-      // stays a true singleton instead of a third simultaneous amber
-      // element (perception-brief §9a). b3's own state (recoloredDim)
-      // recedes the in-window teal to ground-tier brightness so it no
-      // longer competes with the amber band for the luminance peak.
+      // REVISION (Gate-5 item 2, all five dispositions -- this is the
+      // beat the author's own feedback calls "beat 2," the scene's first
+      // beat with a real reading to take away): b3 still does not
+      // redefine the chip (the key from b2 stays on screen unchanged), so
+      // entering b3 does not re-fire the key's amber pulse alongside the
+      // amber annotation -- amber stays a true singleton (perception-
+      // brief §9a). b3's own state (recoloredDim) recedes the in-window
+      // teal to ground-tier brightness ("the day-grid dims beneath") so
+      // it no longer competes with the comparison lane's amber gap for
+      // the luminance peak. Prose order: concede-then-quantify open with
+      // the corrected, class-A-recomputed figure (waking_residual 1.2161,
+      // not the pre-recompute "twice"); the null-model disclosed in one
+      // plain counting sentence; the strawman and the "wide awake"
+      // metaphor both replaced with the author's own plain wording; the
+      // beat closes teaching the clock-reading skill the whole scene has
+      // been building toward.
       id: 'b3',
-      html: '<p>One thing survives even after you subtract out the schedule. During American waking hours, trading runs about twice as heavy as the schedule alone would predict.<sup><a href="#fn-6">6</a></sup> Tonight&rsquo;s final kicks off in United States primetime. Heavy trading tonight will mean people are watching, not that anyone knows the result early. It also means the price will be wide awake the moment the whistle blows.</p>',
+      html: '<p>An American exchange trades on American time. No surprise there. Even after the schedule&rsquo;s own credit, the waking hours still run about 20 percent heavier: from 8 a.m. to 11 p.m. Eastern, trading runs about 1.2 times what the schedule&rsquo;s credit predicts.<sup><a href="#fn-6">6</a></sup> Modest, but real. No model here, just counting: give every hour credit for the match minutes scheduled inside it, then compare the money to the credit. The lines above the grid show it, hour by hour. Tonight&rsquo;s final kicks off in United States primetime. Heavy trading tonight means a big crowd holding real money is present. Volume tells you how many are watching. The price tells you what they believe. When tonight&rsquo;s final ends, the crowd will already be here: the price will move within seconds of the whistle, not overnight. A move at 3 a.m. has a thin crowd behind it. A move in primetime has the deepest crowd of the day.</p>',
       trigger: 'step',
       state: 'recoloredDim',
       kind: 'recolor',

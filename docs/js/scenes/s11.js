@@ -517,9 +517,17 @@ export default {
       // (ink-mid) thing on screen despite being the scene's one payoff
       // line. It now joins the top-left caption stack (clear of the KEY's
       // footprint) as ink-hi, the scene's single luminance peak.
+      // Text-collision sweep (Gate-5 item 3 disposition 2): the top-left
+      // stack's own +22px-per-line rhythm (title/matchedLeg/smallN) left
+      // this line only +22px below smallN, but this line sets a larger
+      // 15px bold face than the 12-13.5px lines above it -- its ascent
+      // ran into smallN's descenders ("coupled", 84 legs) and the two
+      // rendered as one garbled line. +78 (not +66) gives it the clearance
+      // its own larger type actually needs; the annotation card still
+      // lands well short of the tallest bars below it.
       annoLayer.selectAll('text.crossout-cap, rect.crossout-cap-scrim').remove();
       const crossoutText = annoLayer.append('text').attr('class', 'crossout-cap')
-        .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff + 66)
+        .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff + 78)
         .attr('fill', view.css('ink-hi'))
         .style('font', '15px var(--font-apparatus)')
         .text('scores a closed book against a live market, not a fair fight');

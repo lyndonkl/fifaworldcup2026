@@ -293,10 +293,19 @@ function overlay(container, data, view, scalesObj) {
   // what it was counting). Sits in the chart's own clear top-left corner
   // and re-fires its onset transition on every real change, per the
   // change-blindness countermeasure in perception-brief §7.
+  // Text-collision sweep (Gate-5 item 3 disposition 2): region.y - 8 was
+  // set when ladderCaption below was still one line. ladderCaption grew a
+  // second tspan (dy 1.2em) once the tick-floor stat shipped, and nobody
+  // moved this label to match -- its baseline (region.y - 8) landed just
+  // 6px under ladderLine2's (region.y - 13.8), so "55% sit at the
+  // one-to-two-cent tick floor." and "weighted by: ..." rendered on top
+  // of each other on every beat past b1. region.y + 6 clears ladderLine2
+  // by the same ~16px gap every other line in this stack already uses,
+  // just inside the plot's empty top-left corner instead of above it.
   const modeLabel = g.append('text')
     .attr('class', 's14-mode-label')
     .attr('x', view.region.x + 4)
-    .attr('y', view.region.y - 8)
+    .attr('y', view.region.y + 6)
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('font-weight', 600)
@@ -560,6 +569,23 @@ function overlay(container, data, view, scalesObj) {
     .attr('class', 'interactive s14-toggle')
     .attr('role', 'radiogroup')
     .attr('aria-label', 'weight the calibration curve by');
+  // Text-collision sweep (Gate-5 item 3 disposition 2): design-revision-
+  // spec.md CR-13 places this control "centered over the stage (left:
+  // region.x + region.w/2, translateX(-50%)), top: region.y + space-16"
+  // -- but no position/left/top was ever set on this div, desktop or
+  // mobile. #html-overlay (its parent) is `position: absolute; inset: 0`,
+  // so an unpositioned block child renders at that container's own
+  // (0, 0) -- the viewport's literal top-left corner, on top of both the
+  // rail's prose and #grain-plate ("count every market equally" /
+  // "weight by dollars traded" printing over the S14 rail card in every
+  // captured frame, b1 through b4). Wiring in the spec's own numbers.
+  if (!view.mobile) {
+    toggleWrap
+      .style('position', 'absolute')
+      .style('left', `${view.region.x + view.region.w / 2}px`)
+      .style('top', `${view.region.y + 16}px`)
+      .style('transform', 'translateX(-50%)');
+  }
 
   // Self-explaining pair (design-revision-spec CR-13): the control persists
   // on screen after its step, so the label must stand alone without the

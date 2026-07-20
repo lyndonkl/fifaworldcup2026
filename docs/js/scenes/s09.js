@@ -574,11 +574,14 @@ export default {
         just played. Argentina, tonight's team, is priced the same way right
         now: by the one match left on its road.</p>
         <div class="act-close scrim-card">
-          <p><strong>Skill unlocked:</strong> jumps are news, slides can be
-          rules, and every price watches the road still ahead.</p>
+          <p><strong>Skill unlocked:</strong> when a price moves, ask what
+          changed on the road still ahead, not just what happened in
+          today's game. A jump means the news landed all at once. A slow
+          drift can be that same news, working itself out one trade at a
+          time.</p>
           <p><strong>The receipt:</strong> every clean spike of this
-          tournament held. Every famous "panic" turned out to be fine print
-          or bracket math.</p>
+          tournament held. Every famous "panic" turned out to be the wrong
+          ticket talking, or bracket math.</p>
         </div>`,
       trigger: 'step',
       state: 'mirror',

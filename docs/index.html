@@ -184,6 +184,21 @@
     }
 
     /* ---- Skip control (accessibility; z 5) ---- */
+    /* Text-collision sweep (Gate-5 item 3 disposition 2): this pill sits
+       fixed at the viewport corner over scrolling rail prose, same as
+       #chip (the KEY panel) sits over the stage -- but unlike #chip and
+       .scrim-card, it never got the backdrop-filter blur those two use,
+       only the 0.82-alpha fill. A dark fill alone dims sharp prose text
+       without blurring it, so a card whose last line lands in this corner
+       (W12's noted "Skip to methods" pill graze; confirmed still live —
+       e.g. S2's "...no poll can do that." and S15's "...small fee to
+       every price." both bled through, legible-but-garbled, in captured
+       frames) reads as overlapping text, not as one opaque control on
+       top of scrolled-past content. Matching #chip's blur is the same
+       fix already proven at the KEY panel: it does not stop prose from
+       ever reaching this corner, but it stops the bleed-through, the same
+       way scrolling text is not readable under the KEY.
+       (W12's noted "Skip to methods" pill graze.) */
     .skip {
       position: fixed; left: var(--space-24); bottom: var(--space-24);
       z-index: var(--z-skip-controls);
@@ -191,6 +206,7 @@
       font-size: var(--type-micro-size);
       color: var(--ink-low);
       background: rgba(16, 21, 29, 0.82);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
       border: 1px solid rgba(124, 135, 148, 0.25);
       border-radius: var(--space-4);
       padding: var(--space-4) var(--space-8);
@@ -271,6 +287,54 @@
       display: flex; align-items: center;
     }
 
+    /* Text-collision sweep (Gate-5 item 3 disposition 2), desktop only:
+       the S19 fix below (search "card-lane clearance") already diagnosed
+       this defect once -- a beat's card, centered in its own min-100vh
+       box, can still be tall/low enough at the next beat's activation
+       point that its tail sits inside #grain-plate's reserved top-left
+       rect, printing the fixed plate over (and sometimes through the
+       middle of a word in) the outgoing card's prose. That fix scoped
+       itself to s19's own cards; this sweep's captured frames show the
+       identical defect at several other scene boundaries the plate is
+       visible for (S2->S3, S3->S4, S4->S5, S9/S10, S12/S13, S13->S14,
+       S15->S16 all confirmed in captured "t0" frames -- e.g. S4's "have
+       counted" losing its "h" under the plate). Rather than patch each
+       boundary by hand and risk missing the next one a future content
+       edit creates, every desktop step-beat gets the same mechanism S19
+       already proved, scaled down (S19's own cards run taller still,
+       hence its larger 150vh/50vh pair): min-height grows by the same
+       amount as padding-bottom so the *box-sizing: border-box* content
+       area a card centers in is still exactly 100vh (unchanged card
+       position) -- padding-bottom alone, without the matching min-height
+       increase, would shrink that content area instead of adding
+       trailing clearance after it. 36vh (not 30vh): re-measured against
+       this build's two tallest offenders (S12->S13, S15->S16) after a
+       first pass at 30vh -- both cleared the plate's right edge but not
+       yet its bottom edge, so 30vh under-covers this piece's actual
+       tallest cards by roughly the height of one more prose line.
+       Scrub tracks (S2/S6/S8) get the equivalent treatment on their own
+       track element instead: the sticky `.beat-pin` releases once
+       `.scrub-track`'s own border-box bottom clears the viewport, so
+       padding there (not on the sticky child, whose own geometry does
+       not gain a trailing-space effect from its own padding) is the
+       right lever, confirmed against S2->S3 (S2 is this piece's one
+       scrub-track scene immediately followed by a scene the plate is
+       visible for). This adds to the piece's total scroll length --
+       flagged in the review notes for the author, not a silent change. */
+    @media (min-width: 901px) {
+      #rail .beat { min-height: 136vh; padding-bottom: 36vh; }
+      #rail .scrub-track { padding-bottom: 36vh; }
+      /* S15's own last card measured (via a headless DOM probe, not just
+         a screenshot re-read) at 700px tall -- max-height's own cap,
+         confirmed engaged -- and still only 8px short of clearing the
+         plate's bottom edge at the universal 36vh, a smaller shortfall
+         than S12's but still a real one, and this scene has no S19-style
+         all-beats override to fall back on. +15vh more, scoped, closer
+         to S19's own 50vh (which the plate-collision fix mechanism above
+         already establishes this piece needs for its tallest cards). */
+      #rail section[data-scene="s15"] .beat { min-height: 151vh; padding-bottom: 51vh; }
+    }
+
     .card {
       /* G5 card clamp: guarantees a >= 32px gutter between the card edge
          and the stage edge at every desktop width (was 2px at 1280px). */
@@ -282,6 +346,25 @@
       -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
       border: 1px solid rgba(124, 135, 148, 0.18);
       border-radius: var(--space-8);
+      /* Text-collision sweep (Gate-5 item 3 disposition 2): `.beat`
+         centers this card in a min-100vh box (align-items: center). The
+         S19 fix above already found and fixed one instance of this: a
+         card long enough to be centered with its own top edge above the
+         grain plate's reserved rect prints straight through it -- a
+         word split mid-letter, the plate's own text overlapping the
+         card's. That fix was scoped to s19's cards specifically; this
+         build's captured frames show the same defect on at least three
+         more (S3, S4, S5 -- e.g. "[h]ave counted the dollars" losing its
+         first letter under the plate). A max-height + scroll is the
+         general fix every beat needs, not just the longest ones: capped
+         at 700px, this card centers with >= 100px clear top (matches the
+         plate's own footprint) and >= 100px clear bottom (inside the
+         skip pill's corner) on any viewport >= 900px tall; scales down
+         with shorter viewports via the vh term. Cards under the cap
+         (the large majority) are completely unaffected -- this only
+         engages for the small few long enough to have hit the bug. */
+      max-height: min(700px, calc(100vh - 200px));
+      overflow-y: auto;
       padding: var(--space-24) var(--space-32);
     }
     .card .kicker {
@@ -480,7 +563,7 @@
       By the end of this page, you will be able to judge that number for yourself.
       It does not matter if you have never placed a bet in your life.
       Every dot below is <span data-slot="population.desktop.grain_usd" data-format="usd">$75,000</span> that actually changed hands on this World Cup.
-      Altogether, that is <span data-slot="census.total_usd" data-format="usd">$12.3B</span> across thirteen months, and it is going to teach you how, one skill at a time.
+      Altogether, that is <span data-slot="census.total_usd" data-format="usd">$12.8B</span> across thirteen months, and it is going to teach you how, one skill at a time.
     </p>
     <p class="boot-status" id="boot-status" role="status"></p>
     <p class="scroll-cue" aria-hidden="true">scroll ↓</p>
@@ -553,8 +636,8 @@
         <li id="fn-2">Kalshi winner-leg and three-way reference prices, July 13 snapshot: project fact base; pre-kick prices recomputed from the re-driven tape.</li>
         <li id="fn-3">Draw-week participation fingerprint: Kalshi daily arrival series (finding R17).</li>
         <li id="fn-4">Family crossover, the futures book versus per-match products: cumulative family volume (R18).</li>
-        <li id="fn-5">Reconciled tape totals and the stale press floor: Kalshi daily arrival and regime breaks (R1). Every headline dollar refreezes at the deploy-morning pipeline run.</li>
-        <li id="fn-6">The tournament clock: hour-of-day pulse and kickoff-bracketing match windows, in Eastern Time (R11).</li>
+        <li id="fn-5">Reconciled tape totals and the stale press floor: Kalshi daily arrival and regime breaks (R1). The $7.4 billion press figure was Kalshi's own running total from around June 30, 2026, republished by outlets about a week later on July 8. Every headline dollar refreezes at the deploy-morning pipeline run.</li>
+        <li id="fn-6">The tournament clock: hour-of-day pulse and kickoff-bracketing match windows, in Eastern Time (R11). The schedule's credit is a null model, not a regression: each of the 93 fixtures with a known kickoff time (of 102 total) gets a roughly 3.5-hour window centered on its kickoff. Every clock hour is credited a share of the tournament's total dollar pool in proportion to how many window-minutes fall inside it, so summed across all 24 hours the credit equals the money exactly. The waking-hours figure (about 1.2 times) is money divided by credit, summed across 8 a.m. to 11 p.m. Eastern. No independent attention benchmark exists to test the residual against rival explanations: Google Trends pulls were blocked for this project, so the reading is a clean arithmetic fact, not a proven cause.</li>
         <li id="fn-7">Volume concentration and the Lorenz curve: per-market totals with pooled and within-family Gini (R15).</li>
         <li id="fn-8">Novelty versus sports order statistics: mention-market ranks placed against the sports markets (R14).</li>
         <li id="fn-9">Mexico-England advancement zoom: market summary and the advancement trade tape (R8).</li>

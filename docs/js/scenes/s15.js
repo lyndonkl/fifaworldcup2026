@@ -288,8 +288,18 @@ export default {
       .attr('font-family', view.css('font-apparatus')).attr('font-weight', 500)
       .attr('font-size', view.css('type-caption-size'))
       .text('five checkpoints in the tournament (stage)');
+    // Text-collision sweep (Gate-5 item 3 disposition 2): right-anchored
+    // at the region's true right edge (view.region.x + view.region.w),
+    // this title's text ran leftward straight under the fixed KEY panel
+    // (desktop, top-right) — only "tic" ever cleared its left edge. Same
+    // keySafeX exclusion-rect s19.js uses: clamp the anchor to the key's
+    // own left edge (minus a standoff) instead of the region's edge.
+    const keySafeX = view.mobile ? Infinity
+      : view.W - view.tokens.spacing_px[4]
+        - (view.tokens.layout['key-exclusion-w-px'] || 280) - view.tokens.spacing_px[3];
     g.append('text').attr('class', 's15-y-title')
-      .attr('x', view.region.x + view.region.w).attr('y', view.region.y - 12)
+      .attr('x', Math.min(view.region.x + view.region.w, keySafeX - view.tokens.spacing_px[3]))
+      .attr('y', view.region.y - 12)
       .attr('text-anchor', 'end')
       .attr('fill', view.css('ink-mid'))
       .attr('font-family', view.css('font-apparatus')).attr('font-weight', 500)
@@ -372,7 +382,16 @@ export default {
       .text('+3 to +5 points above the model, devigged (bookmaker’s cut removed)');
     if (stages.length) {
       const midStage = stages[Math.floor(stages.length / 2)];
-      devigNote.attr('x', scales.x(midStage.id)).attr('y', scales.y(midStage.opta_pct) - 40);
+      // Text-collision sweep (Gate-5 item 3 disposition 2): both this note
+      // and modelLineLabel (above) fade in together on b1 and stay up
+      // through b3, so they are on screen at the same time from the
+      // start. At -40 this note's y (keyed to the mid-stage model point)
+      // landed within a few px of modelLineLabel's y (keyed to the
+      // *last*-stage model point, -8) -- the two model-line readings sit
+      // close enough on this data that the two labels rendered as one
+      // garbled line. -85 clears modelLineLabel with margin regardless of
+      // exactly how close those two model-line readings land.
+      devigNote.attr('x', scales.x(midStage.id)).attr('y', scales.y(midStage.opta_pct) - 85);
     }
 
     const fade = (sel, on) => sel.transition().duration(400).attr('opacity', on ? 1 : 0);

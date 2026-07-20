@@ -384,11 +384,19 @@ export default {
     // Merged two-line annotation (CR-8): line 1 amber (the scene's one
     // amber unit), line 2 ink-mid. One leader, one block, never two
     // separate captions competing for the same story point.
+    // Text-collision sweep (Gate-5 item 3 disposition 2): top used to sit
+    // at laneTop.adv + 8, which put this opaque card's top edge 14px
+    // *above* the "advance-market price (cents)" axis title's baseline
+    // (laneTop.adv + 22) -- the card swallowed the whole title, leaving
+    // only a one-letter "a" sliver visible past its left edge. Dropping
+    // the top past the title's full glyph height (baseline + descender
+    // clearance) clears it; the card still opens right at the advance
+    // lane's data, same as before.
     const decayCaption = pinnedCaption(
       container,
       '',
       's08-decay-caption',
-    ).style('left', `${view.region.x}px`).style('top', `${laneTop.reg + laneH + 8}px`)
+    ).style('left', `${view.region.x}px`).style('top', `${laneTop.adv + 32}px`)
       .html(
         '<div style="color:var(--accent-annotation)">settling out: never faster than 7 cents a minute</div>'
         + '<div style="color:var(--ink-mid); margin-top:4px">a real goal moves 19 to 25 cents in 30 seconds</div>',

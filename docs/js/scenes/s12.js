@@ -365,13 +365,17 @@ function overlay(container, data, view, scalesObj) {
   g.append('text')
     .attr('class', 's12-axis-x-title')
     .attr('x', view.region.x + view.region.w / 2)
-    // A centered title risks sitting under whichever tick lands near the
-    // axis midpoint (this scene's narrow, real-trade-derived domain packs
-    // ticks closer than a full-year axis would); +48 clears the tick
-    // text's own descent instead of the +30 a wider domain could get away
-    // with. The footer stack below (unit line +74, footnote +98) keeps the
-    // same >= space-24 gaps this pushes down.
-    .attr('y', view.region.y + view.region.h + 48)
+    // Text-collision sweep (Gate-5 item 3 disposition 2): this footer
+    // stack's three lines (x-axis title, the y-unit line, the assist-
+    // tiebreak footnote) were spaced by the usual >= space-24 rule, but at
+    // this viewport's actual region.h that rule runs the stack past 900px
+    // -- the unit line was clipped mid-glyph and the footnote landed
+    // entirely below the fold (baseline at region.h + 98 is off-screen at
+    // any viewport <= 926px tall). There simply isn't 74px of room below
+    // the tick labels here, so the three lines pack at 16px apart instead
+    // of 24-26px -- tighter than the rest of the piece's footer rhythm,
+    // but the alternative is a footnote nobody can ever read.
+    .attr('y', view.region.y + view.region.h + 36)
     .attr('text-anchor', 'middle')
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
@@ -406,10 +410,12 @@ function overlay(container, data, view, scalesObj) {
   g.append('text')
     .attr('class', 's12-axis-y-title')
     .attr('x', view.region.x)
-    // Footer stack, top to bottom: x-axis title (region.h+30), this unit
-    // line, then the assist-tiebreak footnote -- each >= space-24 apart so
-    // none of the three overlaps (they previously sat within a 14px band).
-    .attr('y', view.region.y + view.region.h + 74)
+    // Footer stack, top to bottom: x-axis title (region.h+36), this unit
+    // line, then the assist-tiebreak footnote (region.h+68) -- see the
+    // x-title comment above for why these sit 16px apart instead of the
+    // usual >= space-24 (this scene's region.h leaves no room for that
+    // gap and three lines both).
+    .attr('y', view.region.y + view.region.h + 52)
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('font-weight', 500)
@@ -553,9 +559,12 @@ function overlay(container, data, view, scalesObj) {
       annoG.append('text')
         .attr('class', 's12-footnote-chip')
         .attr('x', view.region.x)
-        // Bottom of the footer stack (x-axis title +30, unit line +58, this
-        // footnote +82) -- clear of both by >= space-24.
-        .attr('y', view.region.y + view.region.h + 98)
+        // Bottom of the footer stack (x-axis title +36, unit line +52,
+        // this footnote +68 -- see s12-axis-x-title's comment). This was
+        // +98, which put its baseline below any viewport shorter than
+        // 926px -- the whole line was permanently off-screen, not merely
+        // tight.
+        .attr('y', view.region.y + view.region.h + 68)
         .style('font-family', view.css('font-tape'))
         .style('font-size', view.css('type-tape-size'))
         .style('fill', view.css('ink-low'))

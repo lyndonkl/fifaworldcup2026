@@ -25,7 +25,7 @@
  *     "friction_band_c": 2,
  *     "pinnacle": {
  *       "quotes": [ { "t_s": <seconds since goal_ts>, "price_c": 0-100 }, ... ],
- *       "suspend_start_s": 32, "suspend_end_s": 112
+ *       "suspend_start_s": 11.6, "suspend_end_s": 109.1
  *     },
  *     "polymarket": {
  *       "blocks": [ { "t_s_start": <s>, "t_s_end": <s>, "price_c": 0-100 }, ... ]
@@ -396,9 +396,9 @@ export default {
         dangerous. It pulls its price off the board, waits, then posts one
         new number once it decides what the goal is worth.</p>
         <p>Pinnacle does exactly that here. It stops quoting about
-        thirty-two seconds after the move begins, stays dark for roughly
-        eighty seconds, then reopens with one new quote already at its new
-        price.<sup><a href="#fn-11">11</a></sup></p>
+        twelve seconds after the move begins, stays dark for roughly
+        ninety-eight seconds, then reopens with one new quote already at
+        its new price.<sup><a href="#fn-11">11</a></sup></p>
         <p>That one grey dash is the whole story. Pinnacle did not trade the
         move. It waited it out, then restated its price once, already caught
         up.</p>`,

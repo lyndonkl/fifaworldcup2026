@@ -29,17 +29,18 @@
  *   {
  *     "_provenance": { "sources": [...], "generated": "<iso>" },
  *     "total_markets": 30133,
- *     "core_series": { "legs": 414, "share_pct": 63.5 },
+ *     "core_series": { "legs": 414, "share_pct": 63.06 },
  *     "tail": { "markets": 19640, "share_pct": 0.36 },
  *     "gini_pooled": 0.930, "gini_within_family": 0.44,
  *     "lorenz_curve": [ { "market_frac": 0, "value_frac": 0 }, ... ],  // optional
  *     "novelty_market": {               // the loudest OFF-PITCH novelty of the
- *       "series_ticker": "KXWCADS",     //   tournament (the ad family). It is
- *       "label": "…",                   //   sub-grain: 35 markets, none large
- *       "rank": 10500,                  //   enough to earn a single $75k dot, so
- *       "contracts": 594454,            //   it owns NO dot in this population and
- *       "n_markets": 35,                //   lives entirely in the below-threshold
- *       "in_below_grain": true          //   band, never as a lit singleton dot.
+ *       "series_ticker": "KXWCADS",     //   tournament (the ad family). As of
+ *       "label": "…",                   //   the current deploy its biggest member
+ *       "rank": 7130,                   //   has crossed the per-dot grain line:
+ *       "contracts": 1531620,           //   rank 7,130th of 30,133 markets, and it
+ *       "n_markets": 35,                //   owns a dot in this population. Money
+ *       "in_below_grain": false         //   poured in as the final settled the family
+ *                                        //   nearly tripled from its earlier count.
  *     }
  *   }
  * `manifest.census.below_grain.{markets,usd}` (already part of the
@@ -53,6 +54,20 @@ function hash01(i) {
   let x = (i * 2654435761) >>> 0;
   x ^= x >>> 13; x = (x * 2246822519) >>> 0; x ^= x >>> 16;
   return (x >>> 0) / 4294967296;
+}
+
+// Gate-5 item 4: the rank annotation must define what it orders by, and the
+// number must always come from the data field, never be hardcoded -- this
+// only formats the ordinal suffix around whatever `novelty.rank` says.
+function ordinalSuffix(n) {
+  const r = Math.abs(Math.round(n)) % 100;
+  if (r >= 11 && r <= 13) return 'th';
+  switch (Math.abs(Math.round(n)) % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
 }
 
 const SWEEP_COLOR = 'neutral-data';
@@ -163,13 +178,16 @@ export default {
     }
 
     // b3 punchline state. The loudest off-pitch novelty (the KXWCADS ad
-    // family) is sub-grain: it owns no dot in this population, so there is
-    // nothing in the sweep to light as a singleton. Instead the whole
-    // field recedes to the resting money tint (opacity-rest 0.35 <= the
-    // 0.42 rest-tier threshold -> engine rest-tier dim, perception-brief
-    // §4/§9b) so the amber below-band annotation drawn in overlay() reads
-    // as figure against a dimmed ground. Positions/sizes are identical to
-    // `sweep`, so this stays a pure recolor (kind: 'recolor').
+    // family) has crossed the per-dot grain line at the current deploy
+    // (Gate-5 item 4: in_below_grain is now false, rank 7,130 of 30,133),
+    // but the data contract carries no per-market ticker to pick its exact
+    // dot out of the sorted population, so this still cannot light one
+    // specific dot as a singleton. Instead the whole field recedes to the
+    // resting money tint (opacity-rest 0.35 <= the 0.42 rest-tier
+    // threshold -> engine rest-tier dim, perception-brief §4/§9b) so the
+    // amber below-band annotation drawn in overlay() reads as figure
+    // against a dimmed ground. Positions/sizes are identical to `sweep`,
+    // so this stays a pure recolor (kind: 'recolor').
     const sweepDimmed = makeState(N);
     sweepDimmed.x.set(sweep.x);
     sweepDimmed.y.set(sweep.y);
@@ -259,11 +277,22 @@ export default {
 
     // Concentration figures (structure-spec S5 b2: the Gini numbers move
     // out of body prose into a caption). Footnote-weight, ink-low.
+    // Gate-5 item 3 screenshot: this line was sitting past the visible
+    // stage on shorter viewports (#stage is a fixed, non-scrolling
+    // viewport-height layer -- anything below view.H is off-screen, not
+    // just scrolled out of view), clipping it at the bottom edge. Clamped
+    // to the same safe margin (view.safe) every other bottom-anchored
+    // element in the piece respects. The numbers themselves are bound to
+    // the scene JSON (never hardcoded), so a refreeze cannot desync this
+    // caption from the data the way the beat prose desynced upstream.
+    const giniPooledTxt = (typeof sj.gini_pooled === 'number' ? sj.gini_pooled : 0.930).toFixed(3);
+    const giniWithinTxt = (typeof sj.gini_within_family === 'number' ? sj.gini_within_family : 0.44).toFixed(2);
+    const giniY = Math.min(region.y + region.h + 58, view.H - view.safe);
     const giniCaption = g.append('text').attr('class', 's05-gini-caption')
-      .attr('x', region.x).attr('y', region.y + region.h + 58)
+      .attr('x', region.x).attr('y', giniY)
       .attr('fill', view.css('ink-low'))
       .style('font', `var(--type-micro-size) var(--font-apparatus)`)
-      .text('market concentration (Gini): 0.930 overall, 0.44 within one family')
+      .text(`market concentration (Gini): ${giniPooledTxt} overall, ${giniWithinTxt} within one family`)
       .style('display', 'none');
 
     // Equality diagonal + real Lorenz reference line.
@@ -319,15 +348,24 @@ export default {
     // keeps CR-15's two-line amber/ink-mid FORM but fills it with this
     // family's own data-bound rank instead.
     // The loudest off-pitch novelty of the tournament is the KXWCADS ad
-    // family ("which brands advertise around the final"). It is sub-grain:
-    // 35 markets, none large enough to earn a single $75k dot, so it owns
-    // NO dot in this population and lives entirely in the below-threshold
-    // band drawn above. The callout is therefore an amber ANNOTATION
-    // (design-system §6: amber is annotation, never a data encoding)
-    // pointing at that band, not a lit singleton. The former single-dot
-    // Trump highlight is removed with the swap; FIX #6's "lit up because
-    // surprising" caption and the S14-constancy tag both presupposed an
-    // in-population dot the ad family does not have.
+    // family ("which brands advertise around the final"). GATE-5 RE-SYNC
+    // (item 4): the shipped page's prose and this scene's own data drifted
+    // apart at an epilogue-day refreeze -- the prose kept describing a
+    // market that "could not crack the top ten thousand" and "owned no
+    // dot," while `data/scenes/s05.json` already read `in_below_grain:
+    // false`, rank 7,130 of 30,133. Settlement-day trading nearly tripled
+    // the family (594,454 -> 1,531,620 contracts) and pushed its biggest
+    // member across the per-dot grain line. The callout below is still an
+    // amber ANNOTATION (design-system §6: amber is annotation, never a
+    // data encoding), and its leader still anchors at the below-threshold
+    // band's edge as a general pointer into the small-market end of the
+    // sweep -- the data contract has no per-market ticker to look up that
+    // one market's exact dot among the sorted population, so this does not
+    // claim the leader marks that dot's precise position, only the
+    // neighborhood. The former single-dot Trump highlight is removed with
+    // the swap; FIX #6's "lit up because surprising" caption and the
+    // S14-constancy tag both presupposed an in-population dot this ad
+    // family did not yet have at that time.
     const novelty = sj.novelty_market;
     let noveltyG = null;
     if (novelty) {
@@ -335,23 +373,35 @@ export default {
       // The band spans most of the stage width, so anchor the callout to
       // its right end and let the text run LEFT across the dimmed tail
       // (clamped inside the region), never off the right edge. A short
-      // vertical leader drops from the callout down to the band.
+      // vertical leader drops from the callout down to the band. Three
+      // lines (18px rhythm) so the ordering-definition line never has to
+      // fight for horizontal room the way one long line would.
       const anchorX = Math.min(region.x + bandW, region.x + region.w - 8);
       const bandTopY = region.y + region.h - bandH;
-      const labelY = region.y + region.h - bandH - 58;
+      const labelY = region.y + region.h - bandH - 76;
       noveltyG.append('line')
         .attr('x1', anchorX - 4).attr('y1', bandTopY)
         .attr('x2', anchorX - 4).attr('y2', labelY + 6)
         .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
-      const noveltyRank = fmt.count(novelty.rank || 10500);
+      // Rank and total are read from the scene JSON every time -- never a
+      // hardcoded number -- and the second line states what the rank
+      // orders by (Gate-5 item 4c: "the graphic's rank never defines what
+      // rank orders").
+      const noveltyRank = fmt.count(novelty.rank);
       const noveltyTotal = fmt.count(ml.totalMarkets || sj.total_markets || 30133);
+      const noveltyOrdinal = `${noveltyRank}${ordinalSuffix(novelty.rank)}`;
       noveltyG.append('text')
         .attr('x', anchorX).attr('y', labelY).attr('text-anchor', 'end')
         .attr('fill', view.css('accent-annotation'))
         .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
-        .text(`biggest ad market: rank ${noveltyRank} of ${noveltyTotal}`);
+        .text('biggest ad market:');
       noveltyG.append('text')
         .attr('x', anchorX).attr('y', labelY + 18).attr('text-anchor', 'end')
+        .attr('fill', view.css('accent-annotation'))
+        .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
+        .text(`ranked ${noveltyOrdinal} of ${noveltyTotal} by money traded`);
+      noveltyG.append('text')
+        .attr('x', anchorX).attr('y', labelY + 36).attr('text-anchor', 'end')
         .attr('fill', view.css('ink-mid'))
         .style('font', `var(--type-caption-size) var(--font-apparatus)`)
         .text('lit because it is surprising, not because it is big');
@@ -408,12 +458,12 @@ export default {
     },
     {
       id: 'b2',
-      html: '<p>A market can split into more than one ticket. A single match splits into three: home win, draw, and away win. Each one of those tickets is called a leg. Just three big families of markets, 414 legs in all, took 63.5% of every dollar bet.<sup><a href="#fn-7">7</a></sup> Meanwhile, more than half the catalog, 19,640 tiny markets, shared just 0.36% of all the money.<sup><a href="#fn-7">7</a></sup> Next, one dot lights up deep in the thin tail.</p>',
+      html: '<p>A market can split into more than one ticket. A single match splits into three: home win, draw, and away win. Each one of those tickets is called a leg. Three families carried that weight: the match-winner markets, one set per game; the who-advances markets; and the tournament-winner book you have been watching since the start. Those 414 legs took 63.1% of every dollar bet.<sup><a href="#fn-7">7</a></sup> Meanwhile, more than half the catalog, 19,640 tiny markets, shared just 0.36% of all the money.<sup><a href="#fn-7">7</a></sup> Next, one dot lights up deep in the thin tail.</p>',
       trigger: 'step',
     },
     {
       id: 'b3',
-      html: '<p>The loudest market with nothing to do with football was a bet on advertising: which brands would run a commercial around the final. All 35 of those ad markets put together drew about 594,000 contracts, five thousandths of one percent of the whole tape.<sup><a href="#fn-8">8</a></sup> The single biggest of them, whether Pepsi would advertise, could not crack the top ten thousand markets by size. The whole ad family was more than two hundred times smaller than one real match night.<sup><a href="#fn-8">8</a></sup> Loud in imagination, faint in money. Remember these near-empty markets. They come back later, in the one place this market got something wrong.</p><div class="scrim-card" style="margin-top:var(--space-16); padding:var(--space-8) var(--space-12);"><p style="margin:0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">Skill unlocked.</strong> <span style="color:var(--ink-mid);">You can now tell attention from knowledge: depth decides which prices to trust.</span></p><p style="margin:var(--space-8) 0 0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">The receipt.</strong> <span style="color:var(--ink-mid);">The tape counted $12.3 billion a week before the press did, and the money skipped the silly bets.</span></p></div>',
+      html: '<p>The loudest market with nothing to do with football was a bet on advertising: which brands would run a commercial around the final. All 35 of those ad markets settled at the final itself. Money poured in as settlement got close, and the family nearly tripled in its final hours, from about 594,000 contracts to 1,531,620.<sup><a href="#fn-8">8</a></sup> The single biggest of them, whether Pepsi would advertise, now ranks 7,130th of 30,133 markets by money traded. That late rush pushed it past the top ten thousand and earned it a dot of its own in the picture above, something it could not do before.<sup><a href="#fn-8">8</a></sup> Loud in imagination. Still faint in money: even after tripling, the whole family is a rounding error next to one real match night. Remember these near-empty markets. They come back later, in the one place this market got something wrong.</p><div class="scrim-card" style="margin-top:var(--space-16); padding:var(--space-8) var(--space-12);"><p style="margin:0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">Skill unlocked.</strong> <span style="color:var(--ink-mid);">Volume measures attention, not knowledge. Before trusting a price, check the money behind it: deep markets like the match books earn trust; near-empty ones do not. Skill 5 shows exactly how they go wrong.</span></p><p style="margin:var(--space-8) 0 0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">The receipt.</strong> <span style="color:var(--ink-mid);">The tape&rsquo;s own total ran a week ahead of the number in the news. Meanwhile, 63.1% of every dollar sat in three families of serious questions.</span></p></div>',
       trigger: 'step',
       state: 'sweepDimmed',
       kind: 'recolor',

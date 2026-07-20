@@ -603,8 +603,22 @@ export default {
         .attr('fill', 'none').attr('stroke', view.css('ink-hi')).attr('stroke-width', 2)
         .attr('d', d3.line().x((p) => px(p[0])).y((p) => py(p[1]))(pts));
       const last = pts[pts.length - 1];
+      const labelX = px(last[0]);
+      const labelY = py(last[1]) - 8;
+      // Text-collision sweep (Gate-5 item 3 disposition 2): this label
+      // rides the curve's own last point, which on this build's data sits
+      // near the top-price bucket's high realized rate -- top-right of
+      // the panel, directly under the fixed KEY. keyGutterRect() is this
+      // file's own exclusion-rect helper (already used for the unit
+      // ribbon's wrap width above); only clamp leftward when the label
+      // would actually land inside the KEY's band, so a differently
+      // calibrated future dataset that lands elsewhere is left alone.
+      const gutter = keyGutterRect(view);
+      const safeLabelX = (!view.mobile && labelY >= gutter.y0 - 12 && labelY <= gutter.y1)
+        ? Math.min(labelX, gutter.x0 - 8)
+        : labelX;
       target.append('text')
-        .attr('x', px(last[0])).attr('y', py(last[1]) - 8)
+        .attr('x', safeLabelX).attr('y', labelY)
         .attr('text-anchor', 'end')
         .attr('fill', view.css('ink-hi'))
         .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
@@ -643,6 +657,21 @@ export default {
       target.select('.s09-anchor-axes').selectAll(':scope > text').attr('y', safeY);
     }
 
+    // Text-collision sweep (Gate-5 item 3 disposition 2): the same defect
+    // fixMirrorLabelOverlap fixes for L3 also hits L2 -- s14.js's own
+    // drawAxes() hardcodes its "implied vs realized, weighted by dollars"
+    // title to rect.y - 6, sized for a one-line ribbon. L2's ribbon text
+    // is long enough to wrap to two lines at this panel's width, and the
+    // wrapped second line ("...happened (%)") lands right under this
+    // title. Same fix, same measured-not-guessed approach.
+    function fixCalibrationLabelOverlap(target) {
+      const node = unitRibbon.node();
+      if (!node) return;
+      const bbox = node.getBBox();
+      const safeY = Math.max(rect.y - 6, bbox.y + bbox.height + 12);
+      target.select('.s14-anchor-axes').selectAll(':scope > text').attr('y', safeY);
+    }
+
     // L5 tick-label collision fix (Gate-4 visual-story review fix, s16
     // major: "after the round of 16after the quarterfinals" — the five
     // checkpoint labels s15.js's strip() anchor draws collide edge-to-edge
@@ -675,7 +704,20 @@ export default {
         .attr('x1', shockX).attr('x2', shockX)
         .attr('y1', rect.y).attr('y2', rect.y + rect.h)
         .attr('stroke', view.css('ink-low')).attr('stroke-dasharray', '2 3').attr('stroke-width', 1);
-      target.append('text').attr('x', shockX + 4).attr('y', rect.y + 12)
+      // Text-collision sweep (Gate-5 item 3 disposition 2): this build's
+      // real shock timestamp lands late enough in the 14-month span that
+      // shockX sits inside the KEY's own x-range, and the label's fixed
+      // rect.y + 12 sits inside its y-range too — "the shock" rendered
+      // inside the KEY panel's own card. Drop the label to the bottom of
+      // its own line (still directly on the mark it names) whenever the
+      // top placement would land inside the KEY's exclusion rect.
+      const gutter = keyGutterRect(view);
+      const shockLabelYTop = rect.y + 12;
+      const shockLabelY = (!view.mobile && shockX + 4 >= gutter.x0 - 8
+        && shockLabelYTop >= gutter.y0 - 12 && shockLabelYTop <= gutter.y1)
+        ? rect.y + rect.h - 8
+        : shockLabelYTop;
+      target.append('text').attr('x', shockX + 4).attr('y', shockLabelY)
         .attr('fill', view.css('ink-mid'))
         .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
         .text('the shock');
@@ -746,7 +788,7 @@ export default {
           try { a.drawAxes(axesG); } catch (e) { console.warn('[rt/s16] drawAxes failed', e); }
         }
       }
-      if (idx === 1) { drawCalibrationTrace(axesG); drawAmberCallout(axesG); }
+      if (idx === 1) { drawCalibrationTrace(axesG); drawAmberCallout(axesG); fixCalibrationLabelOverlap(axesG); }
       if (idx === 2) { drawShockMarker(axesG, siblingData.s09json); fixMirrorLabelOverlap(axesG); }
       if (idx === 3) drawPairLabels(axesG, siblingData.s13json);
       if (idx === 4) fixStripTickCollision(axesG);
