@@ -74,6 +74,7 @@ CAPS = {
     "zoom/mexeng.bin": 10 * 1024 * 1024,
     "zoom/gerpar.bin": 3 * 1024 * 1024,
     "zoom/norbra.bin": 3 * 1024 * 1024,
+    "zoom/esparg.bin": 3 * 1024 * 1024,  # epilogue pass (S19); TIE+ESP legs, ~81k rows
     "series.bin": 4 * 1024 * 1024,
     "scenes": 2 * 1024 * 1024,
 }
@@ -678,18 +679,34 @@ def detect_single_source_event(df, price_col="yes_price_usd", ts_col="created_ts
 # ---- S1: FRA-ESP (fallback vehicle documented; built as specced here) ----
 
 def build_fraesp_zoom(con):
-    log("zoom[fraesp]: reading FRA/ESP/TIE trade tape")
-    legs = [("FRA", 0), ("ESP", 1), ("TIE", 2)]
-    dfs = {}
-    for code, _ in legs:
-        dfs[code] = read_trades(con, "KXWCGAME", f"KXWCGAME-26JUL14FRAESP-{code}")
-    lo = min(d["created_ts"].min() for d in dfs.values() if len(d))
-    hi = max(d["created_ts"].max() for d in dfs.values() if len(d))
-    # window: from ~1.5h before the last pre-settlement trade cluster begins
-    # is unnecessary here -- the tape's own span for these three legs (see
-    # TILES.md) already brackets kickoff-to-settlement tightly, so the full
-    # available span is used directly (no additional windowing needed).
-    window_lo, window_hi = lo, hi
+    """S1 zoom tile: France's own regulation leg ONLY.
+
+    S01 INTEGRITY FIX (epilogue-pass data-layer review, 2026-07-19): this
+    tile used to pack all three FRA-ESP 3-way legs (FRA/ESP/TIE) together,
+    with `window` computed as the min/max created_ts across all three legs
+    combined. s01.js's own hero/companion split (isFranceLeg()) already
+    treats France's leg as the scene's one bright figure and titles the
+    price axis "price of the France contract" -- the storyboard's spec is
+    "y = price of the France winner leg; the 3-way legs run as fainter
+    companion streams" -- so packing ESP/TIE into the SAME tick budget as
+    FRA did two things the design review's blind-read audit flagged for
+    s01 (visual-story-review.md Tier 2/P3): it diluted the runtime sample
+    (stride = ceil(T/D) over all three legs' rows, so up to 2/3 of a
+    sampled dot's budget went to legs the scene renders at 0.40 alpha and
+    never keys), and it invited a key row for ESP/TIE with no reliably
+    findable on-screen referent ("two of three key meanings invisible").
+    Neither problem serves the reader; the fix is to ship the leg the
+    scene actually tells its story with, alone, so every sampled dot is a
+    real France trade and the window honestly describes only what is in
+    the tile: this leg's own life, about four days of pre-kickoff
+    positioning followed by the match (see TILES.md sec 3 for the exact
+    span next to the old 3-leg build's numbers).
+    """
+    log("zoom[fraesp]: reading FRA regulation leg only (S01 integrity fix: single-leg tile, no ESP/TIE)")
+    d = read_trades(con, "KXWCGAME", "KXWCGAME-26JUL14FRAESP-FRA")
+    n_raw = len(d)
+    window_lo = int(d["created_ts"].min())
+    window_hi = int(d["created_ts"].max())
 
     ev_df = find_events_matched(con, "JUL14FRAESP")
     event_ts = None
@@ -697,25 +714,29 @@ def build_fraesp_zoom(con):
         # events_matched stores PDT-local event_ts; convert to unix seconds
         event_ts = int(pd.Timestamp(ev_df.iloc[0]["event_ts"]).timestamp())
     else:
-        event_ts = detect_single_source_event(dfs["FRA"])
+        event_ts = detect_single_source_event(d)
 
-    parts = []
-    for code, leg_idx in legs:
-        d = dfs[code]
-        d = d[(d["created_ts"] >= window_lo) & (d["created_ts"] <= window_hi)]
-        parts.append(zoom_rows_from_kalshi(d, leg_idx, window_lo, event_ts))
-    rows = stack_zoom_rows(parts)
+    # Cap check kept for future-proofing (a re-drive could grow this leg's
+    # own tape); at 35,196 rows this build is nowhere near the 6MB cap, so
+    # build_stride stays 1 today -- see TILES.md sec 3 for the measured count.
+    cap_trades = int(CAPS["zoom/fraesp.bin"] // 16)
+    build_stride = 1
+    if n_raw > cap_trades:
+        build_stride = math.ceil(n_raw / cap_trades)
+        d = d.iloc[::build_stride].reset_index(drop=True)
+        log(f"zoom[fraesp]: LOD-thinned {n_raw:,} -> {len(d):,} rows (build_stride={build_stride}) to fit cap")
+
+    rows = zoom_rows_from_kalshi(d, 0, window_lo, event_ts)
     buf, cols = pack_zoom(*rows)
     n = len(rows[0])
-    log(f"zoom[fraesp]: {n:,} rows, window {n and (window_hi-window_lo)}s, event_ts={event_ts}")
+    log(f"zoom[fraesp]: {n:,} rows (of {n_raw:,} raw FRA trades), window "
+        f"{(window_hi - window_lo) / 86400:.2f} days, event_ts={event_ts}")
     meta = {
         "columns": cols, "t0_unix": window_lo, "window": [window_lo, window_hi],
         "legs": [
             {"ticker": "KXWCGAME-26JUL14FRAESP-FRA", "label": "France (regulation)"},
-            {"ticker": "KXWCGAME-26JUL14FRAESP-ESP", "label": "Spain (regulation)"},
-            {"ticker": "KXWCGAME-26JUL14FRAESP-TIE", "label": "Draw (regulation)"},
         ],
-        "trades": n, "build_stride": 1,
+        "trades": n, "build_stride": build_stride,
     }
     return buf, meta
 
@@ -784,6 +805,63 @@ def build_gerpar_zoom(con):
         ],
         "trades": n, "build_stride": 1,
         "regulation_settle_ts": reg_settle, "advance_settle_ts": adv_settle,
+    }
+    return buf, meta
+
+
+# ---- S19 (epilogue): ESP-ARG final, regulation 3-way, TIE + ESP legs ----
+#
+# Epilogue-pass addition (2026-07-19), built by the same rules as every
+# other zoom tile above (R6/R8/R9 at export, own-ticker read + explicit
+# ORDER BY, lifetimes gated on the tape's own contents): the final's
+# regulation-time moneyline (KXWCGAME-26JUL19ESPARG) settled TIE, i.e. the
+# match was level after 90 minutes, and Spain won beyond regulation (method
+# of finish: extra time -- KXWCMOF-26JUL19ESPARG-ET settled yes). The TIE
+# leg is the story leg here (the draw hardening into fact as the clock ran
+# out); ESP (Spain to win in regulation) is the secondary leg, included so
+# the epilogue can show the draw firming up against Spain's regulation
+# chances fading in the same window, on the same shared clock. ARG is
+# deliberately NOT packed into this tile -- the epilogue's story is the
+# draw and Spain's regulation-time price, not a three-way recap, and a
+# third leg would reopen exactly the sample-dilution/key-clutter problem
+# the fraesp fix above just closed. Leg identity is baked into the `leg`
+# column (0=TIE, 1=ESP) exactly as the generic zoom schema already
+# requires, so a scene reading this tile can filter to one leg at a time
+# and never plot two legs' prices as if they were one series on one axis.
+def build_esparg_zoom(con):
+    log("zoom[esparg]: reading TIE (story leg) + ESP (secondary leg) from the final's regulation 3-way")
+    tie = read_trades(con, "KXWCGAME", "KXWCGAME-26JUL19ESPARG-TIE")
+    esp = read_trades(con, "KXWCGAME", "KXWCGAME-26JUL19ESPARG-ESP")
+    window_lo = int(min(tie["created_ts"].min(), esp["created_ts"].min()))
+    window_hi = int(max(tie["created_ts"].max(), esp["created_ts"].max()))
+
+    # No cross-source events_matched row exists for this match (it postdates
+    # the Phase-2 analysis run); fall back to the same single-source
+    # detector fraesp/gerpar use, applied to the TIE leg since it is the
+    # scene's story leg -- the flagged tick is the TIE leg's largest
+    # 1-minute move, i.e. the sharpest moment the draw hardened.
+    ev_df = find_events_matched(con, "JUL19ESPARG")
+    if not ev_df.empty:
+        event_ts = int(pd.Timestamp(ev_df.iloc[0]["event_ts"]).timestamp())
+    else:
+        event_ts = detect_single_source_event(tie)
+
+    parts = [
+        zoom_rows_from_kalshi(tie, 0, window_lo, event_ts),
+        zoom_rows_from_kalshi(esp, 1, window_lo, event_ts),
+    ]
+    rows = stack_zoom_rows(parts)
+    buf, cols = pack_zoom(*rows)
+    n = len(rows[0])
+    log(f"zoom[esparg]: {n:,} rows (tie={len(tie):,}, esp={len(esp):,}), "
+        f"window {(window_hi - window_lo) / 86400:.2f} days, event_ts={event_ts}")
+    meta = {
+        "columns": cols, "t0_unix": window_lo, "window": [window_lo, window_hi],
+        "legs": [
+            {"ticker": "KXWCGAME-26JUL19ESPARG-TIE", "label": "Draw (regulation) -- the story leg"},
+            {"ticker": "KXWCGAME-26JUL19ESPARG-ESP", "label": "Spain (regulation) -- secondary"},
+        ],
+        "trades": n, "build_stride": 1,
     }
     return buf, meta
 
@@ -2109,6 +2187,278 @@ def build_scene_s17(hero):
     }
 
 
+# ---- S19 (v2 epilogue, "the morning after") -----------------------------
+#
+# Added by the epilogue data-layer pass (2026-07-19), AFTER manifest.hero
+# was frozen at G3. This function only READS manifest.hero (the frozen
+# exam number gets restated, never recomputed) and otherwise pulls live
+# off the raw trade tape / catalog, same discipline as every class-A scene
+# above. See storyboard.md sec 5 (SE1 placeholder) for the four-beat shape
+# this data serves: the settle, the lens audit, the conviction verdict,
+# the last number. This pass ships the data only; the lens-audit and
+# last-number beats (storyboard items 2 and 4) need the full-tournament
+# incremental recompute described there and are follow-up work, not
+# blocked by anything here.
+
+FINAL_KICKOFF_UTC = "2026-07-19T19:00:00Z"  # research/fact-base.json remaining_schedule
+
+
+def _last_trade(con, series_ticker, ticker):
+    path = os.path.join(DATA, "kalshi", "trades", f"series_ticker={series_ticker}", f"{ticker}.parquet")
+    if not os.path.exists(path):
+        return None
+    row = con.execute(
+        f"SELECT created_ts, yes_price_usd FROM parquet_scan('{path}') "
+        f"ORDER BY created_ts DESC LIMIT 1"
+    ).fetchone()
+    if not row or row[0] is None:
+        return None
+    return {"ts": int(row[0]), "ts_iso": dt.datetime.fromtimestamp(int(row[0]), dt.timezone.utc).isoformat(),
+            "price_c": round(float(row[1]) * 100, 2)}
+
+
+def _minute_last_price_series(df, t0_unix, t1_unix, cap_points=400):
+    """Resample a trade df to a 1-minute last-price grid from t0 to t1
+    (both unix seconds), forward-filled -- same reindex(minutes,
+    method='ffill') pattern build_braid() uses (t0 predates the series'
+    own first trade here by design, so ffill correctly seeds from
+    whatever the leg's real last price was AT kickoff, not NaN). Returns
+    a list of price_c floats, one per minute, kickoff-relative index 0..N.
+    If the natural minute count would exceed cap_points (a defensive cap;
+    not exercised by this match's own ~139-minute window), every kth
+    minute is dropped and the stride is reported by the caller."""
+    if df.empty:
+        return [], 1
+    s = df.set_index(pd.to_datetime(df["created_ts"], unit="s", utc=True))["yes_price_usd"].sort_index()
+    # Kalshi tick timestamps are second-resolution (TILES.md sec 1), so
+    # several trades often share one index label; reindex() rejects
+    # duplicate labels outright. Collapse to last-price-per-second first
+    # (same "take the last trade price per second" step build_braid() uses).
+    s = s.groupby(level=0).last()
+    minutes = pd.date_range(pd.Timestamp(int(t0_unix), unit="s", tz="UTC"),
+                             pd.Timestamp(int(t1_unix), unit="s", tz="UTC"), freq="1min")
+    m = s.reindex(minutes, method="ffill")
+    stride = max(1, math.ceil(len(m) / cap_points))
+    vals = m.values[::stride]
+    return [round(float(v) * 100, 2) if pd.notna(v) else None for v in vals], stride
+
+
+def build_scene_s19(con, hero):
+    log("scene[s19]: assembling epilogue data (settlement facts, TIE climb, exam recap, 2030 book birth)")
+
+    # ---- 1. settlement facts -------------------------------------------------
+    tie_last = _last_trade(con, "KXWCGAME", "KXWCGAME-26JUL19ESPARG-TIE")
+    esp_last = _last_trade(con, "KXWCGAME", "KXWCGAME-26JUL19ESPARG-ESP")
+    arg_last = _last_trade(con, "KXWCGAME", "KXWCGAME-26JUL19ESPARG-ARG")
+    es_futures_last = _last_trade(con, "KXMENWORLDCUP", "KXMENWORLDCUP-26-ES")
+    ar_futures_last = _last_trade(con, "KXMENWORLDCUP", "KXMENWORLDCUP-26-AR")
+
+    # Method of finish: read all three MOF legs' own last trade and take
+    # whichever settled near certainty (a pure function of the tape's own
+    # contents, same discipline as R9 -- never a hardcoded assumption).
+    mof_candidates = {}
+    for code, label in [("REG", "regulation"), ("ET", "extra_time"), ("PEN", "penalties")]:
+        lt = _last_trade(con, "KXWCMOF", f"KXWCMOF-26JUL19ESPARG-{code}")
+        mof_candidates[label] = lt
+    method_of_finish = max(
+        (lbl for lbl, lt in mof_candidates.items() if lt is not None),
+        key=lambda lbl: mof_candidates[lbl]["price_c"],
+        default=None,
+    )
+
+    settlement = {
+        "champion": "Spain",
+        "champion_ticker": "KXMENWORLDCUP-26-ES",
+        "champion_futures_last_trade": es_futures_last,
+        "runner_up": "Argentina",
+        "runner_up_ticker": "KXMENWORLDCUP-26-AR",
+        "runner_up_futures_last_trade": ar_futures_last,
+        "regulation_3way_result": "tie",  # KXWCGAME-26JUL19ESPARG-TIE settled yes
+        "regulation_tie_last_trade": tie_last,
+        "regulation_esp_last_trade": esp_last,
+        "regulation_arg_last_trade": arg_last,
+        "method_of_finish": method_of_finish,
+        "method_of_finish_candidates": mof_candidates,
+        "headline": "Spain won beyond regulation time: level after 90 minutes, champion after extra time.",
+    }
+
+    # ---- 2. TIE-leg climb series (+ ESP secondary), minute-binned -----------
+    tie_df = read_trades(con, "KXWCGAME", "KXWCGAME-26JUL19ESPARG-TIE")
+    esp_df = read_trades(con, "KXWCGAME", "KXWCGAME-26JUL19ESPARG-ESP")
+    kickoff_unix = int(pd.Timestamp(FINAL_KICKOFF_UTC).timestamp())
+    match_end_unix = int(tie_df["created_ts"].max()) if len(tie_df) else kickoff_unix
+    tie_climb_c, tie_stride = _minute_last_price_series(tie_df, kickoff_unix, match_end_unix)
+    esp_climb_c, esp_stride = _minute_last_price_series(esp_df, kickoff_unix, match_end_unix)
+    climb_points = [
+        {"minute": i, "progress_pct": round(i / max(1, len(tie_climb_c) - 1) * 100, 1),
+         "tie_price_c": tie_climb_c[i] if i < len(tie_climb_c) else None,
+         "esp_price_c": esp_climb_c[i] if i < len(esp_climb_c) else None}
+        for i in range(max(len(tie_climb_c), len(esp_climb_c)))
+    ]
+
+    # Headline half-hour stat (the draw hardening into fact): the wall-
+    # clock 30-minute bucket that contains the leg's own last trade (a
+    # pure function of the tape's own contents, not a hardcoded date/hour
+    # -- generalizes safely to a re-drive). For this match that bucket is
+    # 21:00-21:30Z, which is also where the leg's own last trade sits, so
+    # the bucket and "the match's final trading" are the same window.
+    # mean_price_c is an UNWEIGHTED average of price prints (not a dollar-
+    # weighted VWAP; both are legitimate summaries -- this one is the
+    # figure the piece's own settled-facts note cites).
+    late_lo = (match_end_unix // 1800) * 1800
+    late_hi = late_lo + 1800
+    late = tie_df[(tie_df["created_ts"] >= late_lo) & (tie_df["created_ts"] < late_hi)]
+    headline_half_hour = {
+        "window_utc": [dt.datetime.fromtimestamp(late_lo, dt.timezone.utc).isoformat(),
+                        dt.datetime.fromtimestamp(late_hi, dt.timezone.utc).isoformat()],
+        "n_trades": int(len(late)),
+        "mean_price_c": round(float(late["yes_price_usd"].mean()) * 100, 1) if len(late) else None,
+        "vwap_price_c": round(float((late["yes_price_usd"] * late["count_contracts"]).sum()
+                                     / late["count_contracts"].sum()) * 100, 1) if len(late) else None,
+    }
+
+    # Pre-match anchor: this leg's own mean price before kickoff (the flat
+    # ~33c the draw traded at for four days before the match gave it a
+    # reason to move).
+    pre = tie_df[tie_df["created_ts"] < kickoff_unix]
+    pre_match = {
+        "n_trades": int(len(pre)),
+        "mean_price_c": round(float(pre["yes_price_usd"].mean()) * 100, 1) if len(pre) else None,
+        "window_utc": [dt.datetime.fromtimestamp(int(pre["created_ts"].min()), dt.timezone.utc).isoformat(),
+                        FINAL_KICKOFF_UTC] if len(pre) else None,
+    }
+    # Compact daily pre-match trace (listing day through kickoff day), so
+    # the epilogue can show "four days flat" cheaply without a 1-minute
+    # series over four days.
+    pre_daily = []
+    if len(tie_df):
+        d = tie_df.copy()
+        d["day"] = pd.to_datetime(d["created_ts"], unit="s", utc=True).dt.date.astype(str)
+        for day, g in d.groupby("day"):
+            pre_daily.append({
+                "date": day, "n_trades": int(len(g)),
+                "mean_price_c": round(float(g["yes_price_usd"].mean()) * 100, 1),
+            })
+
+    tie_climb = {
+        "kickoff_utc": FINAL_KICKOFF_UTC,
+        "match_end_utc": dt.datetime.fromtimestamp(match_end_unix, dt.timezone.utc).isoformat(),
+        "bin": "1-minute, last traded price, forward-filled",
+        "build_stride": tie_stride,  # 1 unless a re-drive grows the window past cap_points
+        "points": climb_points,  # kickoff-relative minute 0..N; price_c both legs, leg identity baked (tie_/esp_ prefixed, never shared one unlabeled axis)
+        "headline_half_hour": headline_half_hour,
+        "pre_match": pre_match,
+        "pre_match_daily": pre_daily,
+    }
+
+    # ---- 3. frozen exam numbers, restated (read-only copy of manifest.hero) --
+    # HARD RULE: never recomputed here. This is a verbatim, read-only echo
+    # of the already-frozen manifest.hero passed in by the caller.
+    exam_restated = {
+        "hero_ref": "manifest.hero",
+        "legs": hero.get("legs", []),
+        "book_sum_raw": hero.get("book_sum_raw"),
+        "note": "restated verbatim from the frozen manifest.hero written at G3; the winner ticket paid",
+    }
+
+    # ---- 4. 13-month Spain-vs-model gap recap (reuse s15's stage data) ------
+    s15_path = os.path.join(OUT, "scenes", "s15.json")
+    s15_stages = _read_json_safe(s15_path).get("stages", [])
+    sf = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "semifinalists_price_vs_opta_elo.csv"))
+    gap_recap = []
+    if len(sf) and s15_stages:
+        sf = sf.copy()
+        sf["stage_id_str"] = "s" + sf["stage_id"].astype(int).astype(str)
+        by_stage_team = sf.set_index(["stage_id_str", "team"])
+        for stage in s15_stages:
+            row = {"id": stage["id"], "label": stage["label"], "window": stage["window"]}
+            for team_key, team_csv in [("france", "France"), ("spain", "Spain")]:
+                if (stage["id"], team_csv) in by_stage_team.index:
+                    r = by_stage_team.loc[(stage["id"], team_csv)]
+                    row[team_key] = {
+                        "opta_pct": round(float(r["opta_win_pct"]) * 100, 2),
+                        "kalshi_price_pct": round(float(r["kalshi_price"]) * 100, 2),
+                        "gap_pp": round(float(r["gap_kalshi_minus_opta_share_pp"]), 2),
+                    }
+            gap_recap.append(row)
+    spain_vs_model = {
+        "stages": gap_recap,
+        "summary": "the market priced France 4 to 6 points above Opta's model at every published stage and Spain 2 to 7 points below it at four of five; Spain is the team that won",
+    }
+
+    # ---- 5. the 2030 book's birth --------------------------------------------
+    mk30 = con.execute(f"""
+        SELECT ticker, title, open_time
+        FROM parquet_scan('{MARKETS_PARQUET}')
+        WHERE ticker LIKE 'KXWC-30-%'
+        ORDER BY ticker
+    """).df()
+    trades30 = con.execute(f"""
+        SELECT ticker, MIN(created_ts) AS first_ts, COUNT(*) AS n_trades,
+               SUM(count_contracts) AS dollars
+        FROM parquet_scan('{DATA}/kalshi/trades/series_ticker=KXWC/KXWC-30-*.parquet')
+        GROUP BY ticker
+    """).df() if os.path.exists(os.path.join(DATA, "kalshi", "trades", "series_ticker=KXWC")) else pd.DataFrame()
+    trades_by_ticker = trades30.set_index("ticker") if len(trades30) else pd.DataFrame()
+
+    def team_label(title):
+        m = re.match(r"^Will (.+?) win the 2030", str(title))
+        return m.group(1) if m else title
+
+    listing_open_time = mk30["open_time"].iloc[0] if len(mk30) else None
+    markets30 = []
+    for _, r in mk30.iterrows():
+        tk = r["ticker"]
+        entry = {"ticker": tk, "team": team_label(r["title"])}
+        if tk in trades_by_ticker.index:
+            tr = trades_by_ticker.loc[tk]
+            first_price = None
+            fp = con.execute(f"""
+                SELECT yes_price_usd FROM parquet_scan('{DATA}/kalshi/trades/series_ticker=KXWC/{tk}.parquet')
+                ORDER BY created_ts ASC LIMIT 1
+            """).fetchone()
+            if fp:
+                first_price = round(float(fp[0]) * 100, 2)
+            entry["first_trade"] = {
+                "ts_iso": dt.datetime.fromtimestamp(int(tr["first_ts"]), dt.timezone.utc).isoformat(),
+                "price_c": first_price,
+            }
+            entry["n_trades"] = int(tr["n_trades"])
+            entry["dollars"] = round(float(tr["dollars"]), 2)
+        markets30.append(entry)
+    markets30.sort(key=lambda e: -(e.get("dollars") or 0))
+
+    gap_from_settlement_s = None
+    if listing_open_time and es_futures_last:
+        gap_from_settlement_s = int(
+            (pd.Timestamp(listing_open_time) - pd.Timestamp(es_futures_last["ts_iso"])).total_seconds())
+
+    next_belief = {
+        "series": "KXWC-30",
+        "title_pattern": "Will {country} win the 2030 FIFA Men's World Cup?",
+        "n_markets": int(len(mk30)),
+        "listing_open_time_utc": listing_open_time,
+        "gap_from_champion_futures_settlement_s": gap_from_settlement_s,
+        "headline": "the next belief, listed within minutes of the last one settling",
+        "markets": markets30,
+    }
+
+    return {
+        "_provenance": provenance([
+            "build_tiles.py: build_scene_s19() (epilogue data-layer pass, class A live recompute)",
+            "docs/data/zoom/esparg.bin (this build's TIE+ESP tick tape)",
+            "manifest.hero (frozen at G3; restated verbatim, not recomputed)",
+            "docs/data/scenes/s15.json + pipeline/data/analysis/calibration/semifinalists_price_vs_opta_elo.csv (R6, class B, same source s15 cites)",
+            "pipeline/data/catalog/markets.parquet + pipeline/data/kalshi/trades/series_ticker=KXWC/KXWC-30-*.parquet",
+        ]),
+        "settlement": settlement,
+        "tie_climb": tie_climb,
+        "exam_restated": exam_restated,
+        "spain_vs_model": spain_vs_model,
+        "next_belief": next_belief,
+    }
+
+
 # --------------------------------------------------------------------------
 # 7. Manifest assembly + main
 # --------------------------------------------------------------------------
@@ -2123,12 +2473,126 @@ def check_cap(name, nbytes):
     return status == "OK"
 
 
+def run_epilogue_pass():
+    """--epilogue: the v2 epilogue's ADDITIVE data-layer pass.
+
+    HARD RULE (CLAUDE.md / the epilogue build task): manifest.hero and
+    manifest.frozen_at are FROZEN -- the piece promised "this number will
+    not update." This pass never calls build_population() or build_hero(),
+    never touches pop-75k.bin/pop-250k.bin/markets.json/series.bin, and
+    loads the EXISTING docs/data/manifest.json as its base rather than
+    reconstructing one from scratch. It writes exactly three things and
+    mutates exactly three manifest keys:
+
+      1. data/zoom/esparg.bin       -> manifest.zoom.esparg   (new)
+      2. data/zoom/fraesp.bin       -> manifest.zoom.fraesp   (corrected: FRA leg only, S01 integrity fix)
+      3. data/scenes/s19.json       -> manifest.scenes.s19    (new)
+
+    Every other manifest key -- hero, frozen_at, frozen_at_note, generated,
+    population, enums, teams, markets, series, census, coda, and every
+    other scenes.* entry -- is carried through byte-for-byte from the
+    loaded file (verified: round-tripping the untouched manifest through
+    json.load -> json.dump with this file's own separators reproduces the
+    original bytes exactly, so leaving those keys unassigned in the loaded
+    dict guarantees they cannot drift).
+    """
+    manifest_path = os.path.join(OUT, "manifest.json")
+    if not os.path.exists(manifest_path):
+        raise RuntimeError(
+            "run_epilogue_pass: docs/data/manifest.json does not exist -- run a full "
+            "build (no flags, or --freeze) at least once before --epilogue."
+        )
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    hero_before = json.dumps(manifest.get("hero"), sort_keys=True)
+    frozen_at_before = manifest.get("frozen_at")
+
+    os.makedirs(os.path.join(OUT, "zoom"), exist_ok=True)
+    os.makedirs(os.path.join(OUT, "scenes"), exist_ok=True)
+
+    con = make_con()
+    sizes = {}
+
+    log("=== epilogue step 1/3: zoom/esparg.bin (final's TIE+ESP tick tape) ===")
+    esparg_buf, esparg_meta = build_esparg_zoom(con)
+    sizes["zoom/esparg.bin"] = write_bin("zoom/esparg.bin", esparg_buf)
+
+    log("=== epilogue step 2/3: zoom/fraesp.bin (S01 integrity fix: FRA leg only) ===")
+    fraesp_buf, fraesp_meta = build_fraesp_zoom(con)
+    sizes["zoom/fraesp.bin"] = write_bin("zoom/fraesp.bin", fraesp_buf)
+
+    log("=== epilogue step 3/3: scenes/s19.json ===")
+    s19_payload = build_scene_s19(con, manifest.get("hero", {}))
+    s19_path = os.path.join(OUT, "scenes", "s19.json")
+    with open(s19_path, "w") as f:
+        json.dump(s19_payload, f, separators=(",", ":"), default=str)
+    sizes["scenes/s19.json"] = os.path.getsize(s19_path)
+
+    def zoom_manifest_entry(url, byte_count, meta):
+        return {
+            "url": url, "bytes": byte_count,
+            "trades": meta["trades"], "build_stride": meta["build_stride"],
+            "t0": dt.datetime.fromtimestamp(meta["t0_unix"], dt.timezone.utc).isoformat(),
+            "window": [dt.datetime.fromtimestamp(w, dt.timezone.utc).isoformat() for w in meta["window"]],
+            "legs": meta["legs"], "columns": meta["columns"],
+        }
+
+    manifest["zoom"]["esparg"] = zoom_manifest_entry("data/zoom/esparg.bin", sizes["zoom/esparg.bin"], esparg_meta)
+    manifest["zoom"]["fraesp"] = zoom_manifest_entry("data/zoom/fraesp.bin", sizes["zoom/fraesp.bin"], fraesp_meta)
+    manifest["scenes"]["s19"] = "data/scenes/s19.json"
+
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=None, separators=(",", ":"), default=str)
+    sizes["manifest.json"] = os.path.getsize(manifest_path)
+
+    # ---- self-check: hero / frozen_at byte-identical to what was loaded ----
+    with open(manifest_path) as f:
+        reloaded = json.load(f)
+    hero_after = json.dumps(reloaded.get("hero"), sort_keys=True)
+    frozen_at_after = reloaded.get("frozen_at")
+    hero_untouched = (hero_after == hero_before) and (frozen_at_after == frozen_at_before)
+    log(f"epilogue: hero/frozen_at byte-identical after write: {hero_untouched}")
+    if not hero_untouched:
+        raise RuntimeError("run_epilogue_pass: manifest.hero or manifest.frozen_at changed -- ABORTING per hard rule")
+
+    # ---- budget report: full docs/data tree, not just this pass's files ----
+    total_bytes = 0
+    for root, _dirs, files in os.walk(OUT):
+        for fn in files:
+            total_bytes += os.path.getsize(os.path.join(root, fn))
+    total_mb = total_bytes / 1e6
+    log(f"epilogue: docs/data total = {total_mb:.3f} MB (budget: {TOTAL_BUDGET_BYTES/1e6:.0f} MB) "
+        f"[{'OK' if total_bytes <= TOTAL_BUDGET_BYTES else 'OVER BUDGET'}]")
+    check_cap("zoom/esparg.bin", sizes["zoom/esparg.bin"])
+    check_cap("zoom/fraesp.bin", sizes["zoom/fraesp.bin"])
+
+    result = {
+        "tiles_written": [{"name": k, "bytes": v} for k, v in sorted(sizes.items())],
+        "total_bytes": total_bytes,
+        "total_mb": round(total_mb, 3),
+        "manifest_path": manifest_path,
+        "hero_untouched": hero_untouched,
+        "s19_path": s19_path,
+    }
+    result_path = os.path.join(os.path.dirname(__file__), "_last_epilogue_report.json")
+    with open(result_path, "w") as f:
+        json.dump(result, f, indent=2, default=str)
+    log(f"epilogue build report written to {result_path}")
+    log("DONE (epilogue pass).")
+    return result
+
+
 def main():
     # --freeze: the G3 morning-of-final refresh pass. Stamps manifest.frozen_at
     # with this run's UTC instant so S17's provenance line ("raw traded price,
     # frozen at {frozen_at}; ... this number does not update") renders the real
     # freeze moment instead of the pre-G3 placeholder.
     freeze = "--freeze" in sys.argv
+
+    # --epilogue: v2 epilogue additive pass (see run_epilogue_pass() docstring).
+    # Mutually exclusive with a full build; never touches hero/frozen_at.
+    if "--epilogue" in sys.argv:
+        return run_epilogue_pass()
 
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(os.path.join(OUT, "zoom"), exist_ok=True)

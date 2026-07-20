@@ -72,14 +72,34 @@ SCENE_READ_SETS = {
             "ladder_attribution.pct_at_tick_floor", "tick_floor.lo_c", "tick_floor.hi_c",
             "worst_bucket_label"],
     "s15": ["stages[]"],
+    "s19": ["exam_restated.legs[]",
+            "settlement.champion_futures_last_trade.price_c",
+            "settlement.runner_up_futures_last_trade.price_c",
+            "tie_climb.points[]",
+            "tie_climb.headline_half_hour.window_utc[]",
+            "tie_climb.headline_half_hour.n_trades",
+            "tie_climb.headline_half_hour.mean_price_c",
+            "tie_climb.kickoff_utc",
+            "spain_vs_model.stages[]",
+            "next_belief.markets[]",
+            "next_belief.n_markets",
+            "next_belief.gap_from_champion_futures_settlement_s"],
 }
 
-# Per-item required sub-fields for the two scenes whose read-set includes
-# player/bucket ROWS with their own required keys (s12.players[], s14.buckets[]).
+# Per-item required sub-fields for scenes whose read-set includes player/
+# bucket/row ROWS with their own required keys (s12.players[], s14.buckets[],
+# s19's four row-arrays). Each scene maps to a LIST of (path, sub_fields)
+# pairs -- s19 needs four independent row-arrays checked, not just one.
 ROW_SUBFIELDS = {
-    "s12": ("players", ["key", "label", "reference", "market_indices"]),
-    "s14": ("buckets", ["label", "lo_c", "hi_c", "mean_price_c", "win_rate_pct"]),
-    "s15": ("stages", ["id", "label", "window", "opta_pct"]),
+    "s12": [("players", ["key", "label", "reference", "market_indices"])],
+    "s14": [("buckets", ["label", "lo_c", "hi_c", "mean_price_c", "win_rate_pct"])],
+    "s15": [("stages", ["id", "label", "window", "opta_pct"])],
+    "s19": [
+        ("exam_restated.legs", ["label", "price_c", "devig_pct"]),
+        ("tie_climb.points", ["minute", "tie_price_c"]),
+        ("spain_vs_model.stages", ["id", "label", "france", "spain"]),
+        ("next_belief.markets", ["team", "dollars"]),
+    ],
 }
 
 
@@ -106,16 +126,16 @@ def main():
                 failures.append(f"{sid}: field '{p}' {v}")
 
         if sid in ROW_SUBFIELDS:
-            arr_key, sub_fields = ROW_SUBFIELDS[sid]
-            rows = doc.get(arr_key, [])
-            total_checks += 1
-            if not rows:
-                failures.append(f"{sid}: '{arr_key}' is empty, cannot verify row sub-fields")
-            else:
-                for sf in sub_fields:
-                    total_checks += 1
-                    if sf not in rows[0]:
-                        failures.append(f"{sid}: row in '{arr_key}[0]' missing sub-field '{sf}'")
+            for arr_key, sub_fields in ROW_SUBFIELDS[sid]:
+                rows = get_path(doc, arr_key)
+                total_checks += 1
+                if rows is MISSING or not isinstance(rows, list) or not rows:
+                    failures.append(f"{sid}: '{arr_key}' is empty or missing, cannot verify row sub-fields")
+                else:
+                    for sf in sub_fields:
+                        total_checks += 1
+                        if sf not in rows[0]:
+                            failures.append(f"{sid}: row in '{arr_key}[0]' missing sub-field '{sf}'")
 
     print(f"=== {total_checks} field-presence checks across {len(SCENE_READ_SETS)} scenes ===")
     if failures:

@@ -23,6 +23,81 @@
  * color key debuts here via the row-array `setChip` API, updated
  * imperatively as the scrub crosses pre-title -> zoom -> settle.
  *
+ * GATE-4 ROUND-3 REVISION (s01 integrity pass, this file's sole-writer
+ * scope): the data layer rebuilt zoom/fraesp.bin as FRANCE-LEG-ONLY (one
+ * leg in manifest.zoom.fraesp.legs, ticker ...-FRA; no Spain/draw legs in
+ * this tile anymore), which retires the "three legs mixed on one axis"
+ * flag structurally -- isFranceLeg()'s companion-leg branch below is now
+ * unreachable on real data (kept as a defensive no-op, not deleted, in
+ * case a future data pull re-adds legs to this tile). The second flagged
+ * issue -- the match-clock axis reading uniform minutes over a window that
+ * actually opens ~4 days before kickoff -- survives the earlier
+ * kickoff-relative fix (computeEnvelope's FRAESP_KICKOFF_UTC_MS math,
+ * below) because that fix only stopped the axis from stretching to
+ * 5000'+; it still drew the pre-kickoff rows inside the SAME positive
+ * pixel range real early-match trades use (0'-7'), so a first-time reader
+ * had no way to tell four-day-old positioning from the game's actual
+ * opening minutes. Fixed here by reserving an honestly UNTICKED sliver to
+ * the LEFT of a labeled "kickoff" tick for that pre-match activity (see
+ * PRE_MATCH_WIDTH_FRAC, computeEnvelope's preMatchMinutes, scales()'
+ * clockX domain, and tickState()'s preKickoff branch) -- a narrated break
+ * in the axis, not a second linear time scale.
+ *
+ * GATE-4 ROUND-4 REVISION (blind cognitive review of the captured scrub
+ * frames; sole-writer scope, this file only):
+ *   (1) KEY HONESTY, cyan/orange (CRITICAL): the key promised "orange =
+ *       money that bet NO," but no orange mark is perceivable in any
+ *       frame — and none can be: a taker-no trade prints at the SAME
+ *       traded price as the taker-yes side (one tape, one price per
+ *       trade), so the 4,234 in-match NO rows (25% of the in-match tape)
+ *       land on exactly the pixels the 3x-larger YES mass occupies, and
+ *       additive blending buries them at any alpha/tier. Truth over
+ *       symmetry: every trade dot now renders one hue (side-yes cyan =
+ *       "a real trade"), the orange key row is gone, and the prose
+ *       teaches the yes/no pairing in words instead of promising a color
+ *       the screen cannot deliver. The side-binary color debut belongs
+ *       to a scene whose geometry can separate the sides (e.g. S6).
+ *   (2) FIGURE-GROUND STAGING (MAJOR): the resting field's
+ *       end-of-tournament density wall rendered as a full-height grey
+ *       pillar that won first fixation in every frame (the blind read
+ *       called it "the settlement mass"). The ground tier's Reinhard
+ *       knee makes per-dot alpha nearly inert against that density
+ *       (composited luminance asymptotes to rest-luminance-cap
+ *       regardless), so the honest lever is geometry: during the zoom
+ *       the ribbon SQUASHES along its stack axis toward its own
+ *       centerline (REST_SQUASH below; the time axis, and so the
+ *       ribbon's identity, is untouched) and drops to 0.08 alpha, while
+ *       the story trace thickens and gains a bright current-price head —
+ *       the brightest object at every scrub position is now the price
+ *       itself, and the ending's dominance belongs to the settled
+ *       objects (dead pour, floor band, collapsed trace), never to
+ *       context. bootRest/resting (the pre-title frames) keep the full
+ *       ribbon, so S2's re-merge parity is untouched.
+ *   (3) SECOND CLIFF NAMED (MAJOR): the prose promised "one vertical
+ *       jump" but the tape draws two comparable cliffs (wall ~19': 38c
+ *       to 21c with a partial rebound; wall ~79': 15c to 3c, terminal).
+ *       Verified before labeling (tile timestamps + published July 14
+ *       match reports, ESPN/FIFA): Spain won 2-0 — Oyarzabal's penalty
+ *       (awarded ~19' wall clock, converted in the 22nd minute of play;
+ *       the detector-flagged event) and Porro's 58th-minute goal, which
+ *       lands at ~79 wall-clock minutes on this axis because the axis
+ *       counts minutes from kickoff THROUGH halftime. Both cliffs are
+ *       now annotated — one amber meaning, "a Spain goal," two
+ *       instances — the second via a tape detector (largest
+ *       1-minute-median drop after the flagged event, computeEnvelope)
+ *       rather than a hardcoded minute, so the deploy-morning tile
+ *       re-drive cannot strand the label. AUTHOR NOTE (outside this
+ *       file's write scope): docs/index.html fn-1 still reads "Spain
+ *       1-0 in regulation"; the tape and every match report say 2-0.
+ *   (4) KEY CHANGE NARRATED (MAJOR): the grey key row used to silently
+ *       REWORD itself at settlement ("money at rest" -> "settled to
+ *       zero, dead money"). The pale-grey rest row now keeps one label
+ *       for the whole beat, and settlement ADDS a visually distinct
+ *       dark-grey state-dead row (glyph 'dead') in the same chip update
+ *       whose pulse fires in the same instant as the floor-band onset
+ *       pulse — a new meaning arrives, announced; no old meaning
+ *       mutates.
+ *
  * STORYBOARD CONTRACT NOTE — pre-title frame: the storyboard's "Beat,
  * pre-title" text ("A still field of dots... every dot on this screen is
  * $75,000...") is already authored as static HTML in docs/index.html's
@@ -55,6 +130,12 @@ function hash01(i) {
 }
 
 const BUCKET_PX = 4; // one time-bucket per ~4 CSS px column of the stage
+
+// Gate-4 s01 fix, round 3 (integrity pass, see header note below): share of
+// the zoom stage's width reserved for the pre-kickoff "days before" sliver,
+// to the LEFT of a labeled kickoff tick. Fixed, not data-derived -- it is a
+// pixel budget, not a time scale (see computeEnvelope()).
+const PRE_MATCH_WIDTH_FRAC = 0.10;
 
 /* The resting-field ("timeline-ribbon") position formula, shared in spirit
  * with s02.js (duplicated per CONTRACT §2 import rule: scenes may only
@@ -149,6 +230,15 @@ function computeEnvelope(zoomTile) {
   const matchEndMinutes = zoomTile && zoomTile.count
     ? Math.max(60, minuteOf(zoomTile.ts_ms[zoomTile.count - 1]))
     : 120;
+  // Gate-4 s01 fix, round 3: width (in clock-minutes, i.e. clockX domain
+  // units) of the pre-kickoff sliver reserved to the LEFT of kickoff.
+  // Zero when this tile carries no pre-kickoff rows at all (kickoffOffsetMin
+  // <= 0), so a fully in-match tile never reserves dead axis space for a
+  // window that doesn't exist. NOT a linear day scale -- see tickState's
+  // preKickoff branch, which scatters rows inside it, not orders them.
+  const preMatchMinutes = kickoffOffsetMin > 0
+    ? matchEndMinutes * PRE_MATCH_WIDTH_FRAC / (1 - PRE_MATCH_WIDTH_FRAC)
+    : 0;
   let eventMinute = null;
   let eventPriceC = 50;
   if (zoomTile) {
@@ -166,6 +256,46 @@ function computeEnvelope(zoomTile) {
     Math.max(eventMinute + 5, matchEndMinutes * 0.93),
   );
   const pad = Math.min(8, eventMinute / 2);
+
+  // GATE-4 ROUND-4 (header note (3)): recover the tape's SECOND repricing
+  // cliff. Only bit 0's event is structurally flagged (CONTRACT §5.4),
+  // but the real tape steps down twice — Spain won 2-0, and Porro's
+  // 58th-minute second goal lands at ~79 wall-clock minutes here — so
+  // the second goal is detected from tape geometry: the largest
+  // 1-minute-median price drop after the flagged event, kept only when
+  // it is unmistakably a cliff (>= 8c). A detector, not a hardcoded
+  // minute, so a deploy-morning tile re-drive keeps the anchor honest;
+  // on a tape with no second cliff, event2Minute stays null and the
+  // annotation never renders.
+  let event2Minute = null;
+  let event2PriceC = 50;
+  if (zoomTile && zoomTile.count) {
+    const from = Math.ceil(eventMinute + 10);
+    const to = Math.floor(whistleMinute - 3);
+    const pricesByMinute = new Map();
+    for (let i = 0; i < zoomTile.count; i++) {
+      const m = minuteOf(zoomTile.ts_ms[i]);
+      if (m < from - 1 || m > to + 1) continue;
+      const bucket = Math.floor(m);
+      let arr = pricesByMinute.get(bucket);
+      if (!arr) { arr = []; pricesByMinute.set(bucket, arr); }
+      arr.push(zoomTile.price_c[i]);
+    }
+    const med = new Map();
+    for (const [bucket, arr] of pricesByMinute) {
+      arr.sort((p, q) => p - q);
+      med.set(bucket, arr[arr.length >> 1]);
+    }
+    let bestDrop = 0;
+    for (let b = from; b <= to; b++) {
+      const before = med.get(b - 1);
+      const after = med.get(b + 1);
+      if (before === undefined || after === undefined) continue;
+      const drop = before - after;
+      if (drop > bestDrop) { bestDrop = drop; event2Minute = b; event2PriceC = before; }
+    }
+    if (bestDrop < 8) event2Minute = null;
+  }
 
   // Scroll-fraction -> match-clock cutoff. Storyboard S1 Scroll spec:
   // "~40% of the scrub's length dwells on the minutes around the detected
@@ -211,8 +341,9 @@ function computeEnvelope(zoomTile) {
     return matchEndMinutes;
   }
   return {
-    eventMinute, eventPriceC, whistleMinute, matchEndMinutes, breakpoints, cutoffAt,
-    kickoffOffsetMin,
+    eventMinute, eventPriceC, event2Minute, event2PriceC,
+    whistleMinute, matchEndMinutes, breakpoints, cutoffAt,
+    kickoffOffsetMin, preMatchMinutes,
   };
 }
 
@@ -269,8 +400,11 @@ export default {
 
     const zoomTile = data.zoom.fraesp;
     const env = computeEnvelope(zoomTile);
+    // Gate-4 s01 fix, round 3: domain starts BEFORE 0 (kickoff) so the
+    // pre-match sliver gets its own honest pixel space instead of sharing
+    // pixels with the real match's first few minutes (see header note).
     const clockX = d3.scaleLinear()
-      .domain([0, env.matchEndMinutes])
+      .domain([-env.preMatchMinutes, env.matchEndMinutes])
       .range([region.x, region.x + region.w]);
     const priceY = d3.scaleLinear()
       .domain([0, 100])
@@ -292,7 +426,6 @@ export default {
     const timeX = registry.get('s01.time');
     const clockX = registry.get('s01.clock');
     const priceY = registry.get('s01.price');
-    const YES_IDX = manifest.enums.side.indexOf('taker_yes');
 
     const heroBit = data.flagBit('ZOOM_FRAESP');
     const taggedIdx = indicesWithFlag(pop.flags, heroBit);
@@ -328,22 +461,52 @@ export default {
     // 0.42-0.90 gap and did not pop). Amber = the reserved "story points here"
     // hue naming tonight's match.
     const amber = view.color('accent-annotation', ACTIVE_A);
-    const yesColor = view.color('side-yes', ACTIVE_A); // real ticks: active-tier
-    const noColor = view.color('side-no', ACTIVE_A);
+    // Round 4, header note (1): ONE hue for every trade dot. The old
+    // yesColor/noColor split promised orange the screen could not deliver
+    // (a taker-no trade prints at the same traded price as the yes side,
+    // so NO's 25% share sits on exactly YES's pixels and additive
+    // blending buries it). Cyan here means "a real trade," nothing more.
+    const tradeColor = view.color('side-yes', ACTIVE_A); // real ticks: active-tier
     const waitColor = view.color('field-rest', 0.10);  // staged/not-yet-arrived: below rest band
     // Gate-4 visual-story review (s01 critical, "un-keyed near-white
-    // column"): during the zoom the resting field is CONTEXT, not story,
-    // but its end-of-tournament density wall at the right edge was
-    // accumulating past the tone-map cap and rendering as a full-height
-    // near-white mass that out-shone the tick stream in every frame and
-    // matched no key entry. Drop the in-zoom field to the same 0.10
-    // alpha the staging tier uses (precedent: waitColor above) so the
-    // summed wall stays a dim grey ground and the key's "grey = money at
-    // rest" is true of what is rendered (perception-brief §4, §9b).
-    const zoomFieldColor = view.color('field-rest', 0.10);
+    // column") + round 4, header note (2): during the zoom the resting
+    // field is CONTEXT, not story. Alpha alone could not stop its
+    // end-of-tournament density wall from rendering as the frame's
+    // dominant grey pillar (the ground tier's Reinhard knee asymptotes to
+    // rest-luminance-cap at any per-dot alpha once density is high), so
+    // the in-zoom field is BOTH dimmed below the rest band (0.08) and
+    // squashed geometrically (REST_SQUASH below) into a narrow mid-stage
+    // band. The key's "pale grey = money at rest" stays true of what is
+    // rendered (perception-brief §4, §9b).
+    const zoomFieldColor = view.color('field-rest', 0.08);
     const deadColor = view.state('dead');              // 0.55 -> unclassified receding state, engine leaves it
 
-    const stageX = clockX(0) - 14; // "not yet arrived" staging point
+    // Round 4, header note (2): stack-axis squeeze toward the ribbon's
+    // own centerline for the in-zoom keyframes. The TIME axis is never
+    // touched — this is the same ribbon, compressed, not a relocation —
+    // and the pre-title states (bootRest/resting) keep the full-spread
+    // restPos, so S1's first pixel and S2's re-merged field stay
+    // pixel-identical to each other.
+    const REST_SQUASH = 0.18;
+    const stackCenter = view.mobile
+      ? region.x + region.w / 2
+      : region.y + region.h / 2;
+    function squashedRestX(i) {
+      return view.mobile
+        ? stackCenter + (restPos.x[i] - stackCenter) * REST_SQUASH
+        : restPos.x[i];
+    }
+    function squashedRestY(i) {
+      return view.mobile
+        ? restPos.y[i]
+        : stackCenter + (restPos.y[i] - stackCenter) * REST_SQUASH;
+    }
+
+    // Gate-4 s01 fix, round 3: off the LEFT of the WHOLE domain (pre-match
+    // sliver included), not just left of kickoff -- clockX(0) now sits
+    // mid-chart (see scales()), so anchoring here would park "not yet
+    // arrived" dots inside the visible pre-match band instead of off-canvas.
+    const stageX = region.x - 14; // "not yet arrived" staging point
     const stageY = priceY(50);
 
     // ---- state: 'bootRest' — the TRUE first pixel painted, before any
@@ -386,35 +549,42 @@ export default {
     function tickState(cutoffMinutes) {
       const s = makeState(N);
       for (let i = 0; i < N; i++) {
-        s.x[i] = restPos.x[i]; s.y[i] = restPos.y[i];
+        s.x[i] = squashedRestX(i); s.y[i] = squashedRestY(i);
         setColor(s.color, i, zoomFieldColor);
         s.size[i] = BASE_PX;
       }
       for (let d = 0; d < D; d++) {
         const i = taggedIdx[d];
         const t = sampleIdx[d];
-        // Gate-4 s01 critical fix: minute is kickoff-relative (see
-        // computeEnvelope), so the ~4 days of pre-kickoff trading on this
-        // ticker (41% of its rows — this market opened days before the
-        // fixture) no longer stretches the axis to 5000'+. A hard clamp of
-        // every pre-kickoff row to the same x=0 pixel would just relocate
-        // the old mid-chart pileup to a new single-column one, so instead
-        // it is spread deterministically across the axis's own pre-narrated
-        // "intro/kickoff" sliver (the breakpoints' first 6% of match
-        // length, below) — an honest compression the scene already
-        // narrates as accelerated time, not a fresh density spike. That
-        // pre-kickoff activity is also outside "the match" this scene
-        // narrates, so it drops into the same faint tier as the Spain/draw
-        // companion legs (Gate-4 s01 major fix: stops it from out-shining
-        // the in-match story marks — perception-brief §4, "the brightest
-        // thing is never the story").
+        // Gate-4 s01 fix, round 3 (was: hash01(t) * matchEndMinutes*0.06,
+        // a POSITIVE offset that shared pixels with the real match's first
+        // few minutes -- the axis-honesty flag this round fixes): minute
+        // is kickoff-relative (see computeEnvelope), so the ~4 days of
+        // pre-kickoff trading on this ticker no longer stretches the axis
+        // to 5000'+. Those rows now scatter into the NEGATIVE sliver
+        // clockX's domain reserves to the LEFT of the labeled kickoff tick
+        // (scales()), deterministically but with no chronological meaning
+        // to their position within it — an honest "this much happened
+        // before kickoff, compressed" rather than a fake day-by-day scale.
+        // Pre-kickoff activity is outside "the match" this scene narrates,
+        // so it stays in the faint tier below (same tier the companion
+        // legs would use if this tile ever carried more than one — see
+        // the header note: today's tile is France-leg-only, so `faint`
+        // reduces to exactly `preKickoff` on real data).
         const rawMinute = T ? (zoomTile.ts_ms[t] / 60000 - env.kickoffOffsetMin) : 0;
         const preKickoff = rawMinute < 0;
-        const minute = preKickoff ? hash01(t) * (env.matchEndMinutes * 0.06) : rawMinute;
+        const minute = preKickoff ? -hash01(t) * env.preMatchMinutes : rawMinute;
         if (T && minute <= cutoffMinutes) {
           const legSpec = (zoomTile.legs || [])[zoomTile.leg[t]];
-          const faint = preKickoff || !isFranceLeg(legSpec); // Spain/draw legs + pre-kickoff: fainter companions
-          const base = zoomTile.side[t] === YES_IDX ? yesColor : noColor;
+          // Round 3: today's tile is France-leg-only (header note), so
+          // !isFranceLeg(legSpec) never fires on real data; kept as a
+          // defensive fallback rather than deleted.
+          const faint = preKickoff || !isFranceLeg(legSpec); // pre-kickoff (+ any non-France leg): fainter
+          // Round 4, header note (1): one hue for every trade, whichever
+          // side took it — the side split rendered as a promise ("orange =
+          // NO") that no frame could keep, because both sides of a trade
+          // share one (minute, price) coordinate.
+          const base = tradeColor;
           s.x[i] = clockX(minute);
           s.y[i] = priceY(zoomTile.price_c[t]);
           // Hero (France's own regulation leg) stays active-tier (base alpha
@@ -525,10 +695,21 @@ export default {
     // to miss. The axis now always reads off the SAME clockX used to place
     // every dot, so whatever tick sits under a mark is that mark's real
     // minute, at every scrub position.
+    // Gate-4 s01 fix, round 3: ticks come from the REAL match window
+    // [0, matchEndMinutes] only, never from clockX's own domain (which now
+    // runs negative to cover the pre-match sliver) -- a tick like "-40'"
+    // would be its own new lie ("40 minutes before kickoff" on a scale
+    // that isn't linear in days). The 0' tick reads "kickoff" in plain
+    // words, naming the boundary exactly where a first-time reader's eye
+    // already lands.
+    const clockTickValues = d3.scaleLinear().domain([0, env.matchEndMinutes]).ticks(6);
+    function formatClockTick(d) {
+      return d === 0 ? 'kickoff' : `${Math.round(d)}'`;
+    }
     function drawClockAxis() {
       const axisFn = view.mobile
-        ? d3.axisTop(clockX).ticks(6).tickFormat((d) => `${Math.round(d)}'`)
-        : d3.axisBottom(clockX).ticks(6).tickFormat((d) => `${Math.round(d)}'`);
+        ? d3.axisTop(clockX).tickValues(clockTickValues).tickFormat(formatClockTick)
+        : d3.axisBottom(clockX).tickValues(clockTickValues).tickFormat(formatClockTick);
       clockAxisG.call(axisFn);
       styleAxis(clockAxisG);
     }
@@ -552,19 +733,56 @@ export default {
       titleStyle(g.append('text').attr('class', 'axis-title axis-title-clock')
         .attr('x', cx).attr('y', cy).attr('text-anchor', 'middle')
         .attr('transform', `rotate(-90, ${cx}, ${cy})`)
-        .text('match clock (minutes played)'));
+        .text('match clock (minutes from kickoff)'));
     } else {
       titleStyle(g.append('text').attr('class', 'axis-title axis-title-clock')
         .attr('x', view.region.x + view.region.w / 2)
         .attr('y', view.region.y + view.region.h + 8 + 24)
         .attr('text-anchor', 'middle')
-        .text('match clock (minutes played)'));
+        .text('match clock (minutes from kickoff)'));
     }
     titleStyle(g.append('text').attr('class', 'axis-title axis-title-price')
       .attr('x', view.region.x - 8)
       .attr('y', view.region.y - 12)
       .attr('text-anchor', 'start')
       .text('price of the France contract (cents; 100 = certain)'));
+
+    // Gate-4 s01 fix, round 3 (axis honesty, header note): the pre-match
+    // sliver clockX's domain reserves gets its own dim band, a dashed
+    // boundary at the kickoff tick, and a plain-language label — so it
+    // reads as "backdrop, not the match" on sight, before a reader ever
+    // parses a single tick. Static furniture, drawn once like the axes
+    // above (not gated by scrub position); skipped entirely when this
+    // tile carries no pre-kickoff rows (env.preMatchMinutes === 0).
+    if (env.preMatchMinutes > 0) {
+      const kickoffPx = clockX(0);
+      g.insert('rect', ':first-child').attr('class', 'prematch-band')
+        .attr('x', view.region.x)
+        .attr('width', Math.max(0, kickoffPx - view.region.x))
+        .attr('y', view.region.y)
+        .attr('height', view.region.h)
+        .attr('fill', view.css('ink-low'))
+        .attr('fill-opacity', 0.07)
+        .style('pointer-events', 'none');
+      g.append('line').attr('class', 'kickoff-divider')
+        .attr('x1', kickoffPx).attr('x2', kickoffPx)
+        .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
+        .attr('stroke', view.css('ink-low'))
+        .attr('stroke-width', 1)
+        .attr('stroke-dasharray', '2,2')
+        .attr('opacity', 0.6);
+      const preMatchDays = Math.max(1, Math.round(env.kickoffOffsetMin / 1440));
+      const preMatchLabelX = (view.region.x + kickoffPx) / 2;
+      const preMatchLabelY = view.region.y + view.region.h / 2;
+      g.append('text').attr('class', 'prematch-label')
+        .attr('x', preMatchLabelX).attr('y', preMatchLabelY)
+        .attr('text-anchor', 'middle')
+        .attr('transform', `rotate(-90, ${preMatchLabelX}, ${preMatchLabelY})`)
+        .attr('fill', view.css('ink-low'))
+        .style('font-family', view.css('font-apparatus'))
+        .style('font-size', view.css('type-micro-size'))
+        .text(`${preMatchDays} day${preMatchDays === 1 ? '' : 's'} of trading squeezed before kickoff`);
+    }
 
     // Gate-4 s01 major fix (settlement pour has no visual floor): the old
     // faint dotted gridline at price=0 read as axis furniture, not "money
@@ -630,7 +848,14 @@ export default {
       const rows = [];
       for (let r = 0; r < zoomTile.count; r++) {
         const legSpec = (zoomTile.legs || [])[zoomTile.leg[r]];
-        if (isFranceLeg(legSpec) && zoomTile.ts_ms[r] / 60000 - env.kickoffOffsetMin >= 0) rows.push(r);
+        const m = zoomTile.ts_ms[r] / 60000 - env.kickoffOffsetMin;
+        // Round 4: the LINE's real points stop at the whistle — the
+        // post-whistle settlement-crush trades (which run past the
+        // approximated whistle) stay on screen as dots, but appending
+        // them to the path after the (whistleMinute, 0) pour point would
+        // draw a backward-hooking segment, a visible feature with no
+        // meaning. The pour is the trace's final segment, strictly down.
+        if (isFranceLeg(legSpec) && m >= 0 && m <= env.whistleMinute) rows.push(r);
       }
       if (!rows.length) return [];
       const stride = Math.max(1, Math.ceil(rows.length / maxPts));
@@ -663,9 +888,20 @@ export default {
     const tracePathEl = g.append('path').attr('class', 'france-trace')
       .attr('fill', 'none')
       .attr('stroke', view.css('ink-hero'))
-      .attr('stroke-width', 1.5)
+      .attr('stroke-width', 2)
       .attr('stroke-linecap', 'round')
-      .attr('stroke-opacity', 0.85)
+      .attr('stroke-opacity', 0.95)
+      .style('opacity', 0);
+    // Round 4, header note (2): a bright current-price head rides the
+    // trace tip while the market is live, so the story's "now" — not any
+    // grey context mass — owns the frame's luminance peak at every scrub
+    // position (perception-brief §1: luminance singleton). Radius stays
+    // below the annotated-singleton core (5px) so the goal markers keep
+    // their rank in the emphasis stack; it retires at the pour, when the
+    // ending takes over.
+    const traceHead = g.append('circle').attr('class', 'trace-head')
+      .attr('r', 3)
+      .attr('fill', view.css('ink-hero'))
       .style('opacity', 0);
     let tracePourFired = false;
     function updateTrace(cutoff) {
@@ -673,12 +909,26 @@ export default {
       if (pts.length < 2) {
         tracePathEl.attr('d', null);
         fadeOut(tracePathEl);
+        fadeOut(traceHead);
         return;
       }
       tracePathEl.attr('d', traceLineGen(pts));
       fadeIn(tracePathEl);
       const reachedFloor = cutoff >= env.whistleMinute - 0.5;
       tracePathEl.attr('stroke', reachedFloor ? view.css('state-dead') : view.css('ink-hero'));
+      if (reachedFloor) {
+        fadeOut(traceHead);  // the pour is the story now, not the "now" point
+      } else {
+        const tip = pts[pts.length - 1];
+        traceHead.attr('cx', clockX(tip.minute)).attr('cy', priceY(tip.price));
+        fadeIn(traceHead);
+      }
+      // Reverse scrub: rearm the pour and clear the floor band so a
+      // reader scrolling back up returns to the live-market frame.
+      if (!reachedFloor && tracePourFired) {
+        tracePourFired = false;
+        floorBand.interrupt().attr('fill-opacity', 0);
+      }
       if (reachedFloor && !tracePourFired) {
         tracePourFired = true;
         // Onset pulse (perception-brief §7): per-dot size is never touched
@@ -706,10 +956,11 @@ export default {
       .attr('stroke-opacity', 0.4)
       .style('opacity', 0);
 
-    // Amber singleton protocol (design-system §6 emphasis stack: luminance
-    // singleton, white core + amber halo) for "the goal" — the scene's
-    // ONE amber unit (design-revision-spec §2 S1: the whistle is demoted
-    // below, so it no longer competes for the same budget).
+    // Amber protocol (design-system §6 emphasis stack: luminance
+    // singleton, white core + amber halo). Round 4, header note (3): the
+    // scene now carries ONE amber MEANING — "a Spain goal" — in two
+    // instances, one per verified goal; the whistle stays demoted to
+    // plain ink-mid below, so nothing else competes for the amber budget.
     function makeAnnotation() {
       const grp = g.append('g').attr('class', 'annotation').style('opacity', 0);
       grp.append('circle').attr('class', 'halo')
@@ -739,6 +990,7 @@ export default {
     }
 
     const goalAnn = makeAnnotation();
+    const goal2Ann = makeAnnotation();  // round 4: Porro's 58th-minute goal (~79' wall clock)
 
     // Declutter checklist (design-revision-spec §4): the whistle drops its
     // amber halo, white core, and amber leader — a plain ink-mid text mark
@@ -776,7 +1028,7 @@ export default {
         .style('color', 'var(--ink-mid)')
         .style('padding', 'var(--space-8) var(--space-16)')
         .style('opacity', 0)
-        .html('<span>① the goal</span>&nbsp;&nbsp;<span>② the whistle</span>');
+        .html('<span>① first goal (penalty)</span>&nbsp;&nbsp;<span>② second goal</span>&nbsp;&nbsp;<span>③ the whistle</span>');
     }
 
     function fadeIn(sel, delayMs) {
@@ -790,6 +1042,14 @@ export default {
     // zoom -> settle, since this single-beat scrub scene changes color
     // meaning mid-beat (the declarative `beat.chip` below only covers the
     // first activation snap). Capped at 3 meaning rows + 1 standing row.
+    // Round 4, header notes (1) and (4): no orange row — no orange mark is
+    // findable on screen (key hygiene: a row exists iff its mark is) — and
+    // no row ever rewords. The pale-grey rest row keeps one label across
+    // all three phases; settlement ADDS the visually distinct dark-grey
+    // state-dead row (its swatch renders at the dead state's own alpha,
+    // main.js keySwatchRGBA), and the chip's own pulse fires on that
+    // update in the same instant as the floor-band onset pulse, so the
+    // new meaning arrives announced.
     let chipPhase = null;
     function updateChip(cutoff, t) {
       let phase;
@@ -801,19 +1061,18 @@ export default {
       if (phase === 'pretitle') {
         view.setChip([
           { token: 'accent-annotation', glyph: 'dot', label: "amber = tonight's match, France v Spain" },
-          { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+          { token: 'field-rest', glyph: 'dim', label: 'pale grey = money at rest, the whole tournament' },
         ]);
       } else if (phase === 'zoom') {
         view.setChip([
-          { token: 'side-yes', glyph: 'dot', label: 'cyan = money that bet YES' },
-          { token: 'side-no', glyph: 'dot', label: 'orange = money that bet NO' },
-          { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+          { token: 'side-yes', glyph: 'dot', label: 'cyan = one dot, one real trade' },
+          { token: 'field-rest', glyph: 'dim', label: 'pale grey = money at rest, the whole tournament' },
         ]);
       } else {
         view.setChip([
-          { token: 'side-yes', glyph: 'dot', label: 'cyan = money that bet YES' },
-          { token: 'side-no', glyph: 'dot', label: 'orange = money that bet NO' },
-          { token: 'state-dead', glyph: 'dead', label: 'grey = settled to zero, dead money' },
+          { token: 'side-yes', glyph: 'dot', label: 'cyan = one dot, one real trade' },
+          { token: 'field-rest', glyph: 'dim', label: 'pale grey = money at rest, the whole tournament' },
+          { token: 'state-dead', glyph: 'dead', label: 'dark grey = settled to zero, dead money' },
         ]);
       }
     }
@@ -827,20 +1086,32 @@ export default {
       // lane with anything else (one caption at a time).
       if (cutoff <= 0) fadeIn(caption); else fadeOut(caption);
       // Gate-4 s01 major fix (scrub25: zero amber singletons): the dim
-      // goal-preview guide owns the scene's one amber unit until the goal
-      // itself resolves it into the full annotation, never both at once.
+      // goal-preview guide owns the amber budget until the first goal
+      // resolves it into the full annotation, never both at once.
       if (cutoff > 0 && cutoff < env.eventMinute) fadeIn(goalPreview); else fadeOut(goalPreview);
       if (cutoff >= env.eventMinute) {
         placeAnnotation(
           goalAnn, clockX(env.eventMinute), priceY(env.eventPriceC), 24, -28,
-          view.mobile ? '①' : 'the goal',
+          view.mobile ? '①' : 'the first goal, a penalty',
         );
         fadeIn(goalAnn);
+      } else {
+        fadeOut(goalAnn);
+      }
+      // Round 4, header note (3): the second cliff gets the same amber
+      // treatment when the scrub reaches it — one meaning, two instances.
+      if (env.event2Minute != null && cutoff >= env.event2Minute) {
+        placeAnnotation(
+          goal2Ann, clockX(env.event2Minute), priceY(env.event2PriceC), 24, -30,
+          view.mobile ? '②' : 'the second goal',
+        );
+        fadeIn(goal2Ann);
+      } else {
+        fadeOut(goal2Ann);
       }
       if (cutoff >= env.whistleMinute - 0.5) {
         if (view.mobile) {
-          placeAnnotation(goalAnn, clockX(env.eventMinute), priceY(env.eventPriceC), 24, -28, '①');
-          placeWhistle(clockX(env.whistleMinute), priceY(0) - 40, 24, -12, '②');
+          placeWhistle(clockX(env.whistleMinute), priceY(0) - 40, 24, -12, '③');
         } else {
           placeWhistle(clockX(env.whistleMinute), priceY(0) - 40, -24, -12, 'the whistle');
         }
@@ -849,6 +1120,11 @@ export default {
         // floorBand's own reveal (fill-opacity) is driven by updateTrace()'s
         // onset pulse above, fired the instant the trace reaches the floor.
         if (footerLegend) fadeIn(footerLegend);
+      } else {
+        // Reverse scrub: the settlement furniture leaves with the pour.
+        fadeOut(whistleGrp);
+        fadeOut(settleLine);
+        if (footerLegend) fadeOut(footerLegend);
       }
     }
 
@@ -882,7 +1158,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>For more than a year, a ticket that pays off if France wins the World Cup cost about forty cents.<sup><a href="#fn-2">2</a></sup> Here is the deal on every ticket like it: it pays one dollar if its team wins, and nothing if it does not. So a price of forty cents means the crowd thought France's chance was about forty out of a hundred. The market's own word for a ticket like this is a contract. Watch for the one vertical jump on the chart ahead: that is the goal. On July 14, Spain beat France in ninety minutes, and the ticket fell to zero.<sup><a href="#fn-1">1</a></sup> Down here, one dot is one real trade from that night. Cyan dots are money that bet yes, France wins. Orange dots are money that bet no. At the final whistle, the exchange pays a dollar to every ticket that won and nothing to every ticket that lost, a moment traders call settling, and the market closes for good. That is the pour you see hit the floor on screen. This was the night Spain booked tonight's final. Before you judge tonight's price, you should meet the thing that set it. The story starts fourteen months earlier.</p>`,
+      html: `<p>For more than a year, a ticket that pays off if France wins the World Cup cost about forty cents.<sup><a href="#fn-2">2</a></sup> Here is the deal on every ticket like it: it pays one dollar if its team wins, and nothing if it does not. So a price of forty cents means the crowd thought France's chance was about forty out of a hundred. The market's own word for a ticket like this is a contract. On July 14, Spain beat France in ninety minutes, and the ticket fell to zero.<sup><a href="#fn-1">1</a></sup> Watch the white line on the chart ahead: it is France's price through that night, and it falls twice. Each fall is a Spain goal, one in each half, the first from the penalty spot. Down here, one cyan dot is one real trade from that night, and every trade has two sides: one buyer said yes, France wins, and another said no. At the final whistle, the exchange pays a dollar to every winning ticket and nothing to every losing one, a moment traders call settling, and the market closes for good. That is the grey pour you see hit the floor on screen. This was the night Spain booked tonight's final. Before you judge tonight's price, you should meet the thing that set it. The story starts fourteen months earlier.</p>`,
       // Hard budget (storyboard): the whole of S1, pre-title included,
       // occupies at most 6 viewport-heights. The static title header
       // (CONTRACT §8.2) already spends 1; this scrub spends the remaining 5.
@@ -902,14 +1178,16 @@ export default {
       // scrub proceeds (updateChip above).
       chip: [
         { token: 'accent-annotation', glyph: 'dot', label: "amber = tonight's match, France v Spain" },
-        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+        { token: 'field-rest', glyph: 'dim', label: 'pale grey = money at rest, the whole tournament' },
       ],
       grain: {
         // Storyboard-verbatim template (CONTRACT §4.2/§4.3 zoom.grainText
-        // format); {n}/{count} are filled by the driver's narrated-sampling
-        // substitution. NOTE: main.js's zoomGrainText() helper is defined
-        // but not yet called from activateBeat() for zoom scenes — see
-        // data_requests in the build handoff.
+        // format); {n}/{count} are filled in by main.js's activateBeat() ->
+        // zoomGrainText() at beat activation (round 3: confirmed wired —
+        // the earlier "not yet called" note here was stale). {count} now
+        // reads off manifest.zoom.fraesp.trades, so it tracks the rebuilt
+        // France-leg-only tile automatically, with no template edit needed
+        // here when the data layer re-runs the tile build.
         text: '1 dot = 1 trade · showing every {n}th of {count} trades · France–Spain, July 14',
         variant: 'debut',
       },

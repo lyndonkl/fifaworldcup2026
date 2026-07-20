@@ -1,0 +1,25 @@
+{
+  "tiles_written": [
+    {
+      "name": "manifest.json",
+      "bytes": 8007
+    },
+    {
+      "name": "scenes/s19.json",
+      "bytes": 19410
+    },
+    {
+      "name": "zoom/esparg.bin",
+      "bytes": 1298320
+    },
+    {
+      "name": "zoom/fraesp.bin",
+      "bytes": 563152
+    }
+  ],
+  "total_bytes": 17995211,
+  "total_mb": 17.995,
+  "manifest_path": "/Users/kushaldsouza/Documents/Thinking/fifaworldcup2026/docs/data/manifest.json",
+  "hero_untouched": true,
+  "s19_path": "/Users/kushaldsouza/Documents/Thinking/fifaworldcup2026/docs/data/scenes/s19.json"
+}

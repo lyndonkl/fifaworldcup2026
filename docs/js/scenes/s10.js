@@ -682,7 +682,7 @@ export default {
     },
     {
       id: 'b3',
-      html: `<p>Sixteen times during the knockout stage, Pinnacle — the professional sportsbook from the goal scene — simply stopped quoting a live three-way. Each grey line marks the moment: not one shows a fresh Pinnacle quote arriving afterward.${FN(15)}</p><p>Sixteen episodes, one cause: the professionals had left the room.</p>`,
+      html: `<p>Sixteen times in the knockout stage, Pinnacle stopped quoting a live three-way price. Pinnacle is the professional sportsbook from the goal scene. Each grey line marks that moment. No line shows a fresh quote arriving after it.${FN(15)}</p><p>One cause explains all sixteen: the professionals had left the room.</p>`,
       trigger: 'step',
       overlayStep: 'b3',
     },

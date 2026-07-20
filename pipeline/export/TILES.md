@@ -7,11 +7,17 @@ Run with `pipeline/.venv/bin/python pipeline/export/build_tiles.py`; verify
 with `pipeline/.venv/bin/python pipeline/export/verify_tiles.py`. Both are
 plain scripts, no arguments, safe to re-run at any time — every number in
 `docs/data/` is a pure function of the current contents of `pipeline/data/`.
+A second entry point, `build_tiles.py --epilogue`, runs a strictly
+additive pass on top of an existing build (§7) — it is how the v2 epilogue
+artifacts below were added without disturbing the frozen `manifest.hero`/
+`frozen_at`.
 
-Last run: 159,809 desktop dots / 47,785 mobile dots / 16.7MB total (§7 has
-the full size table). Re-running after new ticks land (a G1 re-drive, the
-v2 epilogue's incremental pull) reproduces the algorithm on the grown tape
-with no code change — only the numbers move.
+Last full build: 165,042 desktop dots / 49,394 mobile dots. Last
+`--epilogue` pass (2026-07-19, post-final): 18.00MB total docs/data/ (§8
+has the full size table). Re-running the full build after new ticks land
+(a G1 re-drive, the v2 epilogue's incremental pull) reproduces the
+algorithm on the grown tape with no code change — only the numbers move;
+`--epilogue` is re-runnable the same way for its own three artifacts.
 
 ---
 
@@ -177,17 +183,30 @@ applied exactly once, here, at export — the browser never sees a raw tick.
   single-print reversion spikes) — applied in `read_pinnacle_ftr()` /
   `screen_pinnacle_spikes()`, used by the norbra tile's Pinnacle lane.
 
-**S1 · `zoom/fraesp.bin`.** All three FRA-ESP 3-way legs (`FRA`/`ESP`/
-`TIE`), full available tape (74,439 rows spanning 2026-07-10T21:31 through
-2026-07-14T21:00, i.e. pre-match build-up through the settlement pour — the
-data-audit's G1 gap note about a frozen pre-kickoff snapshot has since
-closed: background ingestion caught the match's in-game and settlement tape
-before this build ran). The repricing-event flag (`flags` bit 0) uses the
+**S1 · `zoom/fraesp.bin`.** **Corrected by the epilogue-pass S01 integrity
+fix (2026-07-19, `--epilogue`; see sec 7 below).** Originally shipped all
+three FRA-ESP 3-way legs (`FRA`/`ESP`/`TIE`) in one tile, 74,439 rows, with
+`window` computed as the min/max `created_ts` across all three legs
+combined. The design review's blind-read audit
+(`research/design-review/visual-story-review.md`, s01 Tier 2/P3) flagged
+two consequences of that: the runtime sample (`stride = ceil(T/D)`, CONTRACT
+§4.3) spent up to two-thirds of its budget on legs s01.js renders at 0.40
+alpha and never keys, diluting the France signal the scene is actually
+about; and ESP/TIE bought a key row with no reliably findable on-screen
+referent ("two of three key meanings invisible"). `build_fraesp_zoom()` now
+ships **France's own regulation leg only** — 35,196 rows, window
+2026-07-10T21:31:05 through 2026-07-14T20:59:32 (recomputed from this leg's
+own first/last trade, not the old three-leg union) — **3.98 days of
+pre-kickoff positioning, then the match**, exactly what the manifest's
+`window` field now claims and exactly what s01.js's axis title ("price of
+the France contract") and hero/companion split (`isFranceLeg()`) already
+assumed. 563,152 bytes, well inside the 6MB cap (no LOD thinning needed;
+`build_stride` stays 1). The repricing-event flag (`flags` bit 0) uses the
 cross-source `events_matched.parquet` row for this match if one exists,
 else a simplified single-source detector (`detect_single_source_event()`):
 resample the FRA leg to 1-minute last-price and flag the single largest
-1-minute move. No sampling needed (74,439 rows ≪ the 375,000-row cap for a
-6MB budget).
+1-minute move — unchanged by the fix, just now run over one leg instead of
+three.
 
 **S6 · `zoom/mexeng.bin`.** The `KXWCADVANCE-…-MEX` leg only (the single
 market the storyboard zooms), full lifetime (999,889 trades — "about a
@@ -242,6 +261,30 @@ to event + 35min (bracketing R20's 30-minute friction-band check).
 
 32,295 rows, 0.52MB.
 
+**S19 (v2 epilogue) · `zoom/esparg.bin`.** Added by the epilogue-pass
+build (`--epilogue`, sec 7), after the July 19 final settled. The final's
+own regulation-time 3-way (`KXWCGAME-26JUL19ESPARG`) settled `TIE` — the
+match was level after 90 minutes, and Spain won beyond regulation (method
+of finish: extra time, `KXWCMOF-26JUL19ESPARG-ET` settled yes). Two legs
+only: `TIE` (`leg=0`, the story leg — the draw hardening into fact) and
+`ESP` (`leg=1`, Spain to win in regulation, secondary — its price fades as
+the draw firms up on the same clock). `ARG` is deliberately excluded: a
+third leg would reopen the exact sample-dilution/key-clutter problem the
+fraesp fix above just closed, and the epilogue's story is the draw and
+Spain's regulation-time price, not a three-way recap. `window` is the
+union of both legs' own first/last trade (2026-07-15T22:00:52 through
+2026-07-19T21:18:51, i.e. the market's full life from opening right after
+the England-Argentina semifinal settled through the final's own
+settlement) — 81,144 rows (`tie`=42,224, `esp`=38,920), 1,298,320 bytes,
+well inside a 3MB cap, no LOD thinning. No cross-source `events_matched`
+row exists for this match (it postdates the Phase-2 analysis run still
+folded into the dossier), so the repricing-event flag falls back to
+`detect_single_source_event()` on the TIE leg — the single largest
+1-minute move, i.e. the sharpest moment the draw hardened. Leg identity is
+baked into the generic `leg` column exactly as gerpar/norbra already do;
+`manifest.zoom.esparg.legs[i].label` names which price a scene is reading,
+so nothing plots TIE and ESP as one series on one axis by mistake.
+
 **Sort order.** Every zoom tile is globally re-sorted by `ts_ms` ascending
 after all legs are stacked (`stack_zoom_rows()`), satisfying the contract's
 "trades sorted by ts_ms ascending" rule even where a tile mixes multiple
@@ -285,6 +328,9 @@ v2 epilogue" directly):
 | `s14.json` (FLB calibration buckets, both weightings) | B | `flb_kalshi_buckets*.parquet` (R7) |
 | `s15.json` (semifinalists vs Opta/Elo) | B | `semifinalists_price_vs_opta_elo.csv` (R6) |
 | `s16.json` | — | no new data; lens lockup labels only, recaps s09/s10/s13/s14/s15 anchors |
+| `s19.json` `settlement`/`tie_climb`/`next_belief` (epilogue pass) | A | `build_scene_s19()`, §7 below — live off the raw tape/catalog |
+| `s19.json` `exam_restated` (epilogue pass) | — (frozen, read-only) | verbatim copy of `manifest.hero`; never recomputed |
+| `s19.json` `spain_vs_model` (epilogue pass) | B | `semifinalists_price_vs_opta_elo.csv` (R6), same file s15.json cites |
 
 ## 5. The S10 braid, in detail
 
@@ -350,25 +396,117 @@ trace to draw.
   threshold if a scene needs to distinguish "one clean price" dots from
   "spans a big move" dots.
 
-## 7. Budget (last run)
+## 7. The epilogue pass (`--epilogue`)
+
+`pipeline/.venv/bin/python pipeline/export/build_tiles.py --epilogue` runs a
+small, strictly additive pass on top of an existing `docs/data/` build,
+added 2026-07-19 after the final settled. It is the only supported way to
+add v2-epilogue artifacts to the shipped data.
+
+**HARD RULE (CLAUDE.md): `manifest.hero` and `manifest.frozen_at` are
+frozen.** The piece promised "this number will not update," so this pass
+never calls `build_population()` or `build_hero()`, never touches
+`pop-75k.bin`/`pop-250k.bin`/`markets.json`/`series.bin`, and loads the
+*existing* `docs/data/manifest.json` as its base rather than rebuilding one
+from scratch (`run_epilogue_pass()`). It writes exactly three artifacts and
+mutates exactly three manifest keys:
+
+1. `data/zoom/esparg.bin` → `manifest.zoom.esparg` (new; §3 above)
+2. `data/zoom/fraesp.bin` → `manifest.zoom.fraesp` (corrected in place; the
+   S01 integrity fix, §3 above)
+3. `data/scenes/s19.json` → `manifest.scenes.s19` (new; below)
+
+Every other manifest key — `hero`, `frozen_at`, `frozen_at_note`,
+`generated`, `population`, `enums`, `teams`, `markets`, `series`, `census`,
+`coda`, and every other `scenes.*` entry — passes through byte-for-byte
+from the loaded file. This is verified two ways: (a) round-tripping the
+untouched manifest through `json.load` → `json.dump` with this file's own
+`separators=(",", ":")` reproduces the original bytes exactly (checked
+directly against the file before writing this section), so leaving those
+keys unassigned in the loaded dict is sufficient, not just probably-fine;
+(b) the pass re-reads the file it just wrote and asserts `hero`/`frozen_at`
+match what it loaded, byte for byte, before declaring success — if that
+assertion fails, it raises rather than shipping a changed freeze.
+
+**`data/scenes/s19.json`** — the epilogue scene's data (storyboard.md §5,
+SE1 "the morning after," beat 1 "the settle" and its supporting numbers;
+beats 2/4, the full lens audit and the last lifetime total, are follow-up
+work gated on the tournament-wide incremental pull, not blocked by
+anything here). Five top-level sections, all class A live recomputes off
+the raw tape except where noted:
+
+- `settlement` — champion/runner-up winner-futures last trades (Spain
+  99.9c, Argentina 0.1c), the regulation 3-way result (`tie`), and the
+  method of finish. The method is read off all three `KXWCMOF-…` legs'
+  own last trade and the one that settled near certainty wins — a pure
+  function of the tape, same discipline as R9, never hardcoded — which
+  resolves to `extra_time` (`KXWCMOF-26JUL19ESPARG-ET` last trade 99c;
+  `-REG`/`-PEN` both settled to 1c).
+- `tie_climb` — the TIE leg's (and, leg-tagged separately, the ESP leg's)
+  price from kickoff (2026-07-19T19:00:00Z, `research/fact-base.json`)
+  through the leg's own last trade, resampled to a 1-minute last-price
+  grid (139 points, kickoff-relative minute 0–138, each also carrying a
+  0–100 `progress_pct` for a normalized read). Kalshi's tick timestamps
+  are second-resolution (§1), so the resample first collapses to
+  last-price-per-second before reindexing — the same step `build_braid()`
+  documents needing. `headline_half_hour` is the wall-clock 30-minute
+  bucket containing the leg's own last trade (`(match_end // 1800) *
+  1800`, a pure function of the tape, not a hardcoded hour) — for this
+  match that resolves to 21:00–21:30Z: 16,961 trades, mean (unweighted)
+  85.4c, VWAP 86.9c. `pre_match`/`pre_match_daily` summarize the leg's
+  flat ~32–33c life over the four days before kickoff cheaply (daily
+  buckets, not a four-day 1-minute series).
+- `exam_restated` — a read-only echo of `manifest.hero.legs`/`book_sum_raw`,
+  copied verbatim, never recomputed (the hard rule above).
+- `spain_vs_model` — the "13-month Spain-vs-model gap recap." Reuses
+  `docs/data/scenes/s15.json`'s own 5-stage id/label/window taxonomy
+  (joined by `id`) and extends it with both France's and Spain's own
+  `kalshi_price`/`opta_win_pct`/`gap_kalshi_minus_opta_share_pp` from
+  `semifinalists_price_vs_opta_elo.csv` — the same class-B source file
+  s15.json's own `_provenance` already cites (R6). s15.json itself only
+  ships France's `opta_pct` as a single reference line (see
+  `build_scene_s15_v2()`'s docstring); Spain's own model/price/gap figures
+  live only in this CSV, so s19 reads them from there rather than
+  re-deriving anything from population-dot positions.
+- `next_belief` — the 2030 winner book's birth: `KXWC-30-*` market count
+  (82, counted live off `pipeline/data/catalog/markets.parquet` — note this
+  is a different, larger number than the "30 markets" mentioned in early
+  verbal notes about this listing, which this pass does not repeat because
+  the catalog itself says otherwise), the shared `open_time`
+  (2026-07-19T22:15:00Z), the gap from the champion futures leg's own last
+  trade (632s), and, per market, the first trade's timestamp/price where
+  one exists yet (16 of 82 markets had traded by build time; Spain,
+  Argentina, and France lead by volume, all opening near 99c).
+
+## 8. Budget (last run)
+
+Snapshot after the `--epilogue` pass (2026-07-19), full `docs/data/` tree —
+numbers below include the G3 full-build artifacts (population, markets,
+series, the 500-shard replay coda) that `--epilogue` itself never touches,
+next to the three artifacts it added/corrected:
 
 | file | bytes | MB | cap | status |
 |---|---:|---:|---:|---|
-| `manifest.json` | 7,240 | 0.007 | — | — |
-| `markets.json` | 609,661 | 0.610 | 1.5 (shared) | OK |
-| `pop-75k.bin` | 2,556,980 | 2.557 | 4.0 | OK |
-| `pop-250k.bin` | 764,596 | 0.765 | 1.5 | OK |
-| `zoom/fraesp.bin` | 1,191,044 | 1.191 | 6.0 | OK |
+| `manifest.json` | 8,007 | 0.008 | — | — |
+| `markets.json` | 621,041 | 0.621 | 1.5 (shared) | OK |
+| `pop-75k.bin` | 2,640,700 | 2.641 | 4.0 | OK |
+| `pop-250k.bin` | 790,332 | 0.790 | 1.5 | OK |
+| `zoom/fraesp.bin` | 563,152 | 0.563 | 6.0 | OK (corrected: FRA leg only, §3/§7) |
 | `zoom/mexeng.bin` | 7,999,148 | 7.999 | 10.0 | OK |
 | `zoom/gerpar.bin` | 2,509,124 | 2.509 | 3.0 | OK |
-| `zoom/norbra.bin` | 516,740 | 0.517 | 3.0 | OK |
-| `series.bin` | 184,864 | 0.185 | 4.0 | OK |
-| `data/scenes/*.json` (16 files) | 345,904 | 0.330 | 2.0 | OK |
-| `data/replay/index.json` | 62,558 | 0.060 | — (lazy) | OK |
-| **TOTAL** | **17,547,859** | **16.73** | **40.0** | **OK, 58% headroom** |
+| `zoom/norbra.bin` | 523,920 | 0.524 | 3.0 | OK |
+| `zoom/esparg.bin` | 1,298,320 | 1.298 | 3.0 | OK (new, §3/§7) |
+| `series.bin` | 184,904 | 0.185 | 4.0 | OK |
+| `data/scenes/*.json` (17 files, incl. s19) | 412,778 | 0.413 | 2.0 | OK |
+| `data/replay/index.json` | 127,161 | 0.127 | — (lazy) | OK |
+| `data/replay/shards/*.bin` (514 files, lazy) | 316,624 | 0.317 | 6.0 (lazy) | OK |
+| **TOTAL** | **17,995,211** | **18.00** | **40.0** | **OK, 55% headroom** |
 
-Population: 159,809 desktop dots (grain $75,000), 47,785 mobile dots (grain
-$250,000). Verified with `pipeline/export/verify_tiles.py` — 108 structural
+Population: 165,042 desktop dots (grain $75,000), 49,394 mobile dots (grain
+$250,000) — unchanged by `--epilogue` (population is never rebuilt by that
+pass). Verified with `pipeline/export/verify_tiles.py` — 122 structural
 checks, 0 failures (magic bytes, header counts vs. manifest, every column's
-offset+length within the file, `ts_ms` sorted ascending in every zoom tile,
-total payload within budget).
+offset+length within the file, `ts_ms` sorted ascending in every zoom tile
+including `esparg`, total payload within budget). Scene-JSON field parity
+(`pipeline/export/check_scene_field_parity.py`, s02–s15's own read-sets,
+unaffected by s19) — 77 checks, 0 failures.

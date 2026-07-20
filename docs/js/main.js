@@ -39,6 +39,14 @@ import {
 /* none -- every scene carries a named skill job in the structure spec.  */
 /* Do not reorder or comment out any line below without a corresponding  */
 /* structure-spec revision; this array is intentionally untouched.       */
+/*                                                                       */
+/* PHASE 6 (v2 epilogue): s19 ("The morning after," storyboard §5 SE1)   */
+/* is wired into the SCENES array between s17 and s18 per SE1's own      */
+/* placement guidance and this build's explicit instruction -- s18 stays */
+/* the final scene, the rail still releases there. The import line below */
+/* sits after s18's for minimal diff; array position is what determines  */
+/* scroll order (main.js §6.3: "registry order = storyboard order =      */
+/* scroll order"), not import order.                                     */
 
 import s01 from './scenes/s01.js';
 import s02 from './scenes/s02.js';
@@ -58,10 +66,11 @@ import s15 from './scenes/s15.js';
 import s16 from './scenes/s16.js';
 import s17 from './scenes/s17.js';
 import s18 from './scenes/s18.js';
+import s19 from './scenes/s19.js';  // v2 epilogue, placed between s17 and s18
 
 const SCENES = [
   s01, s02, s03, s04, s05, s06, s07, s08, s09,
-  s10, s11, s12, s13, s14, s15, s16, s17, s18,
+  s10, s11, s12, s13, s14, s15, s16, s17, s19, s18,
 ];
 
 /* ---------------------------------------------------------------- */

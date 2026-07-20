@@ -500,10 +500,17 @@ def main():
         log(f"navigating to {target_url}")
         chrome.navigate(target_url)
 
-        log("waiting for boot: window.__rt.engine + 18 rail sections ...")
+        # PHASE 6 FIX (v2 epilogue, s19 added between s17/s18): this gate was
+        # hardcoded to the v1 scene count (18) and never became true once the
+        # registry grew to 19, blocking every capture run including scenes
+        # that hadn't changed. Compare against window.__rt.scenes.length (the
+        # live registry, main.js's own debug hook) instead of a literal, so
+        # this gate tracks whatever main.js's SCENES array actually contains
+        # rather than needing a hand-edit at every future scene count change.
+        log("waiting for boot: window.__rt.engine + one <section> per registered scene ...")
         boot_expr = (
-            "!!(window.__rt && window.__rt.engine && "
-            "document.querySelectorAll('#rail section.scene').length===18)"
+            "!!(window.__rt && window.__rt.engine && window.__rt.scenes && "
+            "document.querySelectorAll('#rail section.scene').length===window.__rt.scenes.length)"
         )
         deadline = time.time() + BOOT_TIMEOUT_S
         booted = False
@@ -515,7 +522,7 @@ def main():
         if not booted:
             raise RuntimeError(
                 f"boot condition never became true within {BOOT_TIMEOUT_S}s "
-                "(window.__rt.engine + 18 rail sections)"
+                "(window.__rt.engine + one <section> per registered scene)"
             )
         pop_count = chrome.evaluate(
             "window.__rt.data.pop ? window.__rt.data.pop.count : null"
