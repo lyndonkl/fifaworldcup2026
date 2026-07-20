@@ -51,12 +51,15 @@
  *      This module never hardcodes a team code; it always resolves
  *      `manifest.teams.indexOf(row.team)` using the code the scene JSON
  *      supplies, so the tile builder's convention is authoritative.
- *   5. `zombie_money` totals (277 trades, ~$2,190) come from
+ *   5. `zombie_money` totals (302 trades, ~$2,340) come from
  *      pipeline/data/analysis/bias-forensics/zombie_money.parquet, summed
- *      across all 28 knockout losers; only 26 rows existed at data-audit
- *      time (277 trades / $2,190), consistent with the storyboard's note
- *      that post-July-14 matches are still settling — the deploy re-run
- *      completes this sum.
+ *      across all 28 knockout losers. Gate-5 provenance audit: the
+ *      generating script's futures-leg JOIN matched on exact
+ *      `yes_sub_title` team-name text, which silently dropped 2 of the 28
+ *      losers over name-order/abbreviation mismatches (DR Congo/Congo DR,
+ *      United States/USA) and shipped an under-scoped 277/$2,190 total;
+ *      the JOIN now normalizes on a word-order-invariant, alias-mapped
+ *      team name so all 28 losers resolve.
  */
 
 /* global d3 */
@@ -389,7 +392,7 @@ function overlay(container, data, view, scalesObj) {
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
       .style('fill', view.css('ink-low'))
-      .text('each dot: $75,000 of real money, before kickoff');
+      .text(`each dot: $${Math.round(view.grain.usd).toLocaleString('en-US')} of real money, before kickoff`);
 
     // Bar outlines: the SAME per-host dot count layout() stacked into a
     // column, drawn once as a rectangle so the stacked dots read as "fill
@@ -504,7 +507,7 @@ const s13 = {
         { token: 'identity-teal', glyph: 'dot', label: "teal = Argentina's money" },
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded', variant: 'return' },
+      grain: { text: '1 dot = {grainUsd} of real money traded', variant: 'return' },
       overlayStep: 'b1',
     },
     {
@@ -549,8 +552,8 @@ const s13 = {
     {
       id: 'b4',
       html: `<p>When a team lost, the loyal money did not linger. All 28
-        knockout losers' championship tickets wound down together: 277
-        trades, about $2,190 in total, every one of them at a penny or
+        knockout losers' championship tickets wound down together: 302
+        trades, about $2,340 in total, every one of them at a penny or
         less.<sup><a href="#fn-18">18</a></sup> Tonight the flags at MetLife
         Stadium will be Argentina's, and loud. Now you know the price will
         not care. It never did.</p>`,

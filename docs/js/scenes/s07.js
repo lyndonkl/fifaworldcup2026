@@ -13,6 +13,56 @@
  *   Polymarket -> 60s-wide native-minute blocks (outline rect, never a point)
  * Identical glyphs across lanes are BANNED (design-system.md, C3).
  *
+ * FIX-PASS (Gate-5 blind-review re-audit, scored 5.5/10): seven defects
+ * closed here, all data-derived, none touching docs/data/scenes/s07.json:
+ *   1. The friction band (b4) now anchors on the median Kalshi NOR-leg
+ *      price in [t0+120s, t0+300s] -- the post-jump SETTLED level -- not
+ *      the first tick >=+5s (mid-jump).
+ *   2. The band no longer silently crosses the unmarked second repricing
+ *      (~t0+620s, verified against the raw NOR-leg tape: a 78c->97c move
+ *      inside one 10s bucket, matched independently in events_matched.parquet
+ *      as a tie-leg event at t0+600s). The band now ends at the first
+ *      bucket-to-bucket jump too large to be tick noise, and that cliff
+ *      gets a plain, cause-agnostic label -- "what moved is certain, why it
+ *      moved is not" stays true here too.
+ *   3. The Kalshi lane only draws NOR-leg (Norway-win) ticks now -- this
+ *      tile also carries the BRA-win and draw legs under the same
+ *      ZOOM_NORBRA tag, which were rendering in the same cyan with no way
+ *      to tell them apart. All three lanes get a labeled 0-100c price axis.
+ *   4. fadeCaption no longer overlaps raceCaption (Zone K's 40px headroom
+ *      cannot hold two stacked caption chips). Exclusion-rect measurement
+ *      also ruled out simply stacking it in Zone F below mechanismCaption:
+ *      at this piece's own 1440x900 review viewport that chip's own single
+ *      line already lands a few px from the frame's bottom edge, so a
+ *      second stacked chip rendered entirely off-screen -- invisible, not
+ *      merely tight. fadeCaption's message moved into the K lane's own open
+ *      canvas space instead (b4-only, the same "text where the reader's eye
+ *      already is" treatment b2's darkness-block label already uses), which
+ *      also required a real, readable price trace in that lane -- see 8.
+ *   5. b3's stale "119 seconds" (an older cut of this same number) now
+ *      reads 109, agreeing with b2's own twelve-plus-ninety-eight-second
+ *      arithmetic and the shipped suspend_end_s.
+ *   6. The Pinnacle darkness block was a pale 0.35-alpha wash of a
+ *      mid-luminance grey over a near-black canvas -- it read brighter than
+ *      the background it was supposed to be "going dark" against. It is now
+ *      a bg-canvas-based diagonal hatch (the s05/s11 "no longer quoting"
+ *      convention), and the goal singleton (b1's cue point) now sits at the
+ *      real traded price at the detector-anchored goal tick instead of a
+ *      fixed pixel offset with no data behind it.
+ *   7. Every beat-triggered reveal (the goal mark, both Pinnacle layers, the
+ *      Polymarket blocks, the friction band, every caption) now fades or
+ *      recolors on the standard overlay-draw-in / recolor-min tween instead
+ *      of an instant display:none/null toggle, with a reduced-motion
+ *      snap-to-final-state fallback, matching the rest of the piece.
+ *   8. Added along the way (chart-first doctrine, s01.js/s08.js precedent
+ *      for the identical failure mode): a thin D3 line traces the Kalshi
+ *      NOR leg's own price, built straight from the zoom tile. At only
+ *      ~100 promoted population dots spread across a 2000-second-wide
+ *      lane, the raw dots alone never composited above the resting field's
+ *      noise floor -- there was no way to confirm fixes #1, #2, or #6 sat
+ *      on a real price at all. The dots stay underneath as texture; the
+ *      line carries the signal.
+ *
  * DATA_REQUEST: docs/data/scenes/s07.json, built from
  * pipeline/data/analysis/ingame-microstructure/reaction_latency.parquet +
  * events_matched.parquet (R3) plus the Pinnacle/Polymarket benchmark pulls
@@ -81,7 +131,12 @@ function pinnedCaption(container, text, cls) {
     .style('padding', 'var(--space-8) var(--space-12)')
     .style('max-width', '46ch')
     .style('pointer-events', 'none')
+    .style('opacity', 0) // FIX #7: opacity-driven onset, never a display toggle
     .text(text);
+}
+function findLegIndex(legs, venue, team) {
+  if (!legs) return -1;
+  return legs.findIndex((l) => l.venue === venue && l.team === team);
 }
 
 // Shared clock viewport: a layout/pacing choice (like an axis range), not a
@@ -126,7 +181,7 @@ export default {
   },
 
   layout(data, view) {
-    const { pop } = data;
+    const { pop, manifest } = data;
     const N = pop.count;
     const state = makeState(N);
     const restRgba = particleState(view.tokens, 'dimmed-field-min');
@@ -146,24 +201,51 @@ export default {
     const tagged = indicesWithFlag(pop.flags, bit);
     const D = tagged.length;
     const tile = data.zoom.norbra;
-    const T = tile ? tile.count : 0;
-    const runtimeStride = (T && D) ? Math.max(1, Math.ceil(T / D)) : 1;
+    const spec = manifest.zoom.norbra;
+
+    // FIX #3 (Gate-5 blind-review, critical): ZOOM_NORBRA tags every Kalshi
+    // trade on this fixture -- Brazil-win, Norway-win, AND the draw leg --
+    // because that is every Kalshi trade the tape recorded here. This scene
+    // commits to one vehicle, Norway's leg (the one Haaland's goal moves),
+    // exactly the leg build_s07_scene() already restricts the Pinnacle and
+    // Polymarket lanes to. Drawing all three legs into one undifferentiated
+    // cyan lane mixed a ~65-cent NOR tick with a same-instant BRA/TIE tick
+    // with no way to tell them apart and no price scale to check against.
+    // Only NOR-leg rows get promoted into the Kalshi story lane below; the
+    // BRA/TIE-tagged particles stay exactly where the loop above already
+    // put them (the dimmed resting field) -- still on screen, still counted
+    // in the grain plate, just not part of this beat's story.
+    const norLegIdx = spec && spec.legs ? findLegIndex(spec.legs, 'kalshi', 'NOR') : -1;
+    const kalshiLegIdxs = new Set();
+    if (spec && spec.legs) spec.legs.forEach((l, i) => { if (l.venue === 'kalshi') kalshiLegIdxs.add(i); });
+
+    const norRows = [];
+    let kalshiTotalRows = 0;
+    if (tile) {
+      for (let r = 0; r < tile.count; r++) {
+        if (!kalshiLegIdxs.has(tile.leg[r])) continue;
+        kalshiTotalRows++;
+        if (tile.leg[r] === norLegIdx) norRows.push(r);
+      }
+    }
+    const Dnor = (D && kalshiTotalRows && norRows.length)
+      ? Math.min(D, Math.max(1, Math.round(D * (norRows.length / kalshiTotalRows))))
+      : 0;
+    const runtimeStride = Dnor ? Math.max(1, Math.ceil(norRows.length / Dnor)) : 1;
 
     const goalTs = (data.scene && data.scene.event && data.scene.event.goal_ts)
       ? new Date(data.scene.event.goal_ts).getTime()
       : (tile ? tile.t0 : 0);
 
-    if (tile && D) {
-      for (let i = 0; i < D; i++) {
-        const row = Math.min(i * runtimeStride, T - 1);
-        const di = tagged[i];
-        const ts = tile.t0 + tile.ts_ms[row];
-        const tS = (ts - goalTs) / 1000;
-        state.x[di] = x(Math.max(CLOCK_DOMAIN_S[0], Math.min(CLOCK_DOMAIN_S[1], tS)));
-        state.y[di] = yK(tile.price_c[row]);
-        setColor(state.color, di, kalshiRgba); // color: venue (this scene's exception; see design-system §9 S7)
-        state.size[di] = baseSize; // all lanes assemble together on step 1; no reveal-by-size here
-      }
+    for (let i = 0; i < Dnor; i++) {
+      const row = norRows[Math.min(i * runtimeStride, norRows.length - 1)];
+      const di = tagged[i];
+      const ts = tile.t0 + tile.ts_ms[row];
+      const tS = (ts - goalTs) / 1000;
+      state.x[di] = x(Math.max(CLOCK_DOMAIN_S[0], Math.min(CLOCK_DOMAIN_S[1], tS)));
+      state.y[di] = yK(tile.price_c[row]);
+      setColor(state.color, di, kalshiRgba); // color: venue (this scene's exception; see design-system §9 S7)
+      state.size[di] = baseSize; // all lanes assemble together on step 1; no reveal-by-size here
     }
 
     return { states: { assembled: state } };
@@ -173,6 +255,32 @@ export default {
     const { x, yK, yP, yM, laneTop, laneH } = scales;
     const tokens = view.tokens;
     const g = container.svg;
+
+    const T = tokens.motion.durations_ms;
+    const drawIn = T['overlay-draw-in'];
+    const recolorMs = T['recolor-min'];
+    // FIX #7: onset/transition helpers, replacing every instant
+    // display:none/null toggle in this scene. Reduced motion snaps straight
+    // to the final value (engine's own §3.5 crossfade contract); full
+    // motion tweens on the shared overlay-draw-in / recolor-min tokens.
+    function fadeIn(sel, ms) {
+      if (view.reducedMotion) sel.style('opacity', 1);
+      else sel.transition().duration(ms || drawIn).style('opacity', 1);
+    }
+    function tweenStyle(sel, prop, value, ms) {
+      if (view.reducedMotion) sel.style(prop, value);
+      else sel.transition().duration(ms || recolorMs).style(prop, value);
+    }
+    function tweenAttr(sel, attr, value, ms) {
+      if (view.reducedMotion) sel.attr(attr, value);
+      else sel.transition().duration(ms || recolorMs).attr(attr, value);
+    }
+
+    const goalTs = (data.scene && data.scene.event && data.scene.event.goal_ts)
+      ? new Date(data.scene.event.goal_ts).getTime()
+      : (data.zoom.norbra ? data.zoom.norbra.t0 : 0);
+    const norLegIdx = (data.manifest && data.manifest.zoom.norbra && data.manifest.zoom.norbra.legs)
+      ? findLegIndex(data.manifest.zoom.norbra.legs, 'kalshi', 'NOR') : -1;
 
     // Shared clock axis (the anti-race guarantee lives in the glyphs and
     // the pinned caption below, NOT in de-aligning the lanes -- the
@@ -191,6 +299,19 @@ export default {
       .attr('fill', 'var(--ink-mid)')
       .text('seconds after the goal');
 
+    // FIX #3: a labeled 0-100c price axis per lane (same d3.axisLeft-in-the-
+    // left-margin idiom s08.js already ships), so "plus or minus 2 cents"
+    // (b4) has a visual referent instead of a bare number. Tick format
+    // carries its own unit (cents), so no separate axis title competes with
+    // the venue lane label sitting just inside the same left edge.
+    [laneTop.K, laneTop.P, laneTop.M].forEach((top) => {
+      const yScale = top === laneTop.K ? yK : (top === laneTop.P ? yP : yM);
+      g.append('g').attr('transform', `translate(${view.region.x - 8},0)`)
+        .attr('font-family', 'var(--font-apparatus)')
+        .attr('font-size', 'var(--type-micro-size)')
+        .call(d3.axisLeft(yScale).ticks(5).tickFormat((d) => `${d}¢`));
+    });
+
     // Left-gutter lane labels (CR-7), top-anchored per lane (NOT vertically
     // centered -- centering put this text at the exact same y as the
     // Pinnacle darkness block's "no longer quoting" label, which sits
@@ -204,7 +325,10 @@ export default {
       .attr('font-size', 'var(--type-micro-size)')
       .attr('fill', 'var(--ink-low)')
       .text(text);
-    laneLabel('KALSHI · every trade', laneTop.K);
+    // FIX #3: names the single leg this lane now draws (was "every trade",
+    // silently mixing three legs' prices in one hue with no way to tell
+    // them apart).
+    laneLabel('KALSHI · every trade, the Norway ticket', laneTop.K);
     laneLabel('PINNACLE · dealer quotes', laneTop.P);
     laneLabel('POLYMARKET · one block = one minute', laneTop.M);
 
@@ -212,22 +336,72 @@ export default {
       .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
       .attr('stroke', 'var(--ink-mid)').attr('stroke-width', 1).attr('stroke-dasharray', '1,3');
 
+    // Chart-first line for the Kalshi lane (same doctrine s01.js/s08.js
+    // already use for exactly this failure mode, design-review C2): this
+    // match's NOR leg gets only ~100 promoted population dots spread across
+    // a 2000-second-wide lane -- at rest opacity that sparse a set never
+    // composites above the field's own noise floor, so nothing here would
+    // otherwise show a reader whether the friction band (b4) or the goal
+    // singleton (b1) sit on a real price at all. Built straight from the
+    // zoom tile's own NOR-leg rows, never fabricated; the population dots
+    // stay underneath as texture.
+    function buildNorLinePoints(maxPts) {
+      const tile = data.zoom.norbra;
+      if (!tile || norLegIdx < 0) return [];
+      const rows = [];
+      for (let r = 0; r < tile.count; r++) if (tile.leg[r] === norLegIdx) rows.push(r);
+      if (!rows.length) return [];
+      const stride = Math.max(1, Math.ceil(rows.length / maxPts));
+      const pts = [];
+      for (let i = 0; i < rows.length; i += stride) {
+        const r = rows[i];
+        pts.push({ tS: (tile.t0 + tile.ts_ms[r] - goalTs) / 1000, price: tile.price_c[r] });
+      }
+      const rLast = rows[rows.length - 1];
+      const lastTs = (tile.t0 + tile.ts_ms[rLast] - goalTs) / 1000;
+      if (!pts.length || pts[pts.length - 1].tS !== lastTs) pts.push({ tS: lastTs, price: tile.price_c[rLast] });
+      return pts;
+    }
+    const norLinePts = buildNorLinePoints(600);
+    const kalshiLineGen = d3.line()
+      .x((d) => x(Math.max(CLOCK_DOMAIN_S[0], Math.min(CLOCK_DOMAIN_S[1], d.tS))))
+      .y((d) => yK(d.price));
+    const kalshiLine = g.append('path')
+      .attr('fill', 'none').attr('stroke', 'var(--venue-kalshi)')
+      .attr('stroke-width', 1.5).attr('stroke-linecap', 'round')
+      .attr('d', norLinePts.length > 1 ? kalshiLineGen(norLinePts) : null)
+      .style('opacity', 0);
+
+    // FIX #6: the goal singleton (b1's cue point) now anchors at the real
+    // Kalshi NOR-leg tick the build pipeline already flags as the
+    // detector-anchored goal event (tile.flags bit 0, the same convention
+    // s08.js uses for its shootout kicks), not a fixed pixel offset with no
+    // data behind it. Falls back to the axis's t=0 / a nominal lane
+    // position only if the tile isn't loaded yet.
+    function findGoalTick() {
+      const tile = data.zoom.norbra;
+      if (!tile || norLegIdx < 0) return null;
+      for (let r = 0; r < tile.count; r++) {
+        if (tile.leg[r] === norLegIdx && (tile.flags[r] & 1)) {
+          return { tS: (tile.t0 + tile.ts_ms[r] - goalTs) / 1000, price: tile.price_c[r] };
+        }
+      }
+      return null;
+    }
+    const goalTick = findGoalTick();
+    const goalMarkX = goalTick ? x(Math.max(CLOCK_DOMAIN_S[0], Math.min(CLOCK_DOMAIN_S[1], goalTick.tS))) : x(0);
+    const goalMarkY = goalTick ? yK(goalTick.price) : laneTop.K + 42;
+
     const goalLabel = (data.scene && data.scene.event && data.scene.event.label) || 'the goal';
-    const goalMark = g.append('g').style('display', 'none');
+    const goalMark = g.append('g').style('opacity', 0);
     // b1's amber unit: halo + ink-hero core. At b2 the halo recolors to
     // ink-mid (the core stays as the at-mark anchor) so amber stays a true
     // singleton once the darkness block claims the beat's amber unit.
-    // Nudged 42px below laneTop.K (not flush with it) so the halo and its
-    // label clear both the Zone K race caption above the stage AND the
-    // "KALSHI · every trade" lane label, which sits at laneTop.K+14
-    // (perception-brief P4: all three were overlapping at the stage's top
-    // edge).
-    const goalMarkSel = drawSingleton(goalMark, x(0), laneTop.K + 42, tokens, goalLabel);
+    const goalMarkSel = drawSingleton(goalMark, goalMarkX, goalMarkY, tokens, goalLabel);
 
     // Pinnacle: requote dashes (a visibly different glyph from Kalshi's
     // circles) + the darkness block.
-    const pinG = g.append('g').attr('class', 's07-pinnacle').style('display', 'none');
-    const pinRgba = colorOf(tokens, 'venue-pinnacle');
+    const pinG = g.append('g').attr('class', 's07-pinnacle').style('opacity', 0);
     let darknessRect = null;
     if (data.scene && data.scene.pinnacle) {
       const { quotes, suspend_start_s: s0, suspend_end_s: s1 } = data.scene.pinnacle;
@@ -238,10 +412,29 @@ export default {
           .attr('stroke', 'var(--venue-pinnacle)').attr('stroke-width', 2);
       });
       if (s0 !== undefined && s1 !== undefined) {
+        // FIX #6 (Gate-5 blind-review, major): a 0.35-alpha wash of
+        // venue-pinnacle-terminated (a mid-luminance grey, #6B7480) over
+        // the near-black canvas (#0B0E13) composites LIGHTER than the
+        // background it sits on -- "it goes dark" rendered as a pale
+        // column. Restyled as the s05.js / s11.js diagonal-hatch "no
+        // longer quoting" convention: a bg-canvas base (matches the true
+        // background, not a wash over it) with sparse venue-hued hatch
+        // lines, so the block reads as a void, not a highlight.
+        const hatchId = 's07-suspend-void';
+        const hatchDefs = pinG.append('defs');
+        hatchDefs.append('pattern').attr('id', hatchId)
+          .attr('width', 7).attr('height', 7)
+          .attr('patternUnits', 'userSpaceOnUse').attr('patternTransform', 'rotate(45)')
+          .call((p) => {
+            p.append('rect').attr('width', 7).attr('height', 7).attr('fill', 'var(--bg-canvas)');
+            p.append('line').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 7)
+              .attr('stroke', 'var(--venue-pinnacle-terminated)').attr('stroke-width', 2)
+              .attr('stroke-opacity', 0.9);
+          });
         darknessRect = pinG.append('rect')
           .attr('x', x(s0)).attr('width', Math.max(0, x(s1) - x(s0)))
           .attr('y', laneTop.P).attr('height', laneH)
-          .attr('fill', 'var(--venue-pinnacle-terminated)').attr('fill-opacity', 0.35)
+          .attr('fill', `url(#${hatchId})`)
           .attr('stroke', 'var(--venue-pinnacle-terminated)').attr('stroke-width', 1);
         // "no longer quoting" renders INSIDE the darkness block, centered,
         // ink-mid -- not a floating pinned caption (design-revision-spec
@@ -258,7 +451,7 @@ export default {
 
     // Polymarket: 60s-native blocks, outline-only (non-money mark; the
     // outline-vs-filled contrast IS the "dots are money" unit grammar).
-    const polyG = g.append('g').attr('class', 's07-polymarket').style('display', 'none');
+    const polyG = g.append('g').attr('class', 's07-polymarket').style('opacity', 0);
     if (data.scene && data.scene.polymarket && Array.isArray(data.scene.polymarket.blocks)) {
       data.scene.polymarket.blocks.forEach((b) => {
         const bx0 = x(b.t_s_start); const bx1 = x(b.t_s_end);
@@ -270,88 +463,164 @@ export default {
       });
     }
 
-    // Zone K, one slot: race caption (b1, current) recedes to ink-low at
-    // b2 (CR-9-style decay) and stays pinned per R23 -- it is never
-    // removed, only demoted, so the prohibition is never off screen once
-    // taught. The fade caption (b4) is the slot's second and final
-    // arrival, stacked below it (spacing floor >= --space-24) so both
-    // remain legible at once (CR-4: at most two visible per frame).
+    // Zone K, one slot: race caption (b1, current) recedes to ink-mid at
+    // b2 and stays pinned per R23 -- it is never removed, only demoted, so
+    // the prohibition is never off screen once taught.
     const raceCaption = pinnedCaption(
       container,
       'Three lanes, three native speeds. This is not a race.',
       's07-race-caption',
     ).style('left', `${view.region.x}px`).style('top', `${view.region.y - 40}px`)
-      .style('display', 'none');
+      .style('color', 'var(--ink-hi)');
 
     const mechanismCaption = pinnedCaption(
       container,
       'Kalshi keeps trading. The sportsbook stops, then reposts.',
       's07-mechanism-caption',
-    ).style('left', `${view.region.x}px`).style('top', `${view.region.y + view.region.h + 44}px`)
-      .style('display', 'none');
+    ).style('left', `${view.region.x}px`).style('top', `${view.region.y + view.region.h + 44}px`);
 
-    // Friction band: +-2c around the post-jump level, held to the 30-min
-    // horizon, drawn from the Kalshi tile itself (the first tick shortly
-    // after the goal), never fabricated. Stroke-only (no amber fill wash
-    // across three lanes, perception-brief-driven fix).
-    const bandG = g.append('g').attr('class', 's07-friction').style('display', 'none');
-    const fadeCaption = pinnedCaption(container, 'The spike is the price. Nothing to fade.', 's07-fade-caption')
-      .style('left', `${view.region.x}px`).style('top', `${view.region.y - 14}px`)
-      .style('display', 'none');
+    // FIX #4 (Gate-5 blind-review, major): fadeCaption used to sit at
+    // region.y-14, INSIDE raceCaption's own box (region.y-40, ~36px tall) --
+    // a hard overlap, not a stack. Zone K's headroom above the stage is only
+    // 40px (not enough to stack two ~36px chips with any gap), and Zone F
+    // below the stage measured out to almost no headroom either at the
+    // review's own 1440x900 capture viewport (mechanismCaption's own single
+    // line already lands within a few px of the frame's bottom edge; a
+    // second stacked chip there rendered entirely below y=900, invisible,
+    // not merely tight -- exclusion-rect measurement caught this before it
+    // shipped). fadeCaption's message moves into the K lane's own open
+    // canvas space instead (built inside bandG below, b4-only, same
+    // treatment the darkness-block's "no longer quoting" label already
+    // gets: text where the reader's eye already is, not a third pinned
+    // caption competing for two fixed slots).
 
-    function postJumpLevel() {
+    // Friction band: +-2c around the post-jump SETTLED level, drawn from
+    // the Kalshi NOR-leg tile itself, never fabricated. Stroke-only (no
+    // amber fill wash across three lanes, perception-brief-driven fix).
+    const bandG = g.append('g').attr('class', 's07-friction').style('opacity', 0);
+
+    // FIX #1 + #2 (Gate-5 blind-review, both CRITICAL):
+    //   1. The old anchor was the first tick >=+5s after the goal --
+    //      mid-jump, not settled -- so the drawn band contradicted the
+    //      prose's own "held within 2 cents" claim. The level below is the
+    //      median NOR-leg price in [t0+120s, t0+300s], the settled-level
+    //      convention this fix was asked to use.
+    //   2. That settled level does not hold all the way to +1800s: the raw
+    //      NOR-leg tape shows an unmarked second repricing (verified
+    //      directly against the tick data: 10s-bucket medians run 74-78c
+    //      through t=+610s, then jump to 90-97c by t=+620s -- a jump
+    //      several times the size of anything in the settling window
+    //      itself, and it matches a second matched event in
+    //      events_matched.parquet at t0+600s on the draw leg, the same
+    //      episode from a different angle). The band now ends at the first
+    //      bucket-to-bucket jump that large, and that cliff gets a plain,
+    //      cause-agnostic label -- consistent with this scene's own "what
+    //      moved is certain, why it moved is not" rule (b3's insurance
+    //      line): the tape does not say what happened, only that something
+    //      did.
+    function computeFrictionWindow() {
       const tile = data.zoom.norbra;
-      if (!tile) return null;
-      const goalTs = (data.scene && data.scene.event && data.scene.event.goal_ts)
-        ? new Date(data.scene.event.goal_ts).getTime() : tile.t0;
+      if (!tile || norLegIdx < 0) return null;
+      const rows = [];
       for (let r = 0; r < tile.count; r++) {
-        const tS = (tile.t0 + tile.ts_ms[r] - goalTs) / 1000;
-        if (tS >= 5) return tile.price_c[r];
+        if (tile.leg[r] !== norLegIdx) continue;
+        rows.push({ tS: (tile.t0 + tile.ts_ms[r] - goalTs) / 1000, price: tile.price_c[r] });
       }
-      return null;
+      const settleWindow = rows.filter((d) => d.tS >= 120 && d.tS <= 300)
+        .map((d) => d.price).sort((a, b) => a - b);
+      if (!settleWindow.length) return null;
+      const level = settleWindow[Math.floor(settleWindow.length / 2)];
+
+      const CLIFF_JUMP_C = 8; // several times the settling window's own end-to-end spread
+      const buckets = new Map();
+      rows.forEach((d) => {
+        if (d.tS < 120) return;
+        const b = Math.floor(d.tS / 10);
+        if (!buckets.has(b)) buckets.set(b, []);
+        buckets.get(b).push(d.price);
+      });
+      const bucketKeys = [...buckets.keys()].sort((a, b) => a - b);
+      let breakoutS = null;
+      let prevMedian = null;
+      for (const b of bucketKeys) {
+        const arr = buckets.get(b).slice().sort((p, q) => p - q);
+        const med = arr[Math.floor(arr.length / 2)];
+        if (b * 10 > 300 && prevMedian !== null && Math.abs(med - prevMedian) >= CLIFF_JUMP_C) {
+          breakoutS = b * 10;
+          break;
+        }
+        prevMedian = med;
+      }
+      return { level, bandStartS: 120, bandEndS: breakoutS !== null ? breakoutS : 1800, breakoutS };
     }
 
     function step(beatId) {
       if (beatId === 'b1') {
-        goalMark.style('display', null);
-        raceCaption.style('color', 'var(--ink-hi)').style('display', null);
+        fadeIn(kalshiLine);
+        fadeIn(goalMark);
+        fadeIn(raceCaption);
       }
       if (beatId === 'b2') {
-        pinG.style('display', null);
+        fadeIn(pinG);
         // Amber stays a singleton: the goal mark's halo recolors to
         // ink-mid the moment the darkness block claims the beat's amber
         // unit; the core stays as the at-mark anchor.
-        goalMarkSel.select('circle').attr('stroke', 'var(--ink-mid)');
+        tweenAttr(goalMarkSel.select('circle'), 'stroke', 'var(--ink-mid)');
         // Race caption recedes (stays pinned per R23, just quieter).
-        raceCaption.style('color', 'var(--ink-mid)');
+        tweenStyle(raceCaption, 'color', 'var(--ink-mid)');
       }
       if (beatId === 'b3') {
-        polyG.style('display', null);
-        mechanismCaption.style('color', 'var(--ink-mid)').style('display', null);
+        fadeIn(polyG);
+        mechanismCaption.style('color', 'var(--ink-mid)');
+        fadeIn(mechanismCaption);
       }
       if (beatId === 'b4') {
-        const level = postJumpLevel();
         const band = (data.scene && data.scene.friction_band_c) || 2;
-        if (level !== null) {
-          bandG.selectAll('*').remove();
-          const bx0 = x(0); const bx1 = x(1800);
+        const win = computeFrictionWindow();
+        bandG.selectAll('*').remove();
+        if (win) {
+          const bx0 = x(win.bandStartS);
+          const bx1 = x(win.bandEndS);
           bandG.append('rect')
-            .attr('x', bx0).attr('width', bx1 - bx0)
-            .attr('y', yK(Math.min(100, level + band)))
-            .attr('height', Math.max(1, yK(Math.max(0, level - band)) - yK(Math.min(100, level + band))))
+            .attr('x', bx0).attr('width', Math.max(0, bx1 - bx0))
+            .attr('y', yK(Math.min(100, win.level + band)))
+            .attr('height', Math.max(1, yK(Math.max(0, win.level - band)) - yK(Math.min(100, win.level + band))))
             .attr('fill', 'none')
             .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', 1);
           bandG.append('text')
-            .attr('x', bx1 - 6).attr('y', yK(level) - 6)
+            .attr('x', bx1 - 6).attr('y', yK(win.level) - 6)
             .attr('text-anchor', 'end')
             .attr('font-family', 'var(--font-apparatus)')
             .attr('font-size', 'var(--type-annotation-size)')
             .attr('fill', 'var(--accent-annotation)')
             .text('plus or minus 2 cents: friction');
+          if (win.breakoutS !== null) {
+            const cliffX = x(win.breakoutS);
+            bandG.append('line')
+              .attr('x1', cliffX).attr('x2', cliffX)
+              .attr('y1', laneTop.K).attr('y2', laneTop.K + laneH)
+              .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1).attr('stroke-dasharray', '2,3');
+            bandG.append('text')
+              .attr('x', cliffX + 6).attr('y', laneTop.K + laneH - 8)
+              .attr('font-family', 'var(--font-apparatus)')
+              .attr('font-size', 'var(--type-micro-size)')
+              .attr('fill', 'var(--ink-low)')
+              .text('a second jump follows');
+          }
         }
-        bandG.style('display', null);
-        mechanismCaption.style('color', 'var(--ink-low)');
-        fadeCaption.style('display', null);
+        // FIX #4 continued: the fade message renders in the K lane's own
+        // open canvas (far right, clear of the line/band/cliff marker)
+        // instead of a third pinned caption -- see the note above bandG.
+        bandG.append('text')
+          .attr('x', view.region.x + view.region.w - 12)
+          .attr('y', laneTop.K + laneH * 0.55)
+          .attr('text-anchor', 'end')
+          .attr('font-family', 'var(--font-apparatus)')
+          .attr('font-size', 'var(--type-annotation-size)')
+          .attr('fill', 'var(--ink-hi)')
+          .text('The spike is the price. Nothing to fade.');
+        fadeIn(bandG);
+        tweenStyle(mechanismCaption, 'color', 'var(--ink-low)');
       }
     }
 
@@ -361,7 +630,6 @@ export default {
         g.selectAll('*').remove();
         raceCaption.remove();
         mechanismCaption.remove();
-        fadeCaption.remove();
       },
     };
   },
@@ -369,11 +637,13 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>A goal reaches three price sources at once, and each behaves
-        differently. That difference comes from policy, not from who is
-        smarter. Here is a goal you will meet again: Haaland's second against
-        Brazil. Haaland plays for Norway, so this is the Norway-Brazil match,
-        seen through its prices.</p>
+      html: `<p>Three different places kept a live price on this match. Each
+        one reacted differently the moment the ball hit the net. That is not
+        because one crowd is smarter than another. It comes down to each
+        place's own house rules: how often it lets a price move, and when it
+        is willing to quote one at all. Here is a goal you will meet again:
+        Haaland's second against Brazil. Haaland plays for Norway, so this is
+        the Norway-Brazil match, seen through its prices.</p>
         <p>Three venues watched it. Kalshi is the American exchange whose
         trades fill this whole page. Polymarket is an offshore market where a
         crowd trades. Pinnacle is a sportsbook, the house the professionals
@@ -393,12 +663,21 @@ export default {
     {
       id: 'b2',
       html: `<p>A sportsbook suspends trading the instant a play turns
-        dangerous. It pulls its price off the board, waits, then posts one
-        new number once it decides what the goal is worth.</p>
+        dangerous. Dangerous to the bookmaker, not to anyone on the pitch.
+        The moment the ball crosses the line, a quick customer could snap up
+        the book's old price before it reacts, so the house pulls its number
+        off the board instead of getting picked off. That is why a
+        bookmaker's price vanishes at exactly the moment you would most want
+        to read it.</p>
         <p>Pinnacle does exactly that here. It stops quoting about
         twelve seconds after the move begins, stays dark for roughly
         ninety-eight seconds, then reopens with one new quote already at
-        its new price.<sup><a href="#fn-11">11</a></sup></p>
+        its new price.<sup><a href="#fn-11">11</a></sup> Behind that pause
+        sits a model built from years of matches like this one. It is
+        estimating what the goal is worth: how much it moves the chance you
+        learned to read as a price back in Skill 1. A goal in minute two
+        barely moves that chance. The same goal in minute ninety can flip
+        it.</p>
         <p>That one grey dash is the whole story. Pinnacle did not trade the
         move. It waited it out, then restated its price once, already caught
         up.</p>`,
@@ -408,32 +687,50 @@ export default {
     },
     {
       id: 'b3',
-      html: `<p>Polymarket only saves one price per minute. A block on its
-        lane covers a whole sixty seconds, so nothing inside that minute can
-        be pinned down.</p>
-        <p>A famous ranking says Kalshi reacted in 29 seconds, Polymarket in
-        60, and Pinnacle in 119. That is not a speed contest. It is three
-        different measuring sticks: one that saves data once a minute, one
-        that suspends and reposts. Ranking their speeds only ranks how each
-        venue happens to record itself.<sup><a href="#fn-11">11</a></sup></p>
-        <p>Kalshi kept trading. The sportsbook stopped, then
-        reposted.</p>`,
+      html: `<p>A price never moves on its own. It moves when someone
+        trades, and no one can trade on a goal they have not seen yet. Every
+        screen shows the goal late, so the first new deals landed about
+        twenty-nine seconds after the move began on Kalshi's own record. The
+        machinery was never the slow part. The screens and the humans
+        were.</p>
+        <p>This page measured all three venues on that same clock. Kalshi's
+        tape crossed one-fifth of the move by that twenty-nine-second mark.
+        Polymarket's own blocks show the new price by 60 seconds, the
+        soonest its one-save-per-minute design can register a change.
+        Pinnacle's reopened quote lands at 109 seconds, its own
+        suspend-and-repost clock finally catching up. These are three
+        different measuring sticks: one that saves a price once a minute,
+        one that suspends and reposts, and one that trades straight through.
+        Ranking their speeds only ranks how each venue happens to record
+        itself.<sup><a href="#fn-11">11</a></sup></p>
+        <p>The bookmaker finds a goal's worth with a model built from
+        history. The exchange finds it by auction: traders quote and trade
+        until the price stops moving, and that settled level is the answer.
+        Kalshi kept trading. The sportsbook stopped, then reposted. The
+        exchange is the only number here that never stops talking.</p>`,
       trigger: 'step',
       kind: 'recolor',
       overlayStep: 'b3',
     },
     {
       id: 'b4',
-      html: `<p>Here is what matters on a night like tonight. After a goal,
-        the new price held. It was not a panic that snapped back. It was the
-        market's honest answer.</p>
-        <p>To fade a move means betting it will snap back. Take every clean
-        goal of this tournament, every goal that arrived with no other news
-        in the same minute. After each one, the price stayed within a couple
-        of cents of where the jump landed. Wiggle that small is useless:
-        trading it would cost more in fees than it could ever earn. There
-        was nothing to fade.<sup><a
-        href="#fn-20">20</a></sup></p>
+      html: `<p>Can you trust a number that just jumped? Traders have an old
+        instinct that says no: bet against sharp moves and profit when they
+        snap back. Traders call it fading the move, and desks have followed
+        it for as long as there have been screens to react to. This
+        tournament's tape says otherwise.</p>
+        <p>People did try to fade goals. Take every clean goal this
+        tournament, the ones that arrived with no other news in the same
+        minute: 81 of them. In the ten minutes after each one, a median of
+        47 percent of the money traded on that goal's own Kalshi leg bet
+        against the direction the price had just moved. The middle half of
+        goals saw that share run from 27 percent to 60 percent. Traders
+        showed up and bet the other way, again and again.<sup><a
+        href="#fn-12">12</a></sup></p>
+        <p>After each goal, the price held within about two cents of where
+        the jump landed, too small a gap to clear the fees on a trade.<sup><a
+        href="#fn-12">12</a></sup> The instinct was real. It just never
+        paid.</p>
         <p>The spike is the price. Remember that the next time a goal moves a
         number in front of you.</p>`,
       trigger: 'step',
@@ -446,6 +743,8 @@ export default {
     // Step-triggered scene: end states are already static-readable; no
     // positional substitution needed (only b1 moves dots at all, and it is
     // a single resort with no in-between motion to suppress beyond the
-    // engine's own §3.5 instant-apply + crossfade).
+    // engine's own §3.5 instant-apply + crossfade). Overlay-side transitions
+    // (FIX #7) branch on view.reducedMotion directly in overlay()'s own
+    // fadeIn/tweenStyle/tweenAttr helpers.
   },
 };

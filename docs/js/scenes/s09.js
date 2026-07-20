@@ -546,7 +546,7 @@ export default {
         { token: 'identity-blue', glyph: 'dot', label: 'blue = Norway’s' },
         { token: 'identity-pink', glyph: 'dot', label: 'pink = Belgium’s' },
       ],
-      grain: { text: '1 dot = $75,000 traded again · this is the whole tournament · it never leaves', variant: 'return' },
+      grain: { text: '1 dot = {grainUsd} traded again · this is the whole tournament · it never leaves', variant: 'return' },
       overlayStep: 'b1',
     },
     {
@@ -627,7 +627,22 @@ export default {
       const norIdx = manifest.teams.indexOf('NOR');
       const argIdx = manifest.teams.indexOf('ARG');
       const x = d3.scaleUtc().domain([epochMs, endMs]).range([rect.x + 8, rect.x + rect.w - 8]);
-      const y = d3.scaleLinear().domain([0, 100]).range([rect.y + rect.h - 8, rect.y + 8]);
+      // Gate-5 provenance audit (WRONG_SCOPE): a fixed [0,100] domain
+      // crushes Norway's whole climb (0.1-10.8c lifetime) into the bottom
+      // ~11% of the panel -- the same "amplitude-crushed" defect class the
+      // main S9 scene's own multiples-of-baseline axis was built to fix,
+      // reproduced here in the one place (this recap) that still plots
+      // raw price_band cents. One pass over the two teams' own plotted
+      // dots finds the tight ceiling this specific mirror actually needs.
+      let mirrorMaxPriceBand = 0;
+      for (let i = 0; i < N; i++) {
+        const isNorOrArg = (pop.team[i] === norIdx || pop.team[i] === argIdx) && pop.family[i] === famIdx;
+        if (isNorOrArg && pop.price_band[i] !== 255 && pop.price_band[i] > mirrorMaxPriceBand) {
+          mirrorMaxPriceBand = pop.price_band[i];
+        }
+      }
+      const y = d3.scaleLinear().domain([0, Math.max(mirrorMaxPriceBand * 1.15, 1)])
+        .range([rect.y + rect.h - 8, rect.y + 8]);
       const rest = particleState(view.tokens, 'dimmed-field-min');
       const norRgba = colorOf(view.tokens, 'identity-blue');
       const argRgba = colorOf(view.tokens, 'identity-lavender');

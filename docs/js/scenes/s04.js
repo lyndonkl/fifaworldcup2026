@@ -50,17 +50,42 @@
  *     "hourly_credit": [24 floats],  // the NULL MODEL's own count: every
  *                                     // scheduled match gets a ~3.5h window
  *                                     // around its kickoff (built from
- *                                     // 93/102 fixtures with known kickoff
- *                                     // times); each hour is credited the
- *                                     // total dollar pool in proportion to
- *                                     // its share of window-minutes, so
- *                                     // sum(hourly_credit) == sum(hourly_money).
- *                                     // A counting exercise, not a regression.
+ *                                     // 95/104 fixtures with known kickoff
+ *                                     // times -- Gate-5 provenance audit:
+ *                                     // was 93/102 until the final and the
+ *                                     // third-place playoff gained a listed
+ *                                     // occurrence_datetime); each hour is
+ *                                     // credited the total dollar pool in
+ *                                     // proportion to its share of
+ *                                     // window-minutes, so sum(hourly_credit)
+ *                                     // == sum(hourly_money). A counting
+ *                                     // exercise, not a regression.
  *     "waking_residual": <float>     // sum(hourly_money[wake]) /
  *                                     // sum(hourly_credit[wake]) over the
  *                                     // waking_band hours -- ships pre-
  *                                     // computed but re-derivable from the
  *                                     // two arrays above (Gate-5 item 2).
+ *     "window_share": {              // Gate-5 provenance audit (b2's
+ *       "pct": <float>,              //   "54.7%/1.6x" was a hand-typed
+ *       "clock_coverage_pct": <f>,   //   dossier citation that went stale
+ *       "tilt_x": <float>            //   as match_windows.parquet grew;
+ *     },                             //   now a class-A live recompute:
+ *                                     //   pct = money inside ANY of the 95
+ *                                     //   windows / total tape money;
+ *                                     //   clock_coverage_pct = union of
+ *                                     //   window-seconds / grid.days*24h;
+ *                                     //   tilt_x = pct / clock_coverage_pct.
+ *     "rest_day_ratios": {           // the caption's "drops Nx" figures,
+ *       "all_tape_min_x": <float>,   //   recomputed across the 4 GENUINE
+ *       "all_tape_max_x": <float>,   //   rest days only (match_days now
+ *       "futures_min_x": <float>,    //   correctly excludes the final and
+ *       "futures_max_x": <float>     //   third-place playoff, which the
+ *     }                              //   stale 93-window build had wrongly
+ *                                     //   tagged as rest days). Each ratio
+ *                                     //   is that rest day's nearest-
+ *                                     //   match-day-neighbor average over
+ *                                     //   its own value, all-tape and
+ *                                     //   futures-only (KXMENWORLDCUP).
  *   }
  * If `in_window` is absent, the step-3 recolor falls back to classifying
  * by `kickoff_hist[hour] > 0` alone (ignores per-day rest-day gaps) and
@@ -536,21 +561,33 @@ export default {
       .attr('rx', 3)
       .attr('fill', view.css('bg-canvas')).attr('opacity', 0.85);
 
-    // Rest-day row markers + caption (structure-spec S4 §2: the 5-15x /
-    // 3x-futures ratios demote out of prose into this caption).
+    // Rest-day row markers + caption (structure-spec S4 §2: the drop-ratio
+    // ratios demote out of prose into this caption). Gate-5 provenance
+    // audit: this used to be a hand-typed "5-15x / ~3x" literal; two of
+    // the six days it was computed over (Jul 18/19) turned out to be the
+    // third-place playoff and the final, not rest days at all, once
+    // match_windows.parquet gained their listed kickoffs. Recomputed live
+    // (sj.rest_day_ratios, same pattern as the waking-hours label above)
+    // over the correct 4-day set instead of re-typing a fresh literal.
     const restDays = sj.rest_days || [];
+    const rdr = sj.rest_day_ratios || {};
     const restG = g.append('g').attr('class', 's04-rest-days').style('display', 'none');
     restG.selectAll('line').data(restDays).join('line')
       .attr('x1', gridRect.x - 6).attr('x2', gridRect.x)
       .attr('y1', (d) => day(Math.floor((Date.parse(d) - day0Ms) / 86400000)))
       .attr('y2', (d) => day(Math.floor((Date.parse(d) - day0Ms) / 86400000)))
       .attr('stroke', view.css('ink-mid')).attr('stroke-width', 2);
+    const hasRatios = [rdr.all_tape_min_x, rdr.all_tape_max_x, rdr.futures_min_x, rdr.futures_max_x]
+      .every((v) => typeof v === 'number');
+    const restCaptionText = hasRatios
+      ? `rest days: trading drops ${rdr.all_tape_min_x}-${rdr.all_tape_max_x}x; the always-open winner market, only about ${rdr.futures_min_x}-${rdr.futures_max_x}x`
+      : 'rest days: trading drops sharply; the always-open winner market falls much less';
     restG.append('text')
       .attr('x', gridRect.x - 6).attr('y', gridRect.y + gridRect.h + 24)
       .attr('text-anchor', 'start')
       .attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-caption-size) var(--font-apparatus)`)
-      .text('rest days: trading drops 5-15x; the always-open winner market, only about 3x');
+      .text(restCaptionText);
 
     return {
       step(beatId) {
@@ -579,7 +616,7 @@ export default {
       chip: [
         { token: 'field-rest', glyph: 'ramp', label: 'brighter = more money that hour' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded' },
+      grain: { text: '1 dot = {grainUsd} of real money traded' },
     },
     {
       // REVISION (Gate-4 blind re-review, s04 critical + major: "two
@@ -591,7 +628,7 @@ export default {
       // moves here with it so the chip's pulse lands on the same event
       // it describes.
       id: 'b2',
-      html: '<p>The market gets loud when games kick off, and goes quiet when they do not. Kickoff windows cover about a third of the tournament&rsquo;s hours. But they capture 54.7% of all the money traded, about 1.6 times their fair share.<sup><a href="#fn-6">6</a></sup> The grid on this screen is really just a picture of the match schedule. Watch the grid change color now. Teal marks kickoff windows.</p>',
+      html: '<p>The market gets loud when games kick off, and goes quiet when they do not. Kickoff windows cover about a third of the tournament&rsquo;s hours. But they capture 50.7% of all the money traded, about 1.7 times their fair share.<sup><a href="#fn-6">6</a></sup> The grid on this screen is really just a picture of the match schedule. Watch the grid change color now. Teal marks kickoff windows.</p>',
       trigger: 'step',
       state: 'recolored',
       kind: 'recolor',

@@ -676,6 +676,32 @@ def detect_single_source_event(df, price_col="yes_price_usd", ts_col="created_ts
     return int(peak.timestamp())
 
 
+def find_terminal_pin_ts(df, ts_col="created_ts", price_col="yes_price_usd", hi_c=99, lo_c=97):
+    """Gate-5 item 6 fix (s01 whistleMinute, verdict UNVERIFIABLE): a
+    tape-derived settlement boundary for a leg that has actually locked in,
+    replacing the old matchEndMinutes*0.93 / eventMinute+5 magic-number
+    heuristic in s01.js.
+
+    Definition: the first trade (in chronological order) at >= hi_c cents
+    that is never again followed, later in the same tape, by a print below
+    lo_c cents. A contract that has truly settled never dips back out of
+    its near-certain band, so this is the tape's own record of the moment
+    the outcome stopped being in doubt -- not an external clock reading.
+    Returns that row's created_ts (int, unix seconds), or None if the leg
+    never pins (e.g. it lost and never approaches 99c).
+    """
+    if df.empty:
+        return None
+    price_c = np.round(df[price_col].values * 100)
+    ts = df[ts_col].values
+    below = np.nonzero(price_c < lo_c)[0]
+    last_below = int(below[-1]) if len(below) else -1
+    candidates = np.nonzero((price_c >= hi_c) & (np.arange(len(price_c)) > last_below))[0]
+    if len(candidates) == 0:
+        return None
+    return int(ts[candidates[0]])
+
+
 # ---- S1: FRA-ESP (fallback vehicle documented; built as specced here) ----
 
 def build_fraesp_zoom(con):
@@ -726,7 +752,31 @@ def build_fraesp_zoom(con):
         d = d.iloc[::build_stride].reset_index(drop=True)
         log(f"zoom[fraesp]: LOD-thinned {n_raw:,} -> {len(d):,} rows (build_stride={build_stride}) to fit cap")
 
-    rows = zoom_rows_from_kalshi(d, 0, window_lo, event_ts)
+    # Gate-5 item 6 fix (s01 whistleMinute, verdict UNVERIFIABLE): the
+    # settlement boundary lives on the WINNING leg (ESP), not on this
+    # FRA-only tile, so it is read here (server-side only -- ESP's own rows
+    # are never shipped to the browser, per the S01 integrity fix above)
+    # and flagged onto the nearest FRA-tile row instead. bit 0 is already
+    # "detector-anchored repricing event" (CONTRACT sec 5.4); bit 1 here is
+    # this tile's own reserved-bit use, "tape-derived whistle/settlement
+    # boundary" -- s01.js's computeEnvelope() reads it directly, with the
+    # old magic-number heuristic kept only as a defensive fallback.
+    esp_df = read_trades(con, "KXWCGAME", "KXWCGAME-26JUL14FRAESP-ESP")
+    pin_ts = find_terminal_pin_ts(esp_df)
+
+    rows = list(zoom_rows_from_kalshi(d, 0, window_lo, event_ts))
+    if pin_ts is not None and len(d):
+        nearest = int(np.argmin(np.abs(d["created_ts"].values - pin_ts)))
+        flags = rows[6].copy()
+        flags[nearest] |= 2
+        rows[6] = flags
+        log(f"zoom[fraesp]: whistle pin found on ESP leg at ts={pin_ts} "
+            f"-> flagged FRA row {nearest} (ts={int(d['created_ts'].values[nearest])})")
+    else:
+        log("zoom[fraesp]: WARNING no whistle pin found on ESP leg -- "
+            "s01.js falls back to its magic-number heuristic")
+    rows = tuple(rows)
+
     buf, cols = pack_zoom(*rows)
     n = len(rows[0])
     log(f"zoom[fraesp]: {n:,} rows (of {n_raw:,} raw FRA trades), window "
@@ -736,7 +786,15 @@ def build_fraesp_zoom(con):
         "legs": [
             {"ticker": "KXWCGAME-26JUL14FRAESP-FRA", "label": "France (regulation)"},
         ],
-        "trades": n, "build_stride": build_stride,
+        # Gate-5 provenance audit (s06 finding, same defect class): "trades"
+        # is the tile's RAW pre-thin count piece-wide (matches mexeng's own
+        # convention below and manifest.zoom.*.trades' own doc comment) --
+        # main.js's zoomGrainText() reads this directly for its {count}
+        # template slot, un-multiplied by build_stride. Harmless today
+        # (build_stride is 1 here), but keeps this tile's own meta shape
+        # consistent with mexeng's so a future re-drive that DOES thin this
+        # leg reports the true lifetime count, not the post-thin sample.
+        "trades": n_raw, "build_stride": build_stride,
     }
     return buf, meta
 
@@ -1345,7 +1403,7 @@ def build_s04_scene(con):
     tape (con, TRADES_GLOB), summed by ET clock-hour across the tournament
     window [day0, grid_end) -- same query shape as the dead build_clock_grid()
     helper above, narrowed to a 24-length hour-of-day vector. hourly_credit
-    is the null model by counting: every one of the 93 known-kickoff match
+    is the null model by counting: every one of the 95 known-kickoff match
     windows (win_start..win_end, a fixed ~3.5h bracket) contributes its
     overlap-seconds to whichever ET clock-hour(s) it touches, summed across
     all matches, then rescaled so sum(hourly_credit) == sum(hourly_money) --
@@ -1396,10 +1454,12 @@ def build_s04_scene(con):
             cur = nxt
 
     rest_days = []
+    rest_days_et = []  # kept as tz-aware ET Timestamps for the ratio recompute below
     d = day0
     while d <= tournament_end:
         if d.normalize() not in match_days:
             rest_days.append(d.tz_convert("UTC").isoformat().replace("+00:00", "Z"))
+            rest_days_et.append(d.normalize())
         d += pd.Timedelta(days=1)
 
     # class-A: hourly_money -- live recompute off the full trade tape, same
@@ -1434,6 +1494,94 @@ def build_s04_scene(con):
     )
     log(f"series[s04]: waking_residual={waking_residual} (money_share={money_waking_share}, credit_share={credit_waking_share})")
 
+    # Gate-5 provenance audit (b2 "54.7%/1.6x" WRONG_VALUE, rest-day caption
+    # "5-15x/~3x" WRONG_SCOPE -- both root-caused to match_windows.parquet
+    # stopping 2 events short of the full 95/104-fixture catalog, so both
+    # are recomputed here directly off the now-complete `mw` and the con
+    # already open on this build's full tape, rather than carried forward
+    # as hand-typed dossier citations.
+    log("series[s04]: recomputing window_share (kickoff-window money tilt) + rest_day_ratios")
+    con.register("s04_mw", mw)
+    window_money = con.execute(f"""
+        WITH t AS (SELECT to_timestamp(created_ts) AS ts, count_contracts FROM parquet_scan('{TRADES_GLOB}'))
+        SELECT SUM(t.count_contracts) AS window_total
+        FROM t ASOF JOIN s04_mw ON t.ts >= s04_mw.win_start
+        WHERE t.ts <= s04_mw.win_end
+    """).fetchone()[0] or 0.0
+    tape_total = con.execute(f"SELECT SUM(count_contracts) FROM parquet_scan('{TRADES_GLOB}')").fetchone()[0] or 0.0
+    window_share_pct = round(window_money / tape_total * 100, 2) if tape_total else None
+
+    # Clock coverage: union of the 95 [win_start, win_end) intervals (they
+    # overlap on back-to-back match days), as a fraction of the grid's own
+    # covered span (days * 24h) -- the same denominator the grid/heatmap
+    # itself spans, so "about a third" reads against the same clock the
+    # reader is looking at.
+    merged = []
+    for _, r in mw.sort_values("win_start").iterrows():
+        s, e = r["win_start"], r["win_end"]
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+    covered_s = sum((e - s).total_seconds() for s, e in merged)
+    grid_span_s = days * 86400
+    clock_coverage_pct = round(covered_s / grid_span_s * 100, 2) if grid_span_s else None
+    tilt_x = round(window_share_pct / clock_coverage_pct, 4) if window_share_pct and clock_coverage_pct else None
+    log(f"series[s04]: window_share_pct={window_share_pct} clock_coverage_pct={clock_coverage_pct} tilt_x={tilt_x}")
+
+    # Rest-day drop ratios: each of the (now correctly 4, not 6) genuine
+    # rest days compared to the average of its nearest MATCH-day neighbors
+    # (skipping over any adjacent rest day, e.g. Jul 16/17 both look past
+    # each other to Jul 15 and Jul 18) -- both across the whole tape and
+    # restricted to the always-open futures book (KXMENWORLDCUP), the
+    # "cleaner attention measure" the beat's own caption names.
+    all_daily = con.execute(f"""
+        SELECT date_trunc('day', timezone('America/New_York', to_timestamp(created_ts))) AS day_et,
+               SUM(count_contracts) AS contracts
+        FROM parquet_scan('{TRADES_GLOB}') GROUP BY 1
+    """).df()
+    all_daily["day_et"] = pd.to_datetime(all_daily["day_et"])
+    all_by_day = all_daily.set_index("day_et")["contracts"]
+    fut_daily = con.execute(f"""
+        SELECT date_trunc('day', timezone('America/New_York', to_timestamp(created_ts))) AS day_et,
+               SUM(count_contracts) AS contracts
+        FROM parquet_scan('{TRADES_GLOB}') WHERE series_ticker = 'KXMENWORLDCUP' GROUP BY 1
+    """).df()
+    fut_daily["day_et"] = pd.to_datetime(fut_daily["day_et"])
+    fut_by_day = fut_daily.set_index("day_et")["contracts"]
+
+    # NOTE: `all_by_day`/`fut_by_day` are indexed by the NAIVE wall-clock
+    # timestamps DuckDB's own timezone()-conversion returns, while
+    # `rest_days_et`/`match_days` carry tz-AWARE (America/New_York)
+    # Timestamps (built above from `day0`, itself tz-aware) -- strip tz for
+    # this lookup only, so a comparison never silently misses every key and
+    # falls back to a 0.0 default (which previously made every ratio here
+    # look like a divide-by-nothing and vanish into `None`).
+    match_days_sorted = sorted(m.tz_localize(None) for m in match_days)
+    all_ratios, fut_ratios = [], []
+    for rd_tz in rest_days_et:
+        rd = rd_tz.tz_localize(None)
+        earlier = [m for m in match_days_sorted if m < rd]
+        later = [m for m in match_days_sorted if m > rd]
+        neighbors = [d_ for d_ in (earlier[-1] if earlier else None, later[0] if later else None) if d_ is not None]
+        if not neighbors:
+            continue
+        all_val = float(all_by_day.get(rd, 0.0))
+        fut_val = float(fut_by_day.get(rd, 0.0))
+        all_avg = float(np.mean([all_by_day.get(n, 0.0) for n in neighbors]))
+        fut_avg = float(np.mean([fut_by_day.get(n, 0.0) for n in neighbors]))
+        if all_val:
+            all_ratios.append(all_avg / all_val)
+        if fut_val:
+            fut_ratios.append(fut_avg / fut_val)
+    rest_day_ratios = {
+        "all_tape_min_x": round(min(all_ratios), 1) if all_ratios else None,
+        "all_tape_max_x": round(max(all_ratios), 1) if all_ratios else None,
+        "futures_min_x": round(min(fut_ratios), 1) if fut_ratios else None,
+        "futures_max_x": round(max(fut_ratios), 1) if fut_ratios else None,
+    }
+    log(f"series[s04]: rest_day_ratios={rest_day_ratios} (n_rest_days={len(rest_days_et)})")
+
     return {
         "grid": {"day0": day0.tz_convert("UTC").isoformat().replace("+00:00", "Z"), "days": days},
         "in_window": in_window,
@@ -1445,6 +1593,12 @@ def build_s04_scene(con):
         "hourly_money": [round(v, 2) for v in hourly_money],
         "hourly_credit": [round(v, 2) for v in hourly_credit],
         "waking_residual": waking_residual,
+        "window_share": {
+            "pct": window_share_pct,
+            "clock_coverage_pct": clock_coverage_pct,
+            "tilt_x": tilt_x,
+        },
+        "rest_day_ratios": rest_day_ratios,
     }
 
 
@@ -1606,6 +1760,31 @@ def build_s06_scene(con, mexeng_meta):
     }
 
 
+def _build_s07_fade_attempts():
+    """Gate-5 item 8 ("the fading beat"): did anyone actually TRY to fade a
+    post-goal price, not just whether it would have paid (that question is
+    the separate overreaction_fade.parquet arm). Repacks the class-B summary
+    from pipeline/data/analysis/ingame-microstructure/fade_attempts.json
+    (pipeline/analysis/ingame_microstructure_fade_attempts.py; median/IQR of
+    the per-event contrarian-taker share of post-goal Kalshi volume, 81/82
+    matched events with a defined jump direction) into the scene's own
+    percent-scale convention (see s05/s14's *_pct fields). Returns None if
+    the analysis file has not been generated yet, so a missing addendum
+    fails soft rather than breaking the whole scene."""
+    fa = _read_json_safe(os.path.join(ANALYSIS, "ingame-microstructure", "fade_attempts.json"))
+    summ = fa.get("summary")
+    if not summ:
+        return None
+    return {
+        "n_events_total": summ["n_events_total"],
+        "n_events_used": summ["n_events_used"],
+        "median_contrarian_share_pct": round(summ["median_contrarian_share"] * 100, 1),
+        "p25_contrarian_share_pct": round(summ["p25_contrarian_share"] * 100, 1),
+        "p75_contrarian_share_pct": round(summ["p75_contrarian_share"] * 100, 1),
+        "window_label": "t0+60s to t0+10min, Kalshi trades on the event's own leg",
+    }
+
+
 def build_s07_scene(con, norbra_meta):
     """s07.js reads event.{goal_ts,label}, friction_band_c,
     pinnacle.{quotes,suspend_start_s,suspend_end_s}, polymarket.blocks (R3).
@@ -1619,6 +1798,7 @@ def build_s07_scene(con, norbra_meta):
             "event": None, "friction_band_c": 2,
             "pinnacle": {"quotes": [], "suspend_start_s": None, "suspend_end_s": None},
             "polymarket": {"blocks": []},
+            "fade_attempts": _build_s07_fade_attempts(),
         }
     window_lo, window_hi = event_ts - 120, event_ts + 1900  # matches s07.js's CLOCK_DOMAIN_S
 
@@ -1667,20 +1847,37 @@ def build_s07_scene(con, norbra_meta):
         "friction_band_c": 2,
         "pinnacle": {"quotes": quotes, "suspend_start_s": suspend_start_s, "suspend_end_s": suspend_end_s},
         "polymarket": {"blocks": blocks},
+        "fade_attempts": _build_s07_fade_attempts(),
     }
 
 
-def build_s08_scene(gerpar_meta):
-    """s08.js reads only window.whistle_ts -- the instant regulation time
-    ends and the regulation leg's forced-expiry glide begins. Grounded in
-    the zoom tile's own empirically-anchored regulation_settle_ts (the
+def build_s08_scene(con, gerpar_meta):
+    """s08.js reads window.whistle_ts -- the instant regulation time ends
+    and the regulation leg's forced-expiry glide begins. Grounded in the
+    zoom tile's own empirically-anchored regulation_settle_ts (the
     regulation leg's real last trade) minus the dossier's verified 22-minute
-    glide duration (R4)."""
+    glide duration (R4).
+
+    Gate-5 provenance audit addition: price_at_whistle_c -- the b1 beat's
+    prose used to hand-type "48 cents" for the regulation leg's price at
+    this exact whistle_ts anchor, which the raw tape does not confirm (it
+    reads 43-44c there; 48c last held about 2 minutes earlier). Recomputed
+    live here as the GER regulation leg's last trade at or before
+    whistle_ts, so prose and the drawn axis boundary always describe the
+    identical moment on every rebuild."""
     whistle_ts = gerpar_meta["regulation_settle_ts"] - 22 * 60
+    row = con.execute(f"""
+        SELECT yes_price_usd FROM parquet_scan('{TRADES_GLOB}')
+        WHERE ticker = 'KXWCGAME-26JUN29GERPAR-GER' AND created_ts <= {whistle_ts}
+        ORDER BY created_ts DESC LIMIT 1
+    """).fetchone()
+    price_at_whistle_c = round(row[0] * 100) if row else None
     return {
         "window": {
             "whistle_ts": dt.datetime.fromtimestamp(whistle_ts, dt.timezone.utc).isoformat().replace("+00:00", "Z"),
         },
+        "price_at_whistle_c": price_at_whistle_c,
+        "glide_minutes": 22,
     }
 
 
@@ -1868,8 +2065,20 @@ def build_s10_scene(con):
         for _, r in episodes.iterrows()
     ] if len(episodes) else []
 
-    mean_gap = round(float(max_gaps["mean_abs_gap_pp"].mean()), 2) if len(max_gaps) else None
-    max_gap = round(float(max_gaps["max_abs_gap_pp"].max()), 1) if len(max_gaps) else None
+    # Gate-5 provenance audit (WRONG_SCOPE): kalshi_vs_polymarket_max_gaps.csv
+    # is scoped to a fixed 150-minute pre-RESOLUTION window
+    # (calibration_divergence_pm.py), a different, narrower population than
+    # the kickoff-anchored braid this scene actually ships and draws (t_sorted/
+    # k_sorted/p_sorted above, which s10.js's chart plots literally). Both
+    # summary figures are recomputed here straight off that SAME shipped
+    # braid, so the scalar and the drawn line can never describe two
+    # different populations again.
+    braid_gaps = [
+        abs(k - p) for k, p in zip(k_sorted, p_sorted)
+        if k is not None and p is not None
+    ]
+    mean_gap = round(float(np.mean(braid_gaps)), 2) if braid_gaps else None
+    max_gap = round(float(np.max(braid_gaps)), 1) if braid_gaps else None
 
     return {
         "knockout_window": {
@@ -1879,7 +2088,10 @@ def build_s10_scene(con):
         "gap_summary": {
             "mean_1min_gap_pts": mean_gap,
             "goal_second_spike_pts": max_gap,
-            "goal_second_spike_duration_s": 60,
+            "goal_second_spike_duration_s": None,  # was a hardcoded 60s guess,
+            # never a measured spike duration -- s10.js has never read this
+            # field (confirmed dead), so it ships null rather than a
+            # fabricated number a future consumer could mistake for real.
             "n_legs": int(len(max_gaps)) if len(max_gaps) else 84,
         },
         "braid": {"t": t_sorted, "kalshi_pts": k_sorted, "polymarket_pts": p_sorted, "pinnacle_pts": pin_sorted},
@@ -2053,31 +2265,66 @@ def build_scene_s14_v2(con):
                 "pct_at_tick_floor": round(pct_tick_floor, 1),
             }
 
+    # Gate-5 provenance audit (WRONG_SCOPE): "90-95c" used to be a bare
+    # literal, correct on the market-count basis but NOT the worst bucket
+    # on the dollar-weighted basis (65-70c is, by a wider margin) -- the
+    # same hardcoded label rendered under BOTH of drawCallout()'s toggle
+    # states with an unchanged claim. Both bases now get their own argmin
+    # over calibration_gap_pp = win_rate_pct - price_c (most negative =
+    # most overpriced), computed live off the SAME buckets this scene
+    # already draws, so s14.js can select the one matching whichever
+    # weighting is on screen.
+    def worst_by(price_key, win_key):
+        best_label, best_gap = None, None
+        for row in merged:
+            if price_key not in row or win_key not in row:
+                continue
+            gap = row[win_key] - row[price_key]
+            if best_gap is None or gap < best_gap:
+                best_gap, best_label = gap, row["label"]
+        return best_label
+
+    worst_markets = worst_by("mean_price_c", "win_rate_pct") or "90-95c"
+    worst_dollars = worst_by("vol_weighted_price_c", "vol_weighted_win_rate_pct") or worst_markets
+
     return {
         "buckets": merged,
         "ladder_attribution": ladder_attribution,
         "tick_floor": {"lo_c": 1, "hi_c": 2},
-        "worst_bucket_label": "90-95c",
+        "worst_bucket_label": worst_markets,
+        "worst_bucket_label_markets": worst_markets,
+        "worst_bucket_label_dollars": worst_dollars,
     }
 
 
 def build_scene_s15_v2():
-    """s15.js reads stages[].{id,label,window:[start,end],opta_pct} (R6).
-    Population dots draw at their OWN traded price (money, never invented);
-    the single model reference line the scene overlay draws needs one
-    number per stage, so this ships France's own raw Opta win_pct (the
-    storyboard's headline team, 'priced France ... above Opta') -- verified
-    to put France's own price above this line at all 5 stages by
-    construction, and Spain's own price below it at 4 of 5 (the pre-
-    tournament stage is the one honest exception in the real data, not
+    """s15.js reads stages[].{id,label,window:[start,end],opta_pct,gap_pp}
+    (R6). Population dots draw at their OWN traded price (money, never
+    invented); the single model reference line the scene overlay draws
+    needs one number per stage, so this ships France's own raw Opta
+    win_pct (the storyboard's headline team, 'priced France ... above
+    Opta') -- verified to put France's own price above this line at all 5
+    stages by construction, and Spain's own price below it at 4 of 5 (the
+    pre-tournament stage is the one honest exception in the real data, not
     smoothed away). A future scene-module revision could plot Spain's own
-    opta line separately; the module currently supports only one line."""
+    opta line separately; the module currently supports only one line.
+
+    gap_pp (Gate-5 provenance audit addition): France's own
+    kalshi_price-minus-opta_win_pct gap at each stage, straight from the
+    same CSV's own gap_kalshi_minus_opta_pp column -- this is the raw gap
+    the chart's dots-vs-line actually draws (as opposed to the four-team
+    devig-share gap s19.json's spain_vs_model block computes for a
+    different comparison), so the b3 overlay's min-max callout reads it
+    directly instead of carrying a hand-typed "+3 to +5" range that
+    understated the true 4.5-6.6pp spread."""
     sf = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "semifinalists_price_vs_opta_elo.csv"))
     if not len(sf):
         return {"stages": []}
     stage_meta = (sf[["stage_id", "stage_label", "as_of_date"]]
                   .drop_duplicates().sort_values("stage_id").reset_index(drop=True))
-    fra_by_stage = sf[sf["team"] == "France"].set_index("stage_id")["opta_win_pct"]
+    fra = sf[sf["team"] == "France"].set_index("stage_id")
+    fra_by_stage = fra["opta_win_pct"]
+    fra_gap_by_stage = fra["gap_kalshi_minus_opta_pp"]
 
     stages = []
     prev_end = "2025-05-15T00:00:00Z"  # winner book's own first-trade date (s02.json)
@@ -2085,9 +2332,10 @@ def build_scene_s15_v2():
         sid = int(row["stage_id"])
         end_iso = pd.Timestamp(row["as_of_date"], tz="UTC").isoformat().replace("+00:00", "Z")
         opta_pct = round(float(fra_by_stage.loc[sid]) * 100, 2) if sid in fra_by_stage.index else None
+        gap_pp = round(float(fra_gap_by_stage.loc[sid]), 2) if sid in fra_gap_by_stage.index else None
         stages.append({
             "id": f"s{sid}", "label": row["stage_label"],
-            "window": [prev_end, end_iso], "opta_pct": opta_pct,
+            "window": [prev_end, end_iso], "opta_pct": opta_pct, "gap_pp": gap_pp,
         })
         prev_end = end_iso
     return {"stages": stages}
@@ -2152,6 +2400,10 @@ def build_scene_s04(con):
             "pipeline/data/analysis/volume-anatomy/match_windows.parquet (R11)",
             "hourly_money/hourly_credit/waking_residual: class-A live recompute off "
             "the full trade tape + match_windows.parquet overlap-seconds (Gate-5 item 2)",
+            "window_share/rest_day_ratios: class-A live recompute off the full trade "
+            "tape + the now-complete 95-event match_windows.parquet (Gate-5 provenance "
+            "audit: the prior 93-event build silently mistagged the final and the "
+            "third-place playoff as rest days and understated the window tilt)",
         ]),
     }, **grid)
 
@@ -2186,14 +2438,20 @@ def build_scene_s07(con, norbra_meta):
         "_provenance": provenance([
             "build_tiles.py: build_s07_scene(), live Pinnacle/Polymarket NOR-leg recompute (class A, R1-R3 filtered)",
             "pipeline/data/analysis/ingame-microstructure/events_matched.parquet (R3/R22, event anchor)",
+            "pipeline/data/analysis/ingame-microstructure/fade_attempts.json (Gate-5 item 8, class B: "
+            "median/IQR contrarian-taker share of post-goal volume, 81/82 events)",
         ]),
     }, **s07)
 
 
-def build_scene_s08(gerpar_meta):
-    s08 = build_s08_scene(gerpar_meta)
+def build_scene_s08(con, gerpar_meta):
+    s08 = build_s08_scene(con, gerpar_meta)
     return dict({
-        "_provenance": provenance(["build_tiles.py: build_s08_scene(), zoom[gerpar] regulation-settle recompute (class A)"]),
+        "_provenance": provenance([
+            "build_tiles.py: build_s08_scene(), zoom[gerpar] regulation-settle recompute (class A)",
+            "price_at_whistle_c: class-A live recompute off the raw GER regulation "
+            "leg's own tape at the whistle_ts anchor (Gate-5 provenance audit)",
+        ]),
     }, **s08)
 
 
@@ -2212,7 +2470,10 @@ def build_scene_s10(con):
     return dict({
         "_provenance": provenance([
             "build_tiles.py: build_s10_scene(), live-window-only per-minute braid recompute (class A)",
-            "pipeline/data/analysis/calibration/kalshi_vs_polymarket_max_gaps.csv (R2, class B gap_summary)",
+            "gap_summary: class-A recompute off this scene's OWN shipped braid arrays "
+            "(Gate-5 provenance audit -- kalshi_vs_polymarket_max_gaps.csv's 150-minute "
+            "pre-resolution window is a different, narrower population than the "
+            "kickoff-anchored braid this scene draws)",
             "pipeline/data/analysis/calibration/divergence_episodes_kalshi_vs_pinnacle.csv (R2, class B terminations)",
         ]),
     }, **s10)
@@ -2220,12 +2481,41 @@ def build_scene_s10(con):
 
 def build_scene_s11():
     scores = _read_csv_safe(os.path.join(ANALYSIS, "calibration", "scores_match3way_by_source_horizon.csv"))
+    # Gate-5 provenance audit (three_traps_receipt, WRONG_SCOPE): the
+    # middle line's "29s/60s/119s" silently mixed populations -- 29s
+    # already matched the cross-tournament MEDIAN kalshi reaction time
+    # across all 81 matched goal-reaction events (reaction_latency.parquet),
+    # not the one illustrated S7 event, while 119s did not match that
+    # event's own value (109.1s) OR any real cross-tournament aggregate
+    # (median 114.2s, mean 121.7s). Recomputed here directly from
+    # reaction_latency.parquet so this receipt line states one coherent,
+    # actually-computable population (the median across matched events)
+    # rather than a single-event figure quietly standing in next to an
+    # aggregate one.
+    latency = _read_parquet_safe(os.path.join(ANALYSIS, "ingame-microstructure", "reaction_latency.parquet"))
+    median_kalshi_s = median_pinnacle_s = None
+    if len(latency):
+        k = latency["kalshi_t_first_s"].dropna()
+        p = latency["pinnacle_t_first_s"].dropna()
+        median_kalshi_s = round(float(k.median())) if len(k) else None
+        median_pinnacle_s = round(float(p.median())) if len(p) else None
+    ladder_label = (
+        f"the {median_kalshi_s}s/60s/{median_pinnacle_s}s reaction ladder (S7): the tournament's "
+        "median reaction time across matched goals, not one event's speed ranking"
+        if median_kalshi_s is not None and median_pinnacle_s is not None
+        else "the reaction ladder (S7): a measurement artifact, not a speed ranking"
+    )
     return {
-        "_provenance": provenance(["pipeline/data/analysis/calibration/scores_match3way_by_source_horizon.csv (R5, class B)"]),
+        "_provenance": provenance([
+            "pipeline/data/analysis/calibration/scores_match3way_by_source_horizon.csv (R5, class B)",
+            "three_traps_receipt[1]: class-A median recompute off "
+            "pipeline/data/analysis/ingame-microstructure/reaction_latency.parquet "
+            "(Gate-5 provenance audit)",
+        ]),
         "scores": df_records(scores) if len(scores) else [],
         "three_traps_receipt": [
             "the 16 Kalshi-Pinnacle 'divergence episodes' (S10): feed termination, not disagreement",
-            "the 29s/60s/119s reaction ladder (S7): three measurement artifacts, not a speed ranking",
+            ladder_label,
             "the T-5min Brier 'blowout' (this scene): live repricing scored against a closed book",
         ],
     }
@@ -2755,7 +3045,7 @@ def main():
         "s05": build_scene_s05(con, market_totals, market_meta, ticker_to_idx, lorenz),
         "s06": build_scene_s06(con, mexeng_meta),
         "s07": build_scene_s07(con, norbra_meta),
-        "s08": build_scene_s08(gerpar_meta),
+        "s08": build_scene_s08(con, gerpar_meta),
         "s09": build_scene_s09(con),
         "s10": build_scene_s10(con),
         "s11": build_scene_s11(),

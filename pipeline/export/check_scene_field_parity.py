@@ -45,9 +45,12 @@ def get_path(obj, path):
 # -- are intentionally NOT asserted here; this checks the module's needs,
 # not the payload's completeness.)
 SCENE_READ_SETS = {
+    "s02": ["listing_first_trade"],
     "s03": ["day1_end", "crossover_end", "press_floor.usd", "press_floor.label"],
     "s04": ["grid.day0", "grid.days", "in_window[]", "kickoff_hist.hours[]",
-            "rest_days[]", "waking_band.start_hour", "waking_band.end_hour"],
+            "rest_days[]", "waking_band.start_hour", "waking_band.end_hour",
+            "rest_day_ratios.all_tape_min_x", "rest_day_ratios.all_tape_max_x",
+            "rest_day_ratios.futures_min_x", "rest_day_ratios.futures_max_x"],
     "s05": ["total_markets", "core_series.legs", "core_series.share_pct",
             "tail.markets", "tail.share_pct", "novelty_market.n_markets",
             "novelty_market.contracts"],
@@ -70,7 +73,7 @@ SCENE_READ_SETS = {
             "zombie_money.n_trades", "zombie_money.total_usd", "zombie_money.max_price_c"],
     "s14": ["buckets[]", "ladder_attribution.pct_in_ten_plus_leg_ladders",
             "ladder_attribution.pct_at_tick_floor", "tick_floor.lo_c", "tick_floor.hi_c",
-            "worst_bucket_label"],
+            "worst_bucket_label", "worst_bucket_label_markets", "worst_bucket_label_dollars"],
     "s15": ["stages[]"],
     "s19": ["exam_restated.legs[]",
             "settlement.champion_futures_last_trade.price_c",
@@ -93,7 +96,7 @@ SCENE_READ_SETS = {
 ROW_SUBFIELDS = {
     "s12": [("players", ["key", "label", "reference", "market_indices"])],
     "s14": [("buckets", ["label", "lo_c", "hi_c", "mean_price_c", "win_rate_pct"])],
-    "s15": [("stages", ["id", "label", "window", "opta_pct"])],
+    "s15": [("stages", ["id", "label", "window", "opta_pct", "gap_pp"])],
     "s19": [
         ("exam_restated.legs", ["label", "price_c", "devig_pct"]),
         ("tie_climb.points", ["minute", "tie_price_c"]),

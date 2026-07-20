@@ -373,13 +373,22 @@ export default {
     // Devig annotation (design-revision-spec S15 item 4): must appear
     // BEFORE the drain, never during it, and sit near France's mid-stage
     // cluster rather than the corner. "devigged" carries its plain-words
-    // gloss inline (CR-19), and the number stays storyboard-verbatim.
+    // gloss inline (CR-19). Gate-5 provenance audit (WRONG_VALUE): the
+    // range used to be a hand-typed "+3 to +5", which understated the
+    // true spread by about a point at each end -- now read from each
+    // stage's own gap_pp (s15.json, straight from the same CSV's
+    // gap_kalshi_minus_opta_pp column the chart's dots-vs-line already
+    // draws), min to max, so the number can never drift from the chart.
+    const gapVals = stages.map((s) => s.gap_pp).filter((v) => typeof v === 'number');
+    const devigText = gapVals.length
+      ? `+${Math.min(...gapVals).toFixed(1)} to +${Math.max(...gapVals).toFixed(1)} points above the model, devigged (bookmaker’s cut removed)`
+      : 'above the model, devigged (bookmaker’s cut removed)';
     const devigNote = g.append('text').attr('class', 's15-devig')
       .attr('text-anchor', 'middle')
       .attr('fill', view.css('ink-mid'))
       .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-caption-size'))
       .attr('opacity', 0)
-      .text('+3 to +5 points above the model, devigged (bookmaker’s cut removed)');
+      .text(devigText);
     if (stages.length) {
       const midStage = stages[Math.floor(stages.length / 2)];
       // Text-collision sweep (Gate-5 item 3 disposition 2): both this note
@@ -436,7 +445,7 @@ export default {
         { token: 'neutral-data', glyph: 'line', label: 'grey line = the computer model’s guess' },
         { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded' },
+      grain: { text: '1 dot = {grainUsd} of real money traded' },
       overlayStep: 'b1',
     },
     {

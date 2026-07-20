@@ -246,12 +246,16 @@ SLOTS = [
     ),
     dict(
         id="s03-final-counter", scene="s03",
-        regex=r"July 14 snapshot, it reached \$([\d.]+) billion",
+        regex=r"tape.s final tally, it reached \$([\d.]+) billion",
         extract=num(), actual=lambda: manifest()["census"]["total_usd"],
         compare=cmp_billions(1),
         note="manifest.census.total_usd vs the beat's own quoted running total "
              "(this is also what the on-screen counter animates to -- see "
-             "s03.js:41-42's own DATA CONTRACT comment tying the two together)",
+             "s03.js:41-42's own DATA CONTRACT comment tying the two together). "
+             "Gate-5 provenance audit: was anchored 'July 14 snapshot' -- the "
+             "number is the deploy-frozen total, not a July-14-dated figure "
+             "(true July-14 cumulative is ~$12.35B); relabeled instead of "
+             "reworking the number itself.",
     ),
 
     # -- S04 clock-grid: waking-hours residual --
@@ -261,6 +265,23 @@ SLOTS = [
         extract=num(), actual=lambda: scene_json("s04")["waking_residual"],
         compare=cmp_round(1),
         note="s04.json waking_residual vs the '1.2 times' claim",
+    ),
+    # -- S04 clock-grid: kickoff-window money share/tilt (Gate-5 provenance
+    # audit -- root-caused to match_windows.parquet missing the final and
+    # third-place playoff; regenerated to the full 95-event catalog) --
+    dict(
+        id="s04-window-share-pct", scene="s04",
+        regex=r"capture ([\d.]+)% of all the money traded",
+        extract=num(), actual=lambda: scene_json("s04")["window_share"]["pct"],
+        compare=cmp_round(1),
+        note="window_share.pct vs the '50.7%' claim",
+    ),
+    dict(
+        id="s04-window-tilt-x", scene="s04",
+        regex=r"about ([\d.]+) times their fair share",
+        extract=num(), actual=lambda: scene_json("s04")["window_share"]["tilt_x"],
+        compare=cmp_round(1),
+        note="window_share.tilt_x vs the 'about 1.7 times' claim",
     ),
 
     # -- S05 Lorenz sweep: family concentration + novelty-market rank --
@@ -351,6 +372,18 @@ SLOTS = [
         extract=word(), actual=s07_suspend_duration(),
         compare=cmp_round(0),
         note="pinnacle.suspend_end_s - pinnacle.suspend_start_s",
+    ),
+
+    # -- S08 Germany-Paraguay: regulation leg's price at the whistle anchor
+    # (Gate-5 provenance audit: "48 cents" was a hand-typed dossier figure
+    # the raw tape does not confirm at the exact whistle_ts anchor driving
+    # the axis; the tape reads 43-44c there) --
+    dict(
+        id="s08-price-at-whistle", scene="s08",
+        regex=r"price slid from (\d+) cents to 1 cent over twenty-two minutes",
+        extract=intg(), actual=lambda: scene_json("s08")["price_at_whistle_c"],
+        compare=cmp_int,
+        note="price_at_whistle_c vs the '44 cents' claim",
     ),
 
     # -- S09 bracket math: three shock multiples --

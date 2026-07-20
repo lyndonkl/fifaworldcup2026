@@ -193,11 +193,14 @@ function restingFieldPositions(N, region, mobile, xOf) {
   return { x, y };
 }
 
-/* The zoom tile's flags column bit 0 is the ONLY structurally-flagged
- * event (CONTRACT §5.4: "bit 0 = detector-anchored repricing event").
- * There is no equivalent flag for the whistle/settlement boundary, so it
- * is approximated from tape geometry here — see data_requests in the
- * build handoff for a request to add an explicit boundary marker. */
+/* Gate-5 item 6 fix: the zoom tile's flags column carries TWO structural
+ * flags now (CONTRACT §5.4 bit 0, "detector-anchored repricing event",
+ * plus this tile's own reserved-bit use, bit 1, "tape-derived whistle/
+ * settlement boundary" — build_tiles.py's build_fraesp_zoom() flags the
+ * FRA-tile row nearest the WINNING leg's own terminal pin, the first
+ * trade at >=99c never again followed by a print below 97c). Both are
+ * read directly below; the old magic-number heuristics survive only as
+ * defensive fallbacks for a tile shipped before this fix landed. */
 
 // GATE-4 VISUAL-STORY REVIEW, s01 CRITICAL (x-axis contradicts the grain
 // plate): `ts_ms` is milliseconds since the TILE's own t0 (this ticker's
@@ -239,6 +242,58 @@ function computeEnvelope(zoomTile) {
   const preMatchMinutes = kickoffOffsetMin > 0
     ? matchEndMinutes * PRE_MATCH_WIDTH_FRAC / (1 - PRE_MATCH_WIDTH_FRAC)
     : 0;
+
+  // Gate-5 item 6 fix: one per-minute median price series, bucketed over
+  // the WHOLE in-match window, shared by every cliff detector below
+  // (eventMinute's undetected fallback and the second-cliff search) so
+  // both read off the same tape-derived numbers instead of separate
+  // cross-market magic constants.
+  const wholeMed = new Map();
+  if (zoomTile && zoomTile.count) {
+    const byBucket = new Map();
+    for (let i = 0; i < zoomTile.count; i++) {
+      const m = minuteOf(zoomTile.ts_ms[i]);
+      if (m < 0 || m > matchEndMinutes) continue;
+      const b = Math.floor(m);
+      let arr = byBucket.get(b);
+      if (!arr) { arr = []; byBucket.set(b, arr); }
+      arr.push(zoomTile.price_c[i]);
+    }
+    for (const [b, arr] of byBucket) {
+      arr.sort((p, q) => p - q);
+      wholeMed.set(b, arr[arr.length >> 1]);
+    }
+  }
+  // Gate-5 item 6 fix (bestDrop threshold, verdict WRONG_SCOPE): the old
+  // code used a flat 8c cutoff carried over from a different market's
+  // tape — the same failure class as the MEXENG 5.4x error (item 5).
+  // threshold_c is now derived from THIS tape's own noise: the std of
+  // consecutive-minute median deltas across the whole match, with the two
+  // largest-magnitude deltas excluded (they are the two real goals, not
+  // noise, and would otherwise inflate their own noise floor), times six,
+  // floored at 3c so a near-silent tape cannot shrink the threshold below
+  // the one-cent tick grid.
+  function deriveThresholdC() {
+    const buckets = Array.from(wholeMed.keys()).sort((a, b) => a - b);
+    const deltas = [];
+    for (const b of buckets) {
+      if (wholeMed.has(b - 1)) deltas.push({ b, d: wholeMed.get(b) - wholeMed.get(b - 1) });
+    }
+    if (deltas.length < 3) return 8; // too few minutes on this tape to derive noise; old constant as a floor
+    const byMag = deltas.slice().sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
+    const excluded = new Set(byMag.slice(0, 2).map((x) => x.b));
+    const rest = deltas.filter((x) => !excluded.has(x.b)).map((x) => x.d);
+    const mean = rest.reduce((s, v) => s + v, 0) / rest.length;
+    const variance = rest.reduce((s, v) => s + (v - mean) * (v - mean), 0) / rest.length;
+    return Math.max(3, 6 * Math.sqrt(variance));
+  }
+  const thresholdC = deriveThresholdC();
+
+  // ---- the first repricing event: bit 0 (CONTRACT §5.4) when the build
+  // flagged one, else the same cliff detector the fallback below and the
+  // second event share, run over the whole match and stopped at the
+  // EARLIEST qualifying minute (a first event is the earliest surprise on
+  // the tape, not the largest one). ----
   let eventMinute = null;
   let eventPriceC = 50;
   if (zoomTile) {
@@ -250,12 +305,50 @@ function computeEnvelope(zoomTile) {
       }
     }
   }
-  if (eventMinute == null) eventMinute = matchEndMinutes * 0.55; // undetected fallback
-  const whistleMinute = Math.min(
-    matchEndMinutes,
-    Math.max(eventMinute + 5, matchEndMinutes * 0.93),
-  );
+  if (eventMinute == null && wholeMed.size >= 3) {
+    // Gate-5 item 6 fix (eventMinute undetected fallback, verdict
+    // WRONG_VALUE): the old matchEndMinutes*0.55 fallback placed an
+    // undetected event about 47 minutes off this tape's real first cliff
+    // (18'-19', the penalty award). Same detector as the second cliff
+    // below (med[b-1]-med[b+1] against the tape's own threshold), just
+    // scanning the whole match and keeping the first hit.
+    const buckets = Array.from(wholeMed.keys()).sort((a, b) => a - b);
+    for (const b of buckets) {
+      if (!wholeMed.has(b - 1) || !wholeMed.has(b + 1)) continue;
+      const drop = wholeMed.get(b - 1) - wholeMed.get(b + 1);
+      if (drop > thresholdC) { eventMinute = b; eventPriceC = wholeMed.get(b - 1); break; }
+    }
+  }
+  // Last resort only: no bit-0 flag AND no cliff anywhere clears the
+  // tape's own noise floor. Not expected on real data; the match's own
+  // midpoint is the most neutral placeholder if it ever fires.
+  if (eventMinute == null) eventMinute = matchEndMinutes / 2;
   const pad = Math.min(8, eventMinute / 2);
+
+  // ---- the whistle/settlement boundary: bit 1 (this tile's own reserved-
+  // bit use, set by build_tiles.py's build_fraesp_zoom() at the WINNING
+  // leg's terminal pin — see the header note above). A contract that has
+  // truly locked in never dips back out of its near-certain band again, so
+  // that pin is the tape's own record of the moment the outcome stopped
+  // being in doubt. ----
+  let whistleMinute = null;
+  if (zoomTile) {
+    for (let i = 0; i < zoomTile.count; i++) {
+      if (zoomTile.flags[i] & 2) {
+        whistleMinute = Math.min(matchEndMinutes, Math.max(0, minuteOf(zoomTile.ts_ms[i])));
+        break;
+      }
+    }
+  }
+  if (whistleMinute == null) {
+    // Defensive fallback only: unreachable on the current build (bit 1 is
+    // always set when the winning leg pins to near-certain), kept in case
+    // a future tile ever ships before this build_tiles.py fix runs.
+    whistleMinute = Math.min(
+      matchEndMinutes,
+      Math.max(eventMinute + 5, matchEndMinutes * 0.93),
+    );
+  }
 
   // GATE-4 ROUND-4 (header note (3)): recover the tape's SECOND repricing
   // cliff. Only bit 0's event is structurally flagged (CONTRACT §5.4),
@@ -263,38 +356,25 @@ function computeEnvelope(zoomTile) {
   // 58th-minute second goal lands at ~79 wall-clock minutes here — so
   // the second goal is detected from tape geometry: the largest
   // 1-minute-median price drop after the flagged event, kept only when
-  // it is unmistakably a cliff (>= 8c). A detector, not a hardcoded
-  // minute, so a deploy-morning tile re-drive keeps the anchor honest;
-  // on a tape with no second cliff, event2Minute stays null and the
-  // annotation never renders.
+  // it clears this tape's own noise floor (Gate-5 item 6: threshold_c,
+  // derived above, replacing the old flat 8c cross-market constant). A
+  // detector, not a hardcoded minute, so a deploy-morning tile re-drive
+  // keeps the anchor honest; on a tape with no second cliff, event2Minute
+  // stays null and the annotation never renders.
   let event2Minute = null;
   let event2PriceC = 50;
   if (zoomTile && zoomTile.count) {
     const from = Math.ceil(eventMinute + 10);
     const to = Math.floor(whistleMinute - 3);
-    const pricesByMinute = new Map();
-    for (let i = 0; i < zoomTile.count; i++) {
-      const m = minuteOf(zoomTile.ts_ms[i]);
-      if (m < from - 1 || m > to + 1) continue;
-      const bucket = Math.floor(m);
-      let arr = pricesByMinute.get(bucket);
-      if (!arr) { arr = []; pricesByMinute.set(bucket, arr); }
-      arr.push(zoomTile.price_c[i]);
-    }
-    const med = new Map();
-    for (const [bucket, arr] of pricesByMinute) {
-      arr.sort((p, q) => p - q);
-      med.set(bucket, arr[arr.length >> 1]);
-    }
     let bestDrop = 0;
     for (let b = from; b <= to; b++) {
-      const before = med.get(b - 1);
-      const after = med.get(b + 1);
+      const before = wholeMed.get(b - 1);
+      const after = wholeMed.get(b + 1);
       if (before === undefined || after === undefined) continue;
       const drop = before - after;
       if (drop > bestDrop) { bestDrop = drop; event2Minute = b; event2PriceC = before; }
     }
-    if (bestDrop < 8) event2Minute = null;
+    if (bestDrop < thresholdC) event2Minute = null;
   }
 
   // Scroll-fraction -> match-clock cutoff. Storyboard S1 Scroll spec:
@@ -1158,7 +1238,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>For more than a year, a ticket that pays off if France wins the World Cup cost about forty cents.<sup><a href="#fn-2">2</a></sup> Here is the deal on every ticket like it: it pays one dollar if its team wins, and nothing if it does not. So a price of forty cents means the crowd thought France's chance was about forty out of a hundred. The market's own word for a ticket like this is a contract. On July 14, Spain beat France in ninety minutes, and the ticket fell to zero.<sup><a href="#fn-1">1</a></sup> Watch the white line on the chart ahead: it is France's price through that night, and it falls twice. Each fall is a Spain goal, one in each half, the first from the penalty spot. Down here, one cyan dot is one real trade from that night, pulled from the tape, the exchange's trade-by-trade record, named for the paper ticker tape that once printed every trade. Every trade has two sides: one buyer said yes, France wins, and another said no. At the final whistle, the exchange pays a dollar to every winning ticket and nothing to every losing one, a moment traders call settling, and the market closes for good. That is the grey pour you see hit the floor on screen. This was the night Spain booked tonight's final. Before you judge tonight's price, you should meet the thing that set it. The story starts fourteen months earlier.</p>`,
+      html: `<p>For most of a year, a ticket that pays off if France wins the World Cup cost about thirteen cents. Here is the deal on every ticket like it: it pays one dollar if its team wins, and nothing if it does not. So a price of thirteen cents meant the crowd thought France's chance was about thirteen out of a hundred. The market's own word for a ticket like this is a contract. By the eve of the semifinal, that same ticket had climbed near forty cents.<sup><a href="#fn-2">2</a></sup> On July 14, Spain beat France in ninety minutes, and two France tickets died that night: the season-long ticket you just read about, and a second one built just for that match.<sup><a href="#fn-1">1</a></sup> Watch the white line on the chart ahead: it is the match ticket's price through the night, and it falls twice. Each fall is a Spain goal, one in each half, the first from the penalty spot. Down here, one cyan dot is one real trade from that night, pulled from the tape, the exchange's trade-by-trade record, named for the paper ticker tape that once printed every trade. Every trade has two sides: one buyer said yes, France wins, and another said no. At the final whistle, the exchange pays a dollar to every winning ticket and nothing to every losing one, a moment traders call settling, and the market closes for good. That is the grey pour you see hit the floor on screen. This was the night Spain booked tonight's final. Before you judge tonight's price, you should meet the thing that set it. The story starts fourteen months earlier.</p>`,
       // Hard budget (storyboard): the whole of S1, pre-title included,
       // occupies at most 6 viewport-heights. The static title header
       // (CONTRACT §8.2) already spends 1; this scrub spends the remaining 5.

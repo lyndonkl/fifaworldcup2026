@@ -628,7 +628,7 @@ export default {
         { token: 'accent-annotation', glyph: 'dot', label: 'amber = the final’s contracts, settling' },
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded' },
+      grain: { text: '1 dot = {grainUsd} of real money traded' },
       overlayStep: 'b1',
     },
   ],

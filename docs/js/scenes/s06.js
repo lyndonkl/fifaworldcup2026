@@ -169,11 +169,22 @@ export default {
     // clipped flat. The old fixed [0,6] domain is the fake-flatline bug
     // this replaces. Falls back to a small placeholder domain only if
     // the curve hasn't loaded yet (graceful degrade, DATA_REQUEST above).
+    // Gate-5 provenance audit (WRONG_SCOPE): the 15-minute-binned curve's
+    // own max structurally cannot reach the 1-minute-binned peak the b1
+    // prose cites ("182 trades a second") -- coarser bins smooth spikes
+    // down. domainTop now takes whichever of the two is larger, so the
+    // drawn axis can never fall short of a number the reader is told,
+    // even though the smooth curve itself will still visibly stop short
+    // of that ceiling (real, not a bug -- see the peak-minute marker
+    // drawn separately in overlay() below).
     const rateCurveForDomain = (data.scene && Array.isArray(data.scene.rate_curve))
       ? data.scene.rate_curve : null;
-    const rateMax = (rateCurveForDomain && rateCurveForDomain.length)
+    const curveMax = (rateCurveForDomain && rateCurveForDomain.length)
       ? d3.max(rateCurveForDomain, (d) => d.rate_per_s)
       : 6;
+    const peakMinuteRate = (data.scene && typeof data.scene.peak_minute_rate_per_s === 'number')
+      ? data.scene.peak_minute_rate_per_s : 0;
+    const rateMax = Math.max(curveMax, peakMinuteRate);
     const rate = d3.scaleLinear().domain([0, rateMax * 1.05]) // trades/second, true range + 5% headroom
       .range([paceBottom, paceTop]);
     registry.register('s06.x', x);
@@ -412,6 +423,28 @@ export default {
       ratePlayhead = g.append('circle').attr('class', 's06-playhead')
         .attr('r', 3.5).attr('fill', 'var(--ink-hero)')
         .attr('cx', rangeMin).attr('cy', rate(rateCurve[0].rate_per_s));
+    }
+
+    // Peak-minute marker (Gate-5 provenance audit): a distinct, labeled
+    // reference line at this leg's own 1-minute-binned peak_minute_rate_per_s
+    // -- a DIFFERENT, finer-grained measurement than the smooth 15-minute
+    // rate_curve above it, so it is drawn as its own dashed ceiling rather
+    // than implied to be a point the curve should touch.
+    if (data.scene && typeof data.scene.peak_minute_rate_per_s === 'number') {
+      const peakY = rate(data.scene.peak_minute_rate_per_s);
+      const peakG = g.append('g').attr('class', 's06-peak-minute');
+      peakG.append('line')
+        .attr('x1', rangeMin).attr('x2', rangeMax)
+        .attr('y1', peakY).attr('y2', peakY)
+        .attr('stroke', 'var(--ink-mid)').attr('stroke-width', 1)
+        .attr('stroke-dasharray', '1,3').attr('stroke-opacity', 0.6);
+      peakG.append('text')
+        .attr('x', rangeMax).attr('y', peakY - 4)
+        .attr('text-anchor', 'end')
+        .attr('fill', 'var(--ink-mid)')
+        .attr('font-family', 'var(--font-apparatus)')
+        .attr('font-size', 'var(--type-micro-size)')
+        .text(`busiest single minute: ${Math.round(data.scene.peak_minute_rate_per_s)}/s`);
     }
 
     let kickoffX = null;

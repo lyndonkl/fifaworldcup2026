@@ -440,15 +440,33 @@ export default {
       crossMark.style('display', 'none');
     }
 
-    // The demoted-share caption (structure-spec S3 b3: the 98.6%
-    // in-tournament figure moves out of prose into a caption). One
-    // pinned Zone-K-weight line, ink-mid, shown only once the tape has
-    // climbed past the press floor (step 3).
+    // The demoted-share caption (structure-spec S3 b3: the in-tournament
+    // share figure moves out of prose into a caption). One pinned
+    // Zone-K-weight line, ink-mid, shown only once the tape has climbed
+    // past the press floor (step 3).
+    // Gate-5 provenance audit (WRONG_VALUE, "98.6%" was a frozen dossier
+    // citation with zero check_figure_sync coverage): computed live here
+    // off the already-loaded population tile's own per-dot dollars/
+    // birth_ts, against the tournament's opening day boundary (June 11,
+    // 2026 UTC -- the same "day one" boundary s03.json's day1_end
+    // closes), so the figure can never drift stale against a re-pulled
+    // tape the way a hardcoded literal did.
+    const KICKOFF_MS = Date.UTC(2026, 5, 11);
+    let beforeKickoffUsd = 0;
+    let afterKickoffUsd = 0;
+    for (let i = 0; i < an.N; i++) {
+      const usd = data.pop.dollars[i];
+      if (an.birthMs[i] < KICKOFF_MS) beforeKickoffUsd += usd; else afterKickoffUsd += usd;
+    }
+    const shareTotal = beforeKickoffUsd + afterKickoffUsd;
+    const afterSharePct = shareTotal ? (afterKickoffUsd / shareTotal * 100) : null;
     const shareCaption = g.append('text').attr('class', 's03-share-caption')
       .attr('x', chartRect.x).attr('y', chartRect.y + chartRect.h + 24 + 12 + 18)
       .attr('fill', view.css('ink-mid'))
       .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
-      .text('98.6% of everything on this tape traded after kickoff.')
+      .text(afterSharePct != null
+        ? `${afterSharePct.toFixed(1)}% of everything on this tape traded after kickoff.`
+        : '')
       .style('display', 'none');
 
     // Gate-4 visual-story review (s03 C1/M4, "the floor bars are an
@@ -696,18 +714,18 @@ export default {
         { token: 'identity-lavender', glyph: 'dot', label: 'lavender = bets on single matches' },
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded' },
+      grain: { text: '1 dot = {grainUsd} of real money traded' },
     },
     {
       id: 'b2',
-      html: '<p>Match markets are bets on a single game. They cannot open until the schedule is set, so kickoff created thousands of them at once. On day one alone, those match markets traded 49.4 million contracts. The tournament-winner market, open for a whole year already, had traded only 31.6 million contracts in its entire life.<sup><a href="#fn-4">4</a></sup> By day two, match markets had out-traded that whole year. The winner market sped up too, trading about ninety times faster than before the tournament began.<sup><a href="#fn-4">4</a></sup> Next, watch the counter pass the grey dashed line.</p>',
+      html: '<p>Match markets are bets on a single game. They cannot open until the schedule is set, so kickoff created thousands of them at once. On day one alone, those match markets traded 49.4 million contracts. The tournament-winner market, open for a whole year already, traded only 31.6 million that same day.<sup><a href="#fn-4">4</a></sup> By day two, match markets had out-traded everything the winner market sold across its entire fourteen-month history. The winner market sped up too, trading about ninety times faster than before the tournament began.<sup><a href="#fn-4">4</a></sup> Next, watch the counter pass the grey dashed line.</p>',
       trigger: 'step',
       state: 'crossover',
       kind: 'resort',
     },
     {
       id: 'b3',
-      html: '<p>The counter just passed the press number and kept climbing. The tape, the exchange&rsquo;s trade-by-trade record you met at the start, is also its complete receipt: every trade it ever cleared, kept forever. This counter is the tape&rsquo;s running total. By July 8 that total reached $10.94 billion. By the July 14 snapshot, it reached $12.75 billion.<sup><a href="#fn-5">5</a></sup> Each contract is a one-dollar box: the yes side puts in its price, the no side puts in the rest. Count the filled boxes and you have counted the dollars: $12.75 billion means 12.75 billion boxes. Newspapers had reported &ldquo;$7.4 billion,&rdquo; which is 7.4 billion boxes.<sup><a href="#fn-5">5</a></sup> That number was not the press measuring the market. It was the exchange&rsquo;s own running total from around June 30. Newspapers republished it about a week later, on July 8. A receipt only ever grows, so any dated total is really a floor, not a ceiling.</p>',
+      html: '<p>The counter just passed the press number and kept climbing. The tape, the exchange&rsquo;s trade-by-trade record you met at the start, is also its complete receipt: every trade it ever cleared, kept forever. This counter is the tape&rsquo;s running total. By July 8 that total reached $10.94 billion. By the tape&rsquo;s final tally, it reached $12.75 billion.<sup><a href="#fn-5">5</a></sup> Each contract is a one-dollar box: the yes side puts in its price, the no side puts in the rest. Count the filled boxes and you have counted the dollars: $12.75 billion means 12.75 billion boxes. Newspapers had reported &ldquo;$7.4 billion,&rdquo; which is 7.4 billion boxes.<sup><a href="#fn-5">5</a></sup> That number was not the press measuring the market. It was the exchange&rsquo;s own running total from around June 30. Newspapers republished it about a week later, on July 8. A receipt only ever grows, so any dated total is really a floor, not a ceiling.</p>',
       trigger: 'step',
       state: 'snapshot',
       kind: 'resort',

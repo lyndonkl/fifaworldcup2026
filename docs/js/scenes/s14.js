@@ -531,7 +531,14 @@ function overlay(container, data, view, scalesObj) {
   function drawCallout(weighting) {
     callout.selectAll('*').remove();
     if (!calloutUnlocked) return;
-    const label = sceneJson.worst_bucket_label || '90-95c';
+    // Gate-5 provenance audit (WRONG_SCOPE): the SAME hardcoded "90-95c"
+    // used to render under both toggle states, but 90-95c is only the
+    // worst bucket on the market-count basis -- under dollar weighting,
+    // 65-70c misprices by a wider margin. Each basis now has its own
+    // data-bound worst-bucket label, selected by the active toggle.
+    const label = (weighting === 'dollars'
+      ? sceneJson.worst_bucket_label_dollars
+      : sceneJson.worst_bucket_label_markets) || sceneJson.worst_bucket_label || '90-95c';
     const b = buckets.find((bb) => (bb.label || bb.bucket) === label);
     if (!b) return;
     const px = weighting === 'dollars' && b.vol_weighted_price_c !== undefined ? b.vol_weighted_price_c : b.mean_price_c;
@@ -708,7 +715,7 @@ const s14 = {
         { token: 'accent-annotation', glyph: 'dot', label: 'amber = the overpriced penny tickets' },
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded', variant: 'return' },
+      grain: { text: '1 dot = {grainUsd} of real money traded', variant: 'return' },
       overlayStep: 'b1',
     },
     {

@@ -1,0 +1,757 @@
+[
+ {
+  "scene": "s01",
+  "what": "FRAESP_KICKOFF_UTC_MS constant",
+  "value": "Date.parse('2026-07-14T19:00:00Z')",
+  "class": "CITED",
+  "source": "research/fact-base.json remaining_schedule: \"France vs Spain ... Tuesday, July 14, 2026 ... 19:00 GMT\"",
+  "verdict": "ok",
+  "why": "Exact match to the cited fact-base kickoff time; inlined because S1 carries no scene JSON (needs.scene:false)."
+ },
+ {
+  "scene": "s01",
+  "what": "whistleMinute heuristic",
+  "value": "Math.min(matchEndMinutes, Math.max(eventMinute + 5, matchEndMinutes * 0.93))",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "There is no structural boundary flag for the whistle (per the file's own comment: 'no equivalent flag for the whistle/settlement boundary ... approximated from tape geometry here'). The '+5 minutes' and '*0.93' are guessed heuristics standing in for real settlement data -- the same class of magnitude-approximation the audit is targeting (a data_request for an explicit boundary marker is already noted in the file)."
+ },
+ {
+  "scene": "s01",
+  "what": "eventMinute undetected fallback",
+  "value": "matchEndMinutes * 0.55",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Arbitrary fallback used only if flags[i]&1 is never set on the tile; currently unreached on real FRA-ESP data (an event IS flagged), but it is a live code path with no data grounding for its magnitude."
+ },
+ {
+  "scene": "s01",
+  "what": "second-cliff (Porro goal) detection threshold",
+  "value": "bestDrop >= 8 (cents, 1-minute-median drop)",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "A fixed 8c minimum used across the board to call a move 'unmistakably a cliff.' This is structurally the same failure class Gate-5 item 5/6 flagged for the tournament-generic 5.4x figure wrongly applied to MEXENG -- a cross-market constant standing in for a per-market, data-derived noise floor. It happens to work for FRA-ESP (Porro's goal is a real, large drop) but the threshold itself isn't derived from this or any tape's volatility."
+ },
+ {
+  "scene": "s01",
+  "what": "Beat prose: France pre-kick price 'about forty cents'",
+  "value": "~40 cents",
+  "class": "CITED",
+  "source": "research/storyboard.md / research/revision/structure-spec.md ('near forty cents... about 40 cents'), fn-2 (project fact base, July 13 snapshot + re-driven tape)",
+  "verdict": "ok",
+  "why": "Consistent across storyboard and structure-spec; footnoted."
+ },
+ {
+  "scene": "s01",
+  "what": "Beat prose: match result 'Spain beat France in ninety minutes... falls twice... penalty spot'",
+  "value": "Spain 2-0 (Oyarzabal penalty, Porro)",
+  "class": "CITED",
+  "source": "fn-1 (\"verified against the trade tape and independent match reports before publication\"), corroborated by the file's own round-4 header note citing ESPN/FIFA July 14 reports",
+  "verdict": "ok",
+  "why": "Externally verified per the file's own audit note; matches the tape's two detected cliffs."
+ },
+ {
+  "scene": "s01",
+  "what": "Closing line: \"The story starts fourteen months earlier\"",
+  "value": "14 months (listing-to-settlement)",
+  "class": "CITED",
+  "verdict": "suspect",
+  "why": "Internally inconsistent with s02's very next beat, which states the SAME listing-to-settlement interval as 'thirteen months' (b1 receipt line), and with the pre-title header (docs/index.html, data-scene=\"s01\": 'Altogether, that is $12.8B across thirteen months'). Checking the unused s02.json field listing_first_trade (2025-05-15) against the July 14, 2026 settlement gives ~13 months 30 days -- genuinely ambiguous between 'thirteen' (floor) and 'fourteen' (round), but the piece states it two different ways one screen apart, which a careful reader will notice."
+ },
+ {
+  "scene": "s01",
+  "what": "Pre-title header grain data-slot (adjacent to s01, data-scene=\"s01\")",
+  "value": "data-slot=\"population.desktop.grain_usd\" ($75,000)",
+  "class": "STORE",
+  "source": "docs/index.html lines ~520, ~565; docs/js/main.js fillSlots()",
+  "verdict": "suspect",
+  "why": "fillSlots() reads the literal path 'population.desktop.grain_usd' with no device branching, so on mobile (which loads pop-250k.bin, grain_usd=250000) the pre-title header still prints '$75,000' -- the same device-grain mismatch flagged for s02/s03's beat.grain overrides below, just via the data-slot path instead of a hardcoded string. Out of s01.js's own write-scope but directly tied to this scene by data-scene attribute."
+ },
+ {
+  "scene": "s02",
+  "what": "DRAW_WEEK_MS constant",
+  "value": "Date.UTC(2025, 11, 5) = Dec 5, 2025",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Duplicates docs/data/scenes/s02.json's draw_date field ('2025-12-05') exactly, but s02.js declares needs.scene:false and never reads that file -- the JSON is dead/orphaned data. Values currently agree, but nothing enforces that on a future refreeze; this is the same 'hardcoded literal shadowing a live data field' pattern flagged elsewhere in Gate-5 item 4/6."
+ },
+ {
+  "scene": "s02",
+  "what": "WALL_MS constant (tournament opening / density wall)",
+  "value": "Date.UTC(2026, 5, 11) = Jun 11, 2026",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Duplicates s02.json's unread tournament_start field ('2026-06-11') exactly. Same orphaned-JSON / drift-risk reasoning as DRAW_WEEK_MS."
+ },
+ {
+  "scene": "s02",
+  "what": "FINAL_MS constant",
+  "value": "Date.UTC(2026, 6, 19) = Jul 19, 2026",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Duplicates s02.json's unread final_date field ('2026-07-19') exactly. Same reasoning; also feeds the axis-domain padding above."
+ },
+ {
+  "scene": "s02",
+  "what": "docs/data/scenes/s02.json entirely (listing_first_trade, draw_date, tournament_start, final_date, you_are_here)",
+  "value": "{\"listing_first_trade\":\"2025-05-15\",\"draw_date\":\"2025-12-05\",\"tournament_start\":\"2026-06-11\",\"final_date\":\"2026-07-19\",\"you_are_here\":\"2026-07-19\"}",
+  "class": "STORE",
+  "source": "docs/data/scenes/s02.json _provenance: build_tiles.py",
+  "verdict": "suspect",
+  "why": "This whole file is unread by s02.js (needs.scene:false), so it is orphaned build output masquerading as live scene data. Bonus finding: listing_first_trade (2025-05-15) differs by two weeks from manifest.epoch (2025-05-01), which the scene uses instead as its 'listing' anchor for the resting-field time axis -- a real, if currently invisible, discrepancy between the two candidate 'when did this market start' values."
+ },
+ {
+  "scene": "s02",
+  "what": "Beat prose: '176 mostly small trades' (draw-week reveal hour)",
+  "value": "176 trades",
+  "class": "CITED",
+  "source": "research/findings-dossier.md R17, fn-3",
+  "verdict": "ok",
+  "why": "Exact match to R17's stated figure. Not wired to check_figure_sync.py (script's own docstring names this exact number as intentionally out of scope, since it has no backing scene-JSON field to diff against)."
+ },
+ {
+  "scene": "s02",
+  "what": "Beat prose: 'about twenty-one thousand times more money each day' (peak match day vs prior months)",
+  "value": "~21,000x",
+  "class": "CITED",
+  "source": "R17: 'peak match day is ~3,400x larger in contracts and ~21,000x in premium dollars', fn-3",
+  "verdict": "ok",
+  "why": "Exact match to R17's dollar-multiple figure (the beat correctly picks the dollar reading, not the 3,400x contract reading, consistent with its own preceding sentence about counting dollars vs tickets)."
+ },
+ {
+  "scene": "s02",
+  "what": "Beat prose: 'held a live price on France for thirteen months'",
+  "value": "13 months",
+  "class": "CITED",
+  "source": "research/findings-dossier.md R6 ('for thirteen months the market priced France...'); storyboard.md",
+  "verdict": "suspect",
+  "why": "Same cross-scene inconsistency flagged under s01: describes the same listing-to-settlement interval s01.js's closing line calls 'fourteen months earlier.' See that entry for the arithmetic (~13mo30d, genuinely borderline between the two roundings)."
+ },
+ {
+  "scene": "s02",
+  "what": "grain caption: '1 dot = $75,000 traded again ... this is the whole tournament' (beat.grain, variant 'return')",
+  "value": "$75,000",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Matches manifest.population.desktop.grain_usd (75000) but is a plain string literal, not read from the manifest. main.js's activateBeat() unconditionally overwrites the device-correct view.grain.text (set at boot from manifest.population[desktop|mobile].grain_text) with this literal whenever beat.grain is present. On mobile the loaded tile is pop-250k.bin with grain_usd=250000 ('1 dot = $250,000 of matched volume'), so a mobile reader would see this scene claim $75,000/dot while every dot on their screen actually represents $250,000."
+ },
+ {
+  "scene": "s02",
+  "what": "Reference marker dates (December 5 'the twitch', June 11 'the wall', 'you are here', 'the final')",
+  "value": "Dec 5 2025 / Jun 11 2026 / manifest.frozen_at / Jul 19 2026",
+  "class": "CITED",
+  "source": "research/fact-base.json tournament calendar; 'you are here' specifically reads manifest.frozen_at (STORE), the other three are HARD constants matching fact-base dates",
+  "verdict": "ok",
+  "why": "Dates match the known tournament calendar (draw, opening match, final) and 'you are here' is correctly STORE-derived from manifest.frozen_at rather than hardcoded; grouped here as one mixed-provenance entry since all four render as one visual family (the reference-mark row)."
+ },
+ {
+  "scene": "s03",
+  "what": "Beat b2 prose: '49.4 million contracts' (match markets, day one)",
+  "value": "49.4M",
+  "class": "CITED",
+  "source": "R18, fn-4",
+  "verdict": "ok",
+  "why": "Exact match; not wired to any check_figure_sync.py slot (unguarded)."
+ },
+ {
+  "scene": "s03",
+  "what": "Beat b2 prose: '31.6 million contracts' (futures book's entire prior life)",
+  "value": "31.6M",
+  "class": "CITED",
+  "source": "R18, fn-4",
+  "verdict": "ok",
+  "why": "Exact match; unguarded."
+ },
+ {
+  "scene": "s03",
+  "what": "Beat b2 prose: 'about ninety times faster' (winner-market speedup after kickoff)",
+  "value": "~90x",
+  "class": "CITED",
+  "source": "R18: 'the futures book set its own record the same day, at ~90x its pre-tournament pace', fn-4",
+  "verdict": "ok",
+  "why": "Exact match; unguarded."
+ },
+ {
+  "scene": "s03",
+  "what": "Beat b3 prose: 'By July 8 that total reached $10.94 billion'",
+  "value": "$10.94B",
+  "class": "CITED",
+  "source": "R1: 'the reconciled tape totals $10.94B through July 8', fn-5",
+  "verdict": "suspect",
+  "why": "Exact match to the dossier value, but no on-screen element (counter, chart tick, or scene-JSON field) is actually pinned to July 8 -- the b3 counter jumps straight to manifest.census.total_usd (the current/frozen total). check_figure_sync.py has no slot for this figure (only the press-floor and final-snapshot numbers are guarded). Correct today, but structurally identical to the class of drift risk the audit is chasing: a dossier-era number frozen into prose with no live tether."
+ },
+ {
+  "scene": "s03",
+  "what": "Beat b3 prose: 'By the July 14 snapshot, it reached $12.75 billion'",
+  "value": "$12.75B",
+  "class": "CITED",
+  "source": "matches manifest.census.total_usd (12,750,040,374.67) to the cent-rounded billion; guarded by check_figure_sync.py slot 's03-final-counter'",
+  "verdict": "ok",
+  "why": "This is also the literal target the on-screen counter animates to (setCounter uses manifest.census.total_usd directly), so prose and drawn number cannot drift independently. Note: this differs from dossier R1's own stated snapshot figure ('$12.3B at the July 14 snapshot') -- expected and correct per the piece's FIGURE POLICY ('prose follows DEPLOYED post-final data everywhere'), since manifest.frozen_at (2026-07-19) postdates R1's pre-final analysis; flagging only so the dossier-vs-deployed gap is on record."
+ },
+ {
+  "scene": "s03",
+  "what": "Beat b3 prose: '$7.4 billion' newspaper figure restated",
+  "value": "$7.4B",
+  "class": "CITED",
+  "source": "matches s03.json press_floor.usd exactly; guarded by check_figure_sync.py slot 's03-press-floor'",
+  "verdict": "ok",
+  "why": "Guarded."
+ },
+ {
+  "scene": "s03",
+  "what": "shareCaption: '98.6% of everything on this tape traded after kickoff.'",
+  "value": "98.6%",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Hardcoded SVG text with no scene-JSON field and no check_figure_sync.py slot. Matches R1's dossier wording exactly ('98.6% of lifetime volume traded in-tournament'), but an independent spot-check against the loaded 165,042-dot population tile (summing the dollars column by birth_ts before/after 2026-06-11T00:00Z) gives ~98.85% after-kickoff / ~1.15% before-kickoff -- about 0.25 percentage points off the on-screen claim. The tile's own ~$289M below-grain remainder (per manifest.census.below_grain) is a plausible source of the gap, but nothing on screen or in the build pipeline ties this specific caption number back to a recomputation, so it is asserted rather than verifiably derived from what's actually drawn."
+ },
+ {
+  "scene": "s03",
+  "what": "beat b1 grain: '1 dot = $75,000 of real money traded'",
+  "value": "$75,000",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Identical device-grain mismatch to s02's grain caption: a plain string literal that overrides the device-correct manifest-driven grain plate text (main.js activateBeat()). On mobile the loaded tile's true grain is $250,000/dot (manifest.population.mobile.grain_usd), not $75,000."
+ },
+ {
+  "scene": "s10",
+  "what": "gap-chart y-axis domain [0, 20] points, clamp(true)",
+  "value": "domainMax = 20 (docs/js/scenes/s10.js:298-299)",
+  "class": "HARD",
+  "source": "literal in s10.js, not read from scene JSON",
+  "verdict": "suspect",
+  "why": "Independent recompute of toGapSeries() over the shipped braid arrays shows the true per-minute mean gap reaches 55.8 pts (max), with 21 of 4,052 live minutes (0.5%) exceeding 20. clamp(true) pins all of these to the plot's top edge instead of deriving the ceiling from the data (e.g. d3.max(gapPts) or the dossier's own 41.6pt goal-spike figure). Same class of defect as the Item-5 [0,6] axis bug (a hardcoded ceiling reshaping real data), though far less severe here: the near-zero baseline (97.4% of minutes \u22645pts, matches the beat's own claim) stays correctly proportioned, no on-screen text states a numeric spike height that the clamp would contradict, and the code's own comments defend the choice as deliberate. Still, it is exactly the kind of magnitude Item 6 asks to convert to data-derived."
+ },
+ {
+  "scene": "s10",
+  "what": "reference band threshold, \"within 5 cents\" label + shaded band + clip boundary",
+  "value": "BAND = Math.min(5, domainMax) = 5 (s10.js:390)",
+  "class": "CITED",
+  "source": "dossier R2 (\"never sustained a 5pp gap for 30 minutes\"); underlying analysis pipeline/analysis/calibration_divergence_pm.py: GAP_THRESH=0.05, SUSTAIN_MIN=30",
+  "verdict": "ok",
+  "why": "Verified the literal 5 matches the analysis script's own GAP_THRESH=0.05 constant used to generate kalshi_vs_polymarket_max_gaps.csv, and the beat's \"never sat five points apart for even thirty minutes\" line matches SUSTAIN_MIN=30 exactly."
+ },
+ {
+  "scene": "s10",
+  "what": "gap_summary.mean_1min_gap_pts (drives gapMeter readout and beat b1's \"average gap stayed under one cent\")",
+  "value": "0.74",
+  "class": "CITED",
+  "source": "pipeline/data/analysis/calibration/kalshi_vs_polymarket_max_gaps.csv, mean_abs_gap_pp column, .mean() recomputed at build time",
+  "verdict": "ok",
+  "why": "Matches dossier R2's stated \"mean one-minute gap 0.74pp\" exactly; build-time recompute over the CSV (class B per the scene's own docstring), not a bare literal."
+ },
+ {
+  "scene": "s10",
+  "what": "gap_summary.n_legs",
+  "value": "84",
+  "class": "CITED",
+  "source": "same CSV, row count",
+  "verdict": "ok",
+  "why": "Matches dossier R2's \"84 knockout 3-way legs\" and the count independently confirmed against _entity_map_played.parquet (28 matches x 3 legs)."
+ },
+ {
+  "scene": "s10",
+  "what": "gap_summary.goal_second_spike_pts / .goal_second_spike_duration_s (shipped in JSON, NOT read anywhere in s10.js -- dead fields)",
+  "value": "41.6 pts / 60 s",
+  "class": "CITED",
+  "source": "41.6: same CSV's max_abs_gap_pp.max() (matches dossier R2 \"41.6pp goal-second spikes\"). 60: literal in build_tiles.py, not measured",
+  "verdict": "suspect",
+  "why": "41.6 is a genuine recomputed max and matches the dossier. But goal_second_spike_duration_s=60 is a bare hardcoded literal in build_tiles.py, not a measured duration -- it is an artifact of the analysis's one-minute row grid (every 'spike' occupies exactly one row by construction), not evidence any spike actually lasted 60 seconds. Currently harmless because s10.js never renders it, but it would mislead if a future beat surfaced it as a timed duration."
+ },
+ {
+  "scene": "s10",
+  "what": "pinnacle_terminations[] (16 rows: the b2/b3 vertical 'Pinnacle lane' marks and the \"Sixteen times... Pinnacle stopped quoting\" count-up)",
+  "value": "16 rows: {match_id, leg, t=end_ts, last_quote_pts=pinnacle_mean*100}",
+  "class": "CITED",
+  "source": "pipeline/data/analysis/calibration/divergence_episodes_kalshi_vs_pinnacle.csv, loaded verbatim",
+  "verdict": "ok",
+  "why": "Row count (16) matches dossier R2's \"16 divergence episodes\" exactly and is verified at build time per the module's own header comment."
+ },
+ {
+  "scene": "s10",
+  "what": "checker coverage",
+  "value": "check_figure_sync.py has zero slots for s10 (grep 'scene=\"s10\"' returns nothing)",
+  "class": "HARD",
+  "source": "pipeline/export/check_figure_sync.py",
+  "verdict": "suspect",
+  "why": "Every prose/readout number this scene carries (0.74 mean gap, 16 terminations, 5pt/30min band, 84 legs) is currently unguarded by the automated refreeze-consistency checker; a future data refresh could drift silently."
+ },
+ {
+  "scene": "s11",
+  "what": "smallN readout: \"84 coupled legs \u00b7 effective sample: 28 matches\"",
+  "value": "nLegs = scene.n_legs ?? 84; effN = scene.effective_n ?? 28",
+  "class": "HARD",
+  "source": "fallback literals in s11.js:307-308; scene.n_legs and scene.effective_n do not exist anywhere in the shipped s11.json (only 'scores' and 'three_traps_receipt' keys are present)",
+  "verdict": "suspect",
+  "why": "build_scene_s11() (pipeline/export/build_tiles.py:2221) never emits n_legs or effective_n despite the module's own DATA CONTRACT ASSUMPTIONS docstring describing them as scene-JSON fields -- the `??` fallback ALWAYS fires, so this on-screen number is 100% hardcoded, not a live read, contrary to what the code implies. Independently verified the values are numerically correct (pipeline/data/analysis/calibration/_entity_map_played.parquet has exactly 28 distinct match_id rows, 28x3=84), so no reader-facing error today -- but neither check_figure_sync.py nor check_scene_field_parity.py has an entry for scene 's11' at all, so a future data change would silently go stale with zero automated signal."
+ },
+ {
+  "scene": "s11",
+  "what": "beat b2: \"About 74% of the professional book's error here comes from just five matches\"",
+  "value": "74% / 5 matches",
+  "class": "CITED",
+  "source": "dossier R5 (\"~74% of Pinnacle's error comes from five matches with stoppage-time goals\"); the scene's own header docstring admits this figure was \"not located as an existing pipeline column at build time; flagged in data_requests\"",
+  "verdict": "suspect",
+  "why": "This number is hardcoded directly into beat prose with NO backing scene-JSON field (blowout_share_pct/blowout_matches_n never got wired into build_scene_s11()) and no build-time computation anywhere in the pipeline (grep for 'stoppage'/'74'/'blowout' across pipeline/analysis/*.py returns nothing). For this audit I independently recomputed it from pipeline/data/analysis/calibration/match3way_panel.parquet: summing (pinn_price-outcome)^2 per match for horizon=T-5min across all 28 matches, the top 5 matches (JUN28RSACAN, JUN29BRAJPN, JUL07ARGEGY, JUL10ESPBEL, JUL01ENGCOD) account for 73.8% of total squared error -- confirming 74%/five matches is accurate. The value checks out, but it is exactly the 'class B constant that should get a class A live recompute' pattern Item 6 was written to catch: nothing in the build or in either guard script verifies it, so it was correct by luck of a careful dossier author, not by a checkable pipeline step."
+ },
+ {
+  "scene": "s11",
+  "what": "three_traps_receipt[] (3 fixed strings, the b3 receipt panel content)",
+  "value": "16 divergence episodes / 29-60-119s ladder / T-5min blowout",
+  "class": "CITED",
+  "source": "hand-written in build_scene_s11(), summarizing S10/S7/S11's own corrected findings",
+  "verdict": "ok",
+  "why": "Descriptive cross-references to already-verified findings elsewhere in the piece, not independent numeric claims."
+ },
+ {
+  "scene": "s12",
+  "what": "annotations.july7_8_level.day_s_start / annotations.kane_halving.after_day_s",
+  "value": "2026-07-07T07:00:00Z / 2026-07-11T07:00:00Z",
+  "class": "HARD",
+  "source": "literal ISO date strings hand-typed in build_s12_scene() (build_tiles.py), not derived by any crossover/event-detection query",
+  "verdict": "suspect",
+  "why": "Independently verified against pipeline/data/analysis/bias-forensics/golden_boot_daily.parquet for this audit: Mbappe and Messi both closed at $0.41 (Jul 7) and $0.40 (Jul 8), genuinely level as the annotation claims; Kane's close fell from $0.07 (Jul 10) to $0.04 (Jul 11-13), a real halving right after the chosen date. Both dates are correct today, but they are manual editorial picks embedded in build code rather than computed by a rule (e.g. 'first day |price_mbappe-price_messi|<1c', 'day of the largest single-day price drop') -- nothing would catch it if a refreeze shifted the real crossover or halving day."
+ },
+ {
+  "scene": "s12",
+  "what": "beat prose price/goal figures: Mbappe 61c, Messi \"31 to 32 cents,\" both \"eight goals,\" Kane \"4 cents on six goals,\" \"120 scoreless minutes\"",
+  "value": "61c / 31-32c / 8 goals (both) / 4c / 6 goals / 120 min",
+  "class": "CITED",
+  "source": "dossier R13 / footnote 19 (\"Mbappe at 61c versus Messi's 31-32c on identical 8-goal tallies... Kane's 4c on six goals... halved on the day England won... 120 scoreless minutes\")",
+  "verdict": "ok",
+  "why": "Price figures independently cross-checked against golden_boot_daily.parquet for this audit: Mbappe closed 0.61 (Jul 12-13), Messi 0.31/0.32 (Jul 12/13), Kane 0.04 (Jul 11-13) -- all confirmed. Goal counts (8/8/6) and '120 scoreless minutes' are real-world match facts external to this project's Kalshi price/volume store and cannot be verified from the parquet tape itself; that is a legitimate scope boundary, not a 'should derive from data' defect, though it means these specific figures rest entirely on the dossier author's football research, not on anything this audit or check_figure_sync.py can check."
+ },
+ {
+  "scene": "s12",
+  "what": "grain caption: \"1 dot = $75,000 of real money traded\"",
+  "value": "$75,000",
+  "class": "HARD",
+  "source": "hand-typed literal, reused verbatim across 9 other scenes (s02-05, s09, s12-16, s18-19); matches manifest.population.desktop.grain_usd=75000",
+  "verdict": "suspect",
+  "why": "On mobile, docs/data/manifest.json shows the population tile actually uses grain_usd=250000 (49,394 dots vs desktop's 165,042 at 75000). main.js's activateBeat() uses beat.grain.text verbatim to overwrite the platform-loaded grain-plate text (view.grain.text, which IS correctly sourced from the loaded tile's own grain_text field) whenever a beat defines its own grain object, and none of this string's call sites branch on view.mobile. A mobile reader would see '$75,000' captioned over a tile where each dot is actually worth $250,000. This is a piece-wide gap (documented directly in s02.js's own comment as 'a static field with no data-slot equivalent today'), not unique to s12, but s12 is one of the nine scenes carrying it."
+ },
+ {
+  "scene": "s16",
+  "what": "L4 poll-vs-price pair (Argentina)",
+  "value": "poll_pct=87.0, kalshi_price_pct=11.0",
+  "class": "STORE",
+  "source": "s13.json pairs[key=argentina]",
+  "verdict": "suspect",
+  "why": "Values are correct and match s16's own hardcoded prose ('87 percent... 11 cents'), but scene s16 has zero entries in pipeline/export/check_figure_sync.py -- unlike s17/s19, nothing automatically re-checks s16's restated borrowed figures (this one, plus every other lens's numbers) against a future refreeze of s09/s10/s13/s14/s15."
+ },
+ {
+  "scene": "s16",
+  "what": "L1 beat grain-plate text",
+  "value": "'1 dot = $75,000 of real money traded'",
+  "class": "HARD",
+  "source": "s16.js beats[0] ('l1').grain.text",
+  "verdict": "suspect",
+  "why": "Hardcoded desktop-grain literal overrides the engine's own platform-correct view.grain.text (main.js activateBeat(): a beat's own `grain` always wins over the loaded tile's text). On mobile the real grain is $250,000/dot (manifest.population.mobile.grain_usd=250000, 49,394 dots vs desktop's 165,042 dots at $75,000), so a mobile reader sees an incorrect dot-value claim on this beat. The same literal, same bug pattern, recurs in s18 and s19 (see their entries) and across most other scenes in the piece -- a piece-wide issue, not unique to s16."
+ },
+ {
+  "scene": "s17",
+  "what": "Ceremonial population-dim fraction",
+  "value": "view.state('dimmed-field-min') (~0.25) standing in for design-system.md's authored '15%'",
+  "class": "HARD",
+  "source": "s17.js layout(): const quiet = view.state('dimmed-field-min')",
+  "verdict": "suspect",
+  "why": "A real, acknowledged magnitude gap between the authored design spec (dims to 15%) and the shipped value (25%). The in-code comment itself flags this as an open item for Gate 3 to reconcile ('a possible missing ceremonial-dim token') -- it reads as never closed."
+ },
+ {
+  "scene": "s17",
+  "what": "manifest.hero.provenance field text",
+  "value": "\"raw traded price, PROVISIONAL pre-G3-refresh snapshot from this build run...\"",
+  "class": "STORE",
+  "source": "docs/data/manifest.json hero.provenance",
+  "verdict": "suspect",
+  "why": "Still reads 'PROVISIONAL pre-G3-refresh snapshot' in the deployed manifest even though frozen_at (2026-07-19T15:34:23Z, morning of the final) and the price/devig values are the real frozen figures -- it directly contradicts the sibling field manifest.frozen_at_note ('G3 morning-of-final refresh: hero legs + every scene figure frozen at this run'). Not currently reader-facing (s17.js's resolveProvenance() bypasses this field entirely and hardcodes its own short sentence, per an earlier fix for a debug-caption leak), but it is a genuine, uncorrected stale value sitting in the store that a future direct consumer of manifest.hero.provenance would surface incorrectly."
+ },
+ {
+  "scene": "s18",
+  "what": "Beat b1 grain-plate text",
+  "value": "'1 dot = $75,000 of real money traded'",
+  "class": "HARD",
+  "source": "s18.js beats[0].grain.text",
+  "verdict": "suspect",
+  "why": "Same piece-wide bug as s16/s19: this hardcoded literal overrides the engine's platform-correct view.grain.text on mobile, where the real grain is $250,000/dot (manifest.population.mobile.grain_usd=250000). A mobile reader sees an incorrect per-dot dollar claim on this beat."
+ },
+ {
+  "scene": "s19",
+  "what": "Pre-whistle half-hour mean price",
+  "value": "85.4c (mean_price_c)",
+  "class": "STORE",
+  "source": "s19.json tie_climb.headline_half_hour.mean_price_c",
+  "verdict": "suspect",
+  "why": "The beat's hardcoded prose rounds this to 'averaging 85 cents' (slot s19-tie-avg-price PASSES at 0dp rounding), but drawTieClimb()'s own footDiv caption renders it via fmt.cents(), which does not round -- so the live chart footer shows '85.4\u00a2' on screen at the same time the paragraph above it says '85 cents.' check_figure_sync.py only diffs prose against JSON and never inspects this D3-rendered caption text, so the two-precisions-on-one-screen mismatch is invisible to the existing guard."
+ },
+ {
+  "scene": "s19",
+  "what": "Headline-half-hour window definition",
+  "value": "window_utc = [21:00Z, 21:30Z]; actual last trade at 21:18:51Z",
+  "class": "STORE",
+  "source": "s19.json tie_climb.headline_half_hour.window_utc vs settlement.regulation_tie_last_trade.ts_iso",
+  "verdict": "suspect",
+  "why": "Prose calls this 'the half hour before the whistle,' but the named window is really a fixed clock half-hour starting at the nominal 120-minute mark, not a window ending at the actual whistle (21:18:51Z falls inside it, ~11 minutes before its nominal close). The trade count itself is still correct (no trades occur after settlement), so this is a framing nuance rather than a numeric error."
+ },
+ {
+  "scene": "s19",
+  "what": "Spain-vs-model gap checkpoints (5 stages)",
+  "value": "France gap_pp: 6.41, 4.22, 5.63, 5.88, 6.13; Spain gap_pp: -0.44, -7.36, -2.4, -4.33, -3.34",
+  "class": "CITED",
+  "source": "s19.json spain_vs_model.stages, cited as 'R6, class B, same source s15.json cites'",
+  "verdict": "ok",
+  "why": "France's opta_pct values cross-checked byte-identical against s15.json's own 5 stage values, confirming genuine shared-source reuse rather than fabrication."
+ },
+ {
+  "scene": "s19",
+  "what": "2030-book opening gap from settlement",
+  "value": "632 seconds -> chart caption computes 'about 11 minutes' (Math.round(632/60))",
+  "class": "HARD",
+  "source": "s19.json next_belief.gap_from_champion_futures_settlement_s=632; s19.js drawNextBelief() gapMin calc vs beats[3].html hardcoded 'About ten minutes'",
+  "verdict": "suspect",
+  "why": "Genuine, unaddressed drift: the on-screen chart caption (dynamically computed, 11 minutes) and the hardcoded prose paragraph in the same beat (10 minutes) disagree. Not tracked by check_figure_sync.py at all -- no slot exists for this figure."
+ },
+ {
+  "scene": "s19",
+  "what": "Beat b1 grain-plate text",
+  "value": "'1 dot = $75,000 traded again \u00b7 this is the whole tournament \u00b7 it never leaves'",
+  "class": "HARD",
+  "source": "s19.js beats[0].grain.text",
+  "verdict": "suspect",
+  "why": "Same piece-wide mobile-grain-mismatch bug flagged in s16/s18: hardcoded $75,000 overrides the platform-correct view.grain.text; on mobile the real grain is $250,000/dot."
+ },
+ {
+  "scene": "s19",
+  "what": "manifest.hero.provenance (shared field, restated by s19)",
+  "value": "\"...PROVISIONAL pre-G3-refresh snapshot...\"",
+  "class": "STORE",
+  "source": "docs/data/manifest.json hero.provenance, referenced by s19.json exam_restated.note ('restated verbatim from the frozen manifest.hero')",
+  "verdict": "suspect",
+  "why": "Same stale field flagged under s17: s19 explicitly claims to restate manifest.hero verbatim, so the underlying store inconsistency (provenance text still says 'PROVISIONAL' despite frozen_at_note confirming the freeze happened) applies here too, even though s19.js never renders this specific field either."
+ },
+ {
+  "scene": "s07",
+  "what": "Kalshi-lane population-dot row selection in layout() \u2014 tile row picked by plain stride with NO leg filter",
+  "value": "row = Math.min(i*runtimeStride, T-1) over ALL T=tile.count rows of zoom/norbra.bin; no `tile.leg[row]` check anywhere",
+  "class": "HARD",
+  "source": "s07.js layout(), contrast s08.js's explicit `tile.leg[r]===regIdx` pattern",
+  "verdict": "suspect",
+  "why": "manifest.zoom.norbra declares 9 legs sharing one tile: 3 venues (kalshi/pinnacle/polymarket) x 3 outcomes (BRA/NOR/TIE). The loop that fills the 'KALSHI \u00b7 every trade' lane samples tile.price_c[row] from whichever leg happens to land at that stride index \u2014 potentially a Pinnacle quote row, a Polymarket block row, or a Brazil-win/Draw-price row \u2014 and unconditionally colors it venue-kalshi. This contradicts the lane's own label and the scene's stated grammar ('dots mean money and only money', Kalshi lane = Kalshi's price). Highest-confidence, highest-severity finding in this scene."
+ },
+ {
+  "scene": "s07",
+  "what": "Shared clock x-axis domain, CLOCK_DOMAIN_S",
+  "value": "[-120, 1900] seconds",
+  "class": "HARD",
+  "source": "s07.js top-of-file constant, comment: 'covers the suspension window and the 30-minute friction check with margin either side'",
+  "verdict": "suspect",
+  "why": "Shipped s07.json's last Polymarket block runs t_s_end=1923, 23s past the domain's 1900 ceiling \u2014 that block is drawn partially or fully off/clipped at the chart's right edge. The domain is a static literal, not derived from d3.max over the actual quotes/blocks arrays, so it silently under-covers the very data it claims to fit with margin, and would clip further on any refreeze that lengthens the post-goal Polymarket window."
+ },
+ {
+  "scene": "s07",
+  "what": "postJumpLevel() reference-tick offset (anchors the b4 friction-band overlay)",
+  "value": "first Kalshi tick with t_s >= 5 seconds after goal_ts",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Unexplained, undocumented magic threshold choosing which tick counts as the 'post-jump level' the \u00b12c friction band is drawn around. Not tied to any named detection window (e.g. R22's qualifying floor) or to a scene-JSON field, so there's no way to check it reflects the actual analysis methodology behind R20's 30-minute-horizon claim rather than an arbitrary implementation choice."
+ },
+ {
+  "scene": "s07",
+  "what": "Friction-band drawn window in b4",
+  "value": "bx1 = x(1800) \u2014 1800 seconds = 30 minutes",
+  "class": "CITED",
+  "source": "R20 (ig-02): 'no exploitable post-goal fade at a 30-minute horizon'",
+  "verdict": "ok",
+  "why": "Matches the dossier's stated horizon exactly; a static literal but correctly cites the analysis window it dramatizes."
+ },
+ {
+  "scene": "s08",
+  "what": "Regulation-leg color-interpolation divisor",
+  "value": "t = clamp(1 - price_c/50, 0, 1) \u2014 sets the price at which color sits exactly halfway between 'expiring' and 'dead'",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Hardcoded '50' happens to be close to this leg's real ~48c starting price (R4), but is not computed from the tile's own first-tick price. A regulation leg that opened at a materially different price in a future zoom/refreeze would get a color ramp that starts already mostly 'dead' or barely fades at all, with nothing tying the constant back to the data."
+ },
+ {
+  "scene": "s08",
+  "what": "kickoffTs derivation for the match-minute axis",
+  "value": "kickoffTs = whistleTs - 90*60000 (assumes exactly 90 minutes of regulation, zero stoppage time)",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "No kickoff_ts field is shipped anywhere (s08.json carries only window.whistle_ts) to verify this assumption. The axis and the hardcoded '90'' whistle-line label are self-consistent only by construction; if the real match had added/stoppage time before the whistle (the near-universal case in football), every match-minute label on the axis is systematically offset from the true broadcast clock, undetectably, since there's no independent kickoff timestamp to check against."
+ },
+ {
+  "scene": "s08",
+  "what": "Decay-caption hardcoded figures (SVG overlay, decayCaption.html)",
+  "value": "'settling out: never faster than 7 cents a minute' and 'a real goal moves 19 to 25 cents in 30 seconds'",
+  "class": "CITED",
+  "source": "R4 (ig-07): 'goals jump 0.19-0.25 inside 30 seconds, the decay never exceeds 0.07 per minute'; identical figures also hardcoded independently in beat b1's prose HTML",
+  "verdict": "suspect",
+  "why": "Neither figure is backed by any field in s08.json \u2014 they are literal strings baked into the SVG caption, duplicated by hand in the beat prose, with nothing forcing the two copies to agree after an edit. check_figure_sync.py's own docstring explicitly assumes S08's shootout price levels are 'computed client-side from the population tile,' but no such computation exists in s08.js for these two numbers; a re-run of R4's underlying analysis producing different figures would go undetected by any guard."
+ },
+ {
+  "scene": "s08",
+  "what": "Beat b1 prose: regulation leg '48 cents to 1' over '22 minutes'",
+  "value": "0.48 -> 0.01 over 22 minutes",
+  "class": "CITED",
+  "source": "R4 (ig-07), fn-13",
+  "verdict": "ok",
+  "why": "Matches the dossier's GER-leg-specific (this-match, not tournament-aggregate) figures; not in check_figure_sync.py's SLOTS coverage (no slot defined for any of s08's prose numbers) but consistent with R4 as written."
+ },
+ {
+  "scene": "s09",
+  "what": "Multiples y-axis domain",
+  "value": "[0,6], d3.scaleLinear().clamp(true)",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "Same '[0,N] hardcoded + clamp(true)' shape as the S6 axis-clamp defect this whole audit exists to catch. It is not currently hiding anything: the three verified multiples drawn via verifiedStepPoints (PAR 5.0, NOR 3.6, BEL 2.0) all sit inside [0,6], and the raw per-dot scatter that could exceed 6 is deliberately recolored to ambient dim texture (documented in-code) rather than carrying the signal. But the ceiling is a static literal, not derived as e.g. d3.max(shocks, s=>s.pop_multiple)*margin \u2014 a future refreeze producing any shock multiple above 6 would silently clamp its verified step-line exactly like the original S6 bug, and nothing in the code would flag it."
+ },
+ {
+  "scene": "s09",
+  "what": "S16 anchor recap (`anchors.mirror()`) y-axis domain",
+  "value": "[0,100] raw price_band cents \u2014 not multiples-of-pre-shock like the main scene",
+  "class": "HARD",
+  "verdict": "suspect",
+  "why": "The main scene explicitly replaced a raw 0-100c axis with a multiples-of-baseline axis because 'a fixed 0-100c domain left this scene's story crushed into the bottom few percent of the chart' (in-code design-review citation). The S16 recap reintroduces exactly that raw 0-100c domain for the same Norway/Argentina pair \u2014 Norway an extreme longshot trading a few cents, Argentina a live contender likely trading tens of cents \u2014 risking the identical crushing the main scene's own fix exists to avoid, in the one place this 'Norway rises as Argentina falls' claim gets carried into a later scene."
+ },
+ {
+  "scene": "s09",
+  "what": "verifiedStepPoints() shock multiples driving the labeled step-lines",
+  "value": "PAR 5.0x, NOR 3.6x, BEL 2.0x, from data.scene.shocks[].pop_multiple",
+  "class": "CITED",
+  "source": "s09.json shocks[] / post_upset_drift.parquet (R9), fn-14",
+  "verdict": "ok",
+  "why": "The story-carrying lines and end-labels use the verified analysis figure directly rather than the under-resolved raw scatter \u2014 exactly the fix documented in-code (whole-cent price resolution otherwise floors these longshots' real sub-cent moves to '0 vs 1', and Norway's family has only two sampled dots tile-wide)."
+ },
+ {
+  "scene": "s13",
+  "what": "pairs[].poll_pct (Argentina, USA)",
+  "value": "Argentina 87.0%; USA 7.000000000000001% (float artifact, rounds to 7.0%)",
+  "class": "CITED",
+  "source": "pipeline/data/analysis/calibration/poll_vs_market_gaps.csv, dossier R10",
+  "verdict": "ok",
+  "why": "Matches dossier R10 prose exactly ('87% of Argentine respondents... 7% of Americans'). USA's float noise is explicitly rounded to 1 decimal by s13.js before display, so it never reaches the screen."
+ },
+ {
+  "scene": "s13",
+  "what": "pairs[].kalshi_price_pct (Argentina, USA)",
+  "value": "Argentina 11.0c; USA 1.5c",
+  "class": "CITED",
+  "source": "same poll_vs_market_gaps.csv, R10",
+  "verdict": "ok",
+  "why": "Matches dossier R10 and beat b1/b2 prose figures exactly."
+ },
+ {
+  "scene": "s13",
+  "what": "zombie_money.n_trades / total_usd",
+  "value": "277 trades; $2,190.47",
+  "class": "CITED",
+  "source": "pipeline/data/analysis/bias-forensics/zombie_money.parquet (R21), summed across 26 of 28 knockout losers",
+  "verdict": "suspect",
+  "why": "Verified directly against the parquet on disk right now: it still has only 26 rows (not 28), and sums to exactly 277 trades / $2,190.4654 -- reproducing the shipped figure exactly, confirming the JSON is a faithful passthrough of a KNOWN-INCOMPLETE table. Dossier R21 cites the full-tournament figure as '302 trades, ~$2,340.' s13.js's own docstring (#5) says the deploy re-run should complete this sum. Per FIGURE POLICY ('prose follows DEPLOYED, post-final data everywhere'), and given today is the day after the final, this figure should already reflect all 28 losers and does not -- the upstream analysis script (bias_forensics_04_zombie_money.py) needs a post-final re-run before the next build_tiles.py pass."
+ },
+ {
+  "scene": "s13",
+  "what": "zombie_money.max_price_c",
+  "value": "0.1",
+  "class": "CITED",
+  "source": "same zombie_money.parquet, field max_price_after_elim_c",
+  "verdict": "suspect",
+  "why": "Root-caused in pipeline/analysis/bias_forensics_04_zombie_money.py line 96: max_price_after_elim_c = yes_price_usd.max() * 100. Every one of the 20 non-null team rows in the parquet on disk carries the identical value 0.1 -- implausible organic agreement for a max() computed independently per team, and inconsistent with Kalshi's real 1-cent minimum tick (used elsewhere in this piece, e.g. S14's '1-2 cent tick floor'): a trade cannot clear at $0.001. Reads as an upstream unit/rounding bug (a stray extra divide-by-10, or yes_price_usd already in an unexpected unit somewhere upstream) rather than a real print. If it ever reached the beat, footnoteChip's rendering logic would print '0.1 cents' verbatim, contradicting both the dossier's 'at or below one cent' framing and the exchange's own tick mechanics."
+ },
+ {
+  "scene": "s13",
+  "what": "beat b1 grain.text literal '1 dot = $75,000 of real money traded'",
+  "value": "$75,000 (hardcoded string)",
+  "class": "HARD",
+  "source": "s13.js beats[0].grain.text",
+  "verdict": "suspect",
+  "why": "manifest.json defines two different population grains -- desktop $75,000/dot, mobile $250,000/dot (docs/data/manifest.json population.mobile.grain_usd) -- and main.js normally reads the live, device-correct value into view.grain.text, but a non-zoom scene's beat.grain.text literal always overrides that at render time (main.js ~587-593). On mobile the grain plate would read '$75,000' while every dot on screen is really worth $250,000, a 3.3x understatement -- the same class of defect as the S6 axis-clamp bug this audit is named after (a real, context-dependent value silently overridden by a stale literal). The identical literal appears in S14 and S15 beat b1 too, so this is a piece-wide pattern, not unique to S13."
+ },
+ {
+  "scene": "s14",
+  "what": "buckets[] (20 rows): label, lo_c/hi_c, n_markets, mean_price_c, win_rate_pct, vol_weighted_price_c, vol_weighted_win_rate_pct",
+  "value": "e.g. 1-5c: n=12188, mean=1.818c, win=0.615%, vw_price=1.933c, vw_win=1.447%",
+  "class": "CITED",
+  "source": "flb_kalshi_buckets.parquet + flb_kalshi_buckets_volweighted.parquet, dossier R7",
+  "verdict": "ok",
+  "why": "Recomputed by hand: combining the 1-5c and 5-10c buckets weighted by n_markets reproduces the dossier's headline '3.04% implied, 1.19% paid' almost exactly (3.036%/1.194%). Those same two buckets' dollar-weighted gaps (0.49pp and 0.20pp) match the beat's 'shrink to about half a point.' No rounding drift found across the 20 rows versus the docstring's stated source columns."
+ },
+ {
+  "scene": "s14",
+  "what": "buckets[].total_volume -- consumed by overlay()'s dollarRadiusScale in dollars-weighted mode, absent from every bucket in the shipped JSON",
+  "value": "field missing on all 20 buckets (treated as 0)",
+  "class": "STORE",
+  "source": "build_tiles.py build_scene_s14_v2(): merges only label/lo_c/hi_c/n_markets/mean_price_c/win_rate_pct/vol_weighted_price_c/vol_weighted_win_rate_pct from the parquet; total_volume is never carried through, even though the function's own docstring lists it as a real source column",
+  "verdict": "suspect",
+  "why": "In dollars-weighted mode (b3/b4), every marker's radius is dollarRadiusScale(b.total_volume || 0). With the field missing on every bucket, d3.max(...) evaluates to 0, the scale's domain collapses via the '|| 1' fallback, and every marker renders at the fixed 1.5px minimum regardless of real dollar weight. This silently defeats the exact fix the code's own comments call 'major #3' -- 'the loud high-price wiggle must visibly belong to near-zero dollar weight' -- because no bucket's marker is actually sized by its real volume."
+ },
+ {
+  "scene": "s14",
+  "what": "worst_bucket_label = '90-95c'",
+  "value": "90-95c",
+  "class": "HARD",
+  "source": "build_tiles.py build_scene_s14_v2() return block (literal string, not computed from the bucket table)",
+  "verdict": "suspect",
+  "why": "Independently recomputed the implied-minus-realized gap for all 20 buckets from mean_price_c/win_rate_pct: 90-95c is indeed the single worst (22.98pp gap, next-worst is 75-80c at 15.6pp), so the current claim is correct. But it is typed as a literal string rather than derived (e.g. argmax over the gap), exactly the 'class-B constant standing in for a class-A live computation' pattern this audit exists to catch -- a future data refresh that shifts which bucket is worst would not be caught by anything, and the amber callout would silently keep pointing at 90-95c."
+ },
+ {
+  "scene": "s14",
+  "what": "beat b1 grain.text literal '1 dot = $75,000 of real money traded'",
+  "value": "$75,000 (hardcoded string)",
+  "class": "HARD",
+  "source": "s14.js beats[0].grain.text",
+  "verdict": "suspect",
+  "why": "Same piece-wide mobile/desktop grain mismatch documented for S13: overrides the manifest's real per-device grain ($75,000 desktop vs $250,000 mobile), understating each dot's true value by 3.3x on mobile."
+ },
+ {
+  "scene": "s15",
+  "what": "stages[].opta_pct (5 stages)",
+  "value": "13.0, 18.7, 28.9, 27.3, 34.0",
+  "class": "CITED",
+  "source": "semifinalists_price_vs_opta_elo.csv, dossier R6 -- France's own opta_win_pct row at each as_of_date",
+  "verdict": "ok",
+  "why": "Verified byte-for-byte against the committed CSV: 0.130/0.187/0.289/0.273/0.340 x 100 -- exact match at every stage, confirming build_tiles.py's build_scene_s15_v2() reads the right team/column with no transcription drift."
+ },
+ {
+  "scene": "s15",
+  "what": "Hardcoded overlay annotation text: '+3 to +5 points above the model, devigged (bookmaker's cut removed)'",
+  "value": "+3 to +5 pp",
+  "class": "HARD",
+  "source": "literal string in s15.js overlay(), devigNote element -- not read from s15.json, not computed from the loaded population",
+  "verdict": "suspect",
+  "why": "This is the exact pattern Item 6 exists to catch: a class-B dossier figure (R6's devigged +3/+5pp estimate) baked directly into JS as a literal, even though this same scene already holds, in memory, the live per-dot France/Spain prices (pop.price_band) it is comparing against the drawn Opta line. Nothing keeps this annotation in sync with what the dots actually show; if the devig computation or the population tile is ever refreshed, this string would not move with it, reproducing the S6 5.4x failure mode exactly."
+ },
+ {
+  "scene": "s15",
+  "what": "Mixed-price fallback for France/Spain dots: pb = priceBand[i] === 255 ? 50 : priceBand[i]",
+  "value": "50 (mid-chart placeholder cents)",
+  "class": "HARD",
+  "source": "s15.js computeStripState()",
+  "verdict": "suspect",
+  "why": "Any FRA/ESP winner-futures dot whose price_band carries the pipeline's 'unknown/mixed' sentinel (255) is assigned a fabricated 50c position and drawn at full identity color and boosted size -- rendered as if it were a real, precisely-priced trade. Every other scene handling the same sentinel does the opposite: s13.js skips these dots entirely (if (priceC === 255) continue) and s14.js leaves them in the dimmed rest field. This is an undocumented, scene-specific exception to the piece's own 'never invented precision' rule, which the code comment immediately next to this line explicitly invokes."
+ },
+ {
+  "scene": "s15",
+  "what": "beat b1 grain.text literal '1 dot = $75,000 of real money traded'",
+  "value": "$75,000",
+  "class": "HARD",
+  "source": "s15.js beats[0].grain.text",
+  "verdict": "suspect",
+  "why": "Same piece-wide mobile/desktop grain mismatch flagged in S13 and S14 -- overrides the manifest's real per-device value, understating each dot's true worth by 3.3x on mobile."
+ },
+ {
+  "scene": "s04",
+  "what": "waking_band.{start_hour,end_hour}",
+  "value": "8, 23 (8am-11pm ET)",
+  "class": "HARD",
+  "source": "pipeline/export/build_tiles.py:1370 `waking_start_hour, waking_end_hour = 8, 23  # documented convention`",
+  "verdict": "suspect",
+  "why": "A bare editorial literal with no cited external basis for what counts as 'waking,' yet it fixes the denominator of the headline 1.2x residual quoted in b3. A different band definition moves that number. Should either cite a basis or be labeled on-screen as a chosen convention."
+ },
+ {
+  "scene": "s04",
+  "what": "b2 prose: 'kickoff windows... capture 54.7% of all the money traded, about 1.6 times their fair share'",
+  "value": "54.7%, 1.6x",
+  "class": "CITED",
+  "source": "findings-dossier.md R11 / storyboard.md ('...capture 54.7% of tournament volume (a ~1.6x tilt)')",
+  "verdict": "suspect",
+  "why": "Not present anywhere in the shipped s04.json or manifest.json, and not recomputable from the shipped fields (per-cell day x hour money isn't shipped, only hour-of-day aggregates). Not covered by any check_figure_sync.py slot. Every sibling number in this same beat set (hourly_money/hourly_credit/waking_residual) was demonstrably live-recomputed for the 2026-07-20 post-final freeze; this one was not touched, so it may be stale pre-final dossier prose -- the exact 'class-B constant passed through as static' pattern item 6 exists to catch."
+ },
+ {
+  "scene": "s04",
+  "what": "Rest-day caption: 'trading drops 5-15x; the always-open winner market, only about 3x'",
+  "value": "5-15x, 3x",
+  "class": "CITED",
+  "source": "findings-dossier.md R11 ('rest days fall 5-14.5x... always-open futures dim only ~3x')",
+  "verdict": "suspect",
+  "why": "Hardcoded directly as literal SVG text in overlay() (never read from s04.json), not covered by check_figure_sync.py, and rounds 14.5 up to 15 rather than quoting the dossier's own figure."
+ },
+ {
+  "scene": "s05",
+  "what": "core_series.{legs, share_pct}",
+  "value": "414 legs, 63.06% share",
+  "class": "STORE",
+  "source": "build_lorenz()+build_s05_scene(); provenance also names novelty_vs_sports.json (R14) and concentration_summary.json (R15) as 'class B' inputs",
+  "verdict": "suspect",
+  "why": "s05.json's own generated timestamp is 2026-07-19T15:37Z (deploy-morning, before that evening's final). Per Gate-5 item 3's own SETTLED text, this 414/63.06% figure is 'the stamped deploy-morning freeze' while 'the current tape reads 422/62.1% after the final's late-listed legs,' and item 3's disposition explicitly keeps the numbers frozen. That appears to conflict with the FIGURE POLICY block, which says only S17's exam number stays frozen and everything else follows deployed post-final data. Flag for author confirmation: sanctioned second exception, or does this need refreezing to 422/62.1%? (Also note: item 3's own text quotes '63.5%,' one digit off from the shipped 63.06%/'63.1%' actually deployed.)"
+ },
+ {
+  "scene": "s05",
+  "what": "tail.{markets, share_pct}",
+  "value": "19640 markets, 0.357%",
+  "class": "STORE",
+  "verdict": "suspect",
+  "why": "computed in the same build pass / same pre-final timestamp as core_series; the same freeze-vs-FIGURE-POLICY question applies"
+ },
+ {
+  "scene": "s05",
+  "what": "gini_pooled / gini_within_family",
+  "value": "0.9285 / 0.4411",
+  "class": "STORE",
+  "source": "concentration_summary.json (R15, 'class B' per file provenance)",
+  "verdict": "suspect",
+  "why": "same pre-final generated timestamp as core_series/tail -- not shown to be wrong, just possibly stale relative to the FIGURE POLICY default"
+ },
+ {
+  "scene": "s05",
+  "what": "b3 prose: 'from about 594,000 contracts to 1,531,620'",
+  "value": "594,000 (pre-surge historical figure)",
+  "class": "CITED",
+  "source": "not present in current s05.json; the exact figure (594,454) is recorded verbatim in research/revision/gate5-feedback-notes.md item 4's own fact-finding",
+  "verdict": "ok",
+  "why": "verified match to the canonical spec's own recorded pre-surge count; used correctly as a before/after pair with the current 1,531,620. Not covered by any automated guard (no 'prior contracts' field exists to check against) -- a future rewrite of this beat could drift silently."
+ },
+ {
+  "scene": "s05",
+  "what": "b3 prose: 'nearly tripled'",
+  "value": "1,531,620 / 594,454 = 2.58x",
+  "class": "CITED",
+  "verdict": "ok",
+  "why": "fair colloquial rounding of 2.58x, not misleading"
+ },
+ {
+  "scene": "s06",
+  "what": "size_growth_pct / size_sparkline[]",
+  "value": "15.0 / 409 points",
+  "class": "CITED",
+  "source": "size_growth_pct explicitly still the R16 'class-B' cross-tournament figure per the file's own docstring",
+  "verdict": "ok",
+  "why": "confirmed unused by current s06.js (grep shows no read outside comments) -- shipped for provenance only, no live visual/prose consequence today"
+ },
+ {
+  "scene": "s06",
+  "what": "rate scale domain top: d3.max(rate_curve.rate_per_s) x 1.05",
+  "value": "computed top is approx 125.1 (max sample 119.18 x 1.05)",
+  "class": "STORE",
+  "verdict": "suspect",
+  "why": "The drawn curve is 15-minute-binned, so its own max (119.18/s) sits structurally below the true 1-minute peak_minute_rate_per_s (182.4/s) the same beat's prose quotes as '182 trades a second.' The axis top (~125) can never reach 182 -- the reader is told a number the chart can never visually show, one granularity level removed from the original [0,6]-domain bug this scene was already fixed for."
+ },
+ {
+  "scene": "s06",
+  "what": "Grain-text stride: 'showing every {n}th of {count} trades' (count=tile.count, n=runtimeStride)",
+  "value": "count is the already build_stride=2-thinned tile row count, not the market's true 999,889 raw trades",
+  "class": "STORE",
+  "verdict": "suspect",
+  "why": "technically accurate about the shipped tile, but the on-screen caption doesn't disclose the earlier build-time build_stride=2 pre-thinning (manifest.zoom.mexeng.build_stride), so the '{count}' denominator silently understates the market's true total trade count -- a two-stage downsample where only the second stage is narrated"
+ },
+ {
+  "scene": "s06",
+  "what": "b1 prose: '158.7 million tickets bought and sold, in about a million separate trades'",
+  "value": "158,703,757.33 contracts / 999,889 trades",
+  "class": "CITED",
+  "source": "pipeline/data/analysis/volume-anatomy/mexeng_summary.json (R8, total_contracts/total_trades); trades also cross-matches manifest.zoom.mexeng.trades=999889",
+  "verdict": "ok",
+  "why": "verified exact match against the underlying analysis file and the manifest's own trade count; not covered by any check_figure_sync.py slot, so a future refresh of mexeng_summary.json wouldn't be automatically checked against this prose"
+ },
+ {
+  "scene": "s06",
+  "what": "b1 prose: 'Trading ran heavier before kickoff than in a typical knockout match'",
+  "value": "qualitative, no explicit figure stated on screen",
+  "class": "CITED",
+  "source": "consistent with mexeng_summary.json's pre_kickoff_ramp bucket (27.4% of contracts in the 4h before kickoff)",
+  "verdict": "ok",
+  "why": "no number to check-drift against; direction matches the underlying bucket data"
+ }
+]

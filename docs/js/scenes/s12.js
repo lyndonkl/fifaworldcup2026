@@ -659,7 +659,7 @@ const s12 = {
         { token: 'identity-teal', glyph: 'dot', label: "teal = Messi's Golden Boot money" },
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded', variant: 'return' },
+      grain: { text: '1 dot = {grainUsd} of real money traded', variant: 'return' },
       overlayStep: 'b1',
     },
     {

@@ -35,12 +35,13 @@
  *     "lorenz_curve": [ { "market_frac": 0, "value_frac": 0 }, ... ],  // optional
  *     "novelty_market": {               // the loudest OFF-PITCH novelty of the
  *       "series_ticker": "KXWCADS",     //   tournament (the ad family). As of
- *       "label": "…",                   //   the current deploy its biggest member
- *       "rank": 7130,                   //   has crossed the per-dot grain line:
- *       "contracts": 1531620,           //   rank 7,130th of 30,133 markets, and it
- *       "n_markets": 35,                //   owns a dot in this population. Money
- *       "in_below_grain": false         //   poured in as the final settled the family
- *                                        //   nearly tripled from its earlier count.
+ *       "label": "…",                   //   the current (post-final) deploy its
+ *       "rank": 2426,                   //   biggest member has crossed the per-dot
+ *       "contracts": 4618232,           //   grain line: rank 2,426th of 30,133
+ *       "n_markets": 38,                //   markets, and it owns a dot in this
+ *       "in_below_grain": false         //   population. Money kept arriving through
+ *                                        //   settlement; the family grew nearly
+ *                                        //   eightfold from its pre-tournament count.
  *     }
  *   }
  * `manifest.census.below_grain.{markets,usd}` (already part of the
@@ -239,7 +240,7 @@ export default {
         : region.y + region.h + 8 + 10)
       .attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-tape-size) var(--font-tape)`)
-      .text(`${fmt.count(belowGrain.markets)} markets · under one dot each ($75,000) · ${fmt.usd(belowGrain.usd)} combined`);
+      .text(`${fmt.count(belowGrain.markets)} markets · under one dot each ($${Math.round(view.grain.usd).toLocaleString('en-US')}) · ${fmt.usd(belowGrain.usd)} combined`);
 
     // Axes (G3: "missing apparatus to add" -- S5 had none). Ticks at the
     // five round percentages the spec calls out; titles name what each
@@ -349,13 +350,14 @@ export default {
     // family's own data-bound rank instead.
     // The loudest off-pitch novelty of the tournament is the KXWCADS ad
     // family ("which brands advertise around the final"). GATE-5 RE-SYNC
-    // (item 4): the shipped page's prose and this scene's own data drifted
-    // apart at an epilogue-day refreeze -- the prose kept describing a
-    // market that "could not crack the top ten thousand" and "owned no
-    // dot," while `data/scenes/s05.json` already read `in_below_grain:
-    // false`, rank 7,130 of 30,133. Settlement-day trading nearly tripled
-    // the family (594,454 -> 1,531,620 contracts) and pushed its biggest
-    // member across the per-dot grain line. The callout below is still an
+    // (item 4, then a second provenance-audit re-sync): the shipped page's
+    // prose and this scene's own data drift apart every time this ad
+    // family keeps trading after a freeze -- first at the epilogue-day
+    // refreeze (594,454 -> 1,531,620 contracts, rank 7,130), then again as
+    // post-final housekeeping trades kept landing (contracts now
+    // 4,618,232, rank 2,426 of 30,133, n_markets 35 -> 38). The family
+    // grew nearly eightfold from its pre-tournament baseline, not "nearly
+    // tripled." The callout below is still an
     // amber ANNOTATION (design-system §6: amber is annotation, never a
     // data encoding), and its leader still anchors at the below-threshold
     // band's edge as a general pointer into the small-market end of the
@@ -454,7 +456,7 @@ export default {
         // row renders at rest-tier alpha too.
         { token: 'field-rest', glyph: 'dim', label: 'pale blue = markets, sorted by size' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded' },
+      grain: { text: '1 dot = {grainUsd} of real money traded' },
     },
     {
       id: 'b2',
@@ -463,7 +465,7 @@ export default {
     },
     {
       id: 'b3',
-      html: '<p>The loudest market with nothing to do with football was a bet on advertising: which brands would run a commercial around the final. All 35 of those ad markets settled at the final itself. Money poured in as settlement got close, and the family nearly tripled in its final hours, from about 594,000 contracts to 1,531,620.<sup><a href="#fn-8">8</a></sup> The single biggest of them, whether Pepsi would advertise, now ranks 7,130th of 30,133 markets by money traded. That late rush pushed it past the top ten thousand and earned it a dot of its own in the picture above, something it could not do before.<sup><a href="#fn-8">8</a></sup> Loud in imagination. Still faint in money: even after tripling, the whole family is a rounding error next to one real match night. Remember these near-empty markets. They come back later, in the one place this market got something wrong.</p><div class="scrim-card" style="margin-top:var(--space-16); padding:var(--space-8) var(--space-12);"><p style="margin:0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">Skill unlocked.</strong> <span style="color:var(--ink-mid);">Volume measures attention, not knowledge. Before trusting a price, check the money behind it: deep markets like the match books earn trust; near-empty ones do not. Skill 5 shows exactly how they go wrong.</span></p><p style="margin:var(--space-8) 0 0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">The receipt.</strong> <span style="color:var(--ink-mid);">The tape&rsquo;s own total ran a week ahead of the number in the news. Meanwhile, 63.1% of every dollar sat in three families of serious questions.</span></p></div>',
+      html: '<p>The loudest market with nothing to do with football was a bet on advertising: which brands would run a commercial around the final. All 38 of those ad markets settled at the final itself. Money kept arriving through settlement, and the family grew nearly eightfold, from about 594,000 contracts to 4,618,232.<sup><a href="#fn-8">8</a></sup> The single biggest of them, whether Pepsi would advertise, now ranks 2,426th of 30,133 markets by money traded. That late rush pushed it past the top three thousand and earned it a dot of its own in the picture above, something it could not do before.<sup><a href="#fn-8">8</a></sup> Loud in imagination. Still faint in money: even after growing eightfold, the whole family is a rounding error next to one real match night. Remember these near-empty markets. They come back later, in the one place this market got something wrong.</p><div class="scrim-card" style="margin-top:var(--space-16); padding:var(--space-8) var(--space-12);"><p style="margin:0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">Skill unlocked.</strong> <span style="color:var(--ink-mid);">Volume measures attention, not knowledge. Before trusting a price, check the money behind it: deep markets like the match books earn trust; near-empty ones do not. Skill 5 shows exactly how they go wrong.</span></p><p style="margin:var(--space-8) 0 0; max-width:60ch; font-size:var(--type-caption-size);"><strong style="color:var(--accent-annotation);">The receipt.</strong> <span style="color:var(--ink-mid);">The tape&rsquo;s own total ran a week ahead of the number in the news. Meanwhile, 63.1% of every dollar sat in three families of serious questions.</span></p></div>',
       trigger: 'step',
       state: 'sweepDimmed',
       kind: 'recolor',

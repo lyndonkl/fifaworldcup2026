@@ -20,12 +20,18 @@
  *
  * DATA_REQUEST: docs/data/scenes/s08.json (built from
  * pipeline/data/analysis/ingame-microstructure/shootout_ticks_JUN29GERPAR.parquet,
- * R4) needs one field the manifest's generic zoom spec does not carry: the
+ * R4) needs fields the manifest's generic zoom spec does not carry: the
  * whistle instant itself (the regulation leg's glide begins exactly there,
- * and it anchors the scene's scroll dwell / gold-coin moment):
+ * and it anchors the scene's scroll dwell / gold-coin moment), plus the
+ * regulation leg's own price at that instant (Gate-5 provenance audit --
+ * b1's "48 cents" was a hand-typed dossier figure the raw tape does not
+ * confirm at this exact anchor; the tape reads 43-44c here):
  *   {
  *     "_provenance": { "sources": [...], "generated": ISO },
- *     "window": { "whistle_ts": ISO }
+ *     "window": { "whistle_ts": ISO },
+ *     "price_at_whistle_c": 44,   // GER regulation leg's last trade at or
+ *                                  // before whistle_ts, class-A recompute
+ *     "glide_minutes": 22         // R4's verified glide duration
  *   }
  * Per-kick markers do NOT need a data request: the zoom tile's own `flags`
  * bit 0 ("detector-anchored repricing event", CONTRACT §5.4) already tags
@@ -453,8 +459,9 @@ export default {
         do. Germany and Paraguay finished level after ninety minutes.</p>
         <p>One ticket paid off only if Germany won inside those ninety
         minutes. By its own rules, that ticket had to die at the final
-        whistle: a draw counts as no. Its price slid from 48 cents to 1,
-        like sand falling through an hourglass, never faster than 7 cents a
+        whistle: a draw counts as no. Its price slid from 44 cents to 1
+        cent over twenty-two minutes, like sand falling through an
+        hourglass, never faster than 7 cents a
         minute.<sup><a href="#fn-13">13</a></sup> Compare that to a real
         goal: a real goal moves a price 19 to 25 cents in 30 seconds, more
         than three times as fast.</p>

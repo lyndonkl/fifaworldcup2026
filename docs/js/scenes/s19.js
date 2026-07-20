@@ -492,7 +492,16 @@ export default {
           .text(`settled at ${fmt.cents(last.tie_price_c)}`));
       }
 
-      footDiv.html(`${fmt.count(hh.n_trades || 0)} trades in the half hour before the whistle, averaging ${fmt.cents(hh.mean_price_c || 0)}`);
+      // Gate-5 provenance audit (WRONG_SCOPE): "before the whistle" implied
+      // the 30 minutes immediately preceding the actual last trade
+      // (21:18:51Z) -- window_utc is really a fixed nominal-clock half
+      // hour keyed to the 120-minute mark (see the amber-band comment
+      // above), a different, earlier-starting window with materially
+      // different figures (recomputed: ~20,438 trades / ~80.5c against the
+      // literal "30 minutes before the whistle" reading, vs the 16,961/
+      // 85.4c this fixed-clock window actually measures). Reworded to
+      // describe the window this caption's own numbers are scoped to.
+      footDiv.html(`${fmt.count(hh.n_trades || 0)} trades in the half hour after the 120-minute mark, averaging ${fmt.cents(hh.mean_price_c || 0)}`);
       captionDiv.text('Regulation Time, decided beyond regulation time.');
     }
 
@@ -713,14 +722,14 @@ export default {
         { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
       ],
       grain: {
-        text: '1 dot = $75,000 traded again · this is the whole tournament · it never leaves',
+        text: '1 dot = {grainUsd} traded again · this is the whole tournament · it never leaves',
         variant: 'return',
       },
       overlayStep: 'b1',
     },
     {
       id: 'b2',
-      html: `<p>Ninety minutes ended level. Spain became champion in extra time, not in regulation.${FN(24)} This piece taught that lesson once already, at the Germany-Paraguay shootout: check which ticket is talking. Tonight two tickets disagreed, and a reader who learned that lesson read both of them right.</p><p>The trophy ticket said Spain would win the World Cup. A second ticket asked a narrower question: would the match still be level after ninety minutes? Before kickoff it traded near 33 cents. As the draw held, it climbed. In the half hour before the whistle on regulation it traded 16,961 times, averaging 85 cents.${FN(24)} It settled at 99.</p><p>A piece called Regulation Time was decided beyond regulation time.</p>`,
+      html: `<p>Ninety minutes ended level. Spain became champion in extra time, not in regulation.${FN(24)} This piece taught that lesson once already, at the Germany-Paraguay shootout: check which ticket is talking. Tonight two tickets disagreed, and a reader who learned that lesson read both of them right.</p><p>The trophy ticket said Spain would win the World Cup. A second ticket asked a narrower question: would the match still be level after ninety minutes? Before kickoff it traded near 33 cents. As the draw held, it climbed. In the half hour after the 120-minute mark it traded 16,961 times, averaging 85 cents.${FN(24)} It settled at 99.</p><p>A piece called Regulation Time was decided beyond regulation time.</p>`,
       trigger: 'step',
       // BLIND-REVIEW FIX (scene-wide): b2-b4 carried no chip rows, so the
       // key kept displaying b1's crimson/grey bar meanings under every
@@ -747,7 +756,7 @@ export default {
     },
     {
       id: 'b4',
-      html: `<p>About ten minutes after Spain&rsquo;s coronation settled, Kalshi opened a market on who wins the 2030 World Cup.${FN(25)} Eighty-two countries, priced before the confetti finished falling. Spain&rsquo;s ticket was already the loudest of them, about seven times the volume of the next-biggest country.${FN(25)}</p><p>The next belief was already trading before this one finished being read. Every market above, and this new one too, is still yours to check. The lab is open below.</p>`,
+      html: `<p>About eleven minutes after Spain&rsquo;s coronation settled, Kalshi opened a market on who wins the 2030 World Cup.${FN(25)} Eighty-two countries, priced before the confetti finished falling. Spain&rsquo;s ticket was already the loudest of them, about seven times the volume of the next-biggest country.${FN(25)}</p><p>The next belief was already trading before this one finished being read. Every market above, and this new one too, is still yours to check. The lab is open below.</p>`,
       trigger: 'step',
       chip: [
         { token: 'identity-crimson', glyph: 'block', label: "crimson = Spain's 2030 winner ticket" },

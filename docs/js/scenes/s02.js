@@ -92,12 +92,32 @@ export default {
   kicker: 'Skill 1, continued — a price needs a crowd',
   layoutName: 'timeline-ribbon',
 
-  needs: { scene: false, series: [], zoom: null },
+  // Gate-5 provenance audit (s02 finding, WRONG_VALUE): this scene's own
+  // time axis needs a real calendar anchor for "when the market opened,"
+  // not the population tile's internal birth_ts encoding offset (see
+  // scales() below) -- so it now loads its own scene JSON.
+  needs: { scene: true, series: [], zoom: null },
 
   scales(data, view) {
     const { manifest } = data;
+    const sj = data.scene || {};
     const region = view.region;
-    const epochMs = new Date(manifest.epoch).getTime();
+    // decodeEpochMs: the population tile's own birth_ts is packed as
+    // seconds-since-manifest.epoch (build_tiles.py EPOCH, a fixed binary
+    // reference chosen ahead of the true first trade so every offset is
+    // non-negative) -- this MUST stay manifest.epoch for every dot's
+    // decoded timestamp (below) to come out correct, piece-wide.
+    const decodeEpochMs = new Date(manifest.epoch).getTime();
+    // axisStartMs: the axis's own drawn start, which is a different
+    // question ("when did this market's story actually begin") --
+    // wired to s02.json's listing_first_trade (2025-05-15, confirmed
+    // against both the raw tape's own MIN(created_ts) and the catalog's
+    // earliest open_time). manifest.epoch itself is 14 days earlier and
+    // was never meant to be a displayed date -- no trade, no market
+    // open_time, no catalog record sits anywhere near it.
+    const axisStartMs = sj.listing_first_trade
+      ? Date.parse(`${sj.listing_first_trade}T00:00:00Z`)
+      : decodeEpochMs;
     const frozenMs = new Date(manifest.frozen_at || manifest.generated).getTime();
     // Domain extends at least through the final (Jul 19) so the dimmed
     // "the final" marker sits inside the drawn axis even when the deploy
@@ -106,9 +126,9 @@ export default {
     const range = view.mobile
       ? [region.y, region.y + region.h]
       : [region.x, region.x + region.w];
-    const timeX = d3.scaleUtc().domain([epochMs, domainEnd]).range(range);
+    const timeX = d3.scaleUtc().domain([axisStartMs, domainEnd]).range(range);
     registry.register('s02.time', timeX);
-    return { timeX, epochMs, frozenMs, domainEnd };
+    return { timeX, epochMs: decodeEpochMs, frozenMs, domainEnd };
   },
 
   layout(data, view) {
@@ -381,7 +401,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>This market is a bet on who lifts the trophy, and it is the only market on that question. It opened in May 2025. For almost a year, it barely moved. Even the December draw, the day teams learned their groups, only caused a small stir: 176 mostly small trades in the hour the draw happened.<sup><a href="#fn-3">3</a></sup> There are two ways to measure how busy a market is: count the tickets that changed hands, or add up the dollars that did. By the tournament's busiest match day, the market was trading about twenty-one thousand times more money each day than it had all the months before.<sup><a href="#fn-3">3</a></sup> A market like this is not a poll that runs all day, every day. It is a crowd. And a crowd only shows up when something is actually at stake.</p><p><strong>Skill unlocked.</strong> You can now read any price on this page as a chance out of a hundred, and check whether a real crowd of money stands behind it.</p><p><strong>The receipt.</strong> This market held a live price on France for thirteen months, then settled it to zero the moment the belief died. No poll can do that.</p>`,
+      html: `<p>This market is a bet on who lifts the trophy, and it is the only market on that question. It opened in May 2025. For almost a year, it barely moved. Even the December draw, the day teams learned their groups, only caused a small stir: 175 mostly small trades in the hour the draw happened.<sup><a href="#fn-3">3</a></sup> There are two ways to measure how busy a market is: count the tickets that changed hands, or add up the dollars that did. By the tournament's busiest match day, the market was trading about eight hundred times more money each day than it had all the months before.<sup><a href="#fn-3">3</a></sup> A market like this is not a poll that runs all day, every day. It is a crowd. And a crowd only shows up when something is actually at stake.</p><p><strong>Skill unlocked.</strong> You can now read any price on this page as a chance out of a hundred, and check whether a real crowd of money stands behind it.</p><p><strong>The receipt.</strong> This market held a live price on France for fourteen months, then settled it to zero the moment the belief died. No poll can do that.</p>`,
       trigger: { type: 'scrub', span: 3 },
       state: 'k0',
       kind: 'instant', // see s01.js comment: scrub fine-motion is driven by keyframes, not `kind`
@@ -395,12 +415,13 @@ export default {
         { token: 'field-rest', glyph: 'dim', label: 'grey = every other market' },
       ],
       grain: {
-        // "Return" variant (CONTRACT §7 / design-revision-spec CR-20): the
-        // literal $75,000 figure matches CONTRACT §5.1's own manifest
-        // example and is a deploy-frozen figure like the rest of this
-        // beat's prose (see module data_requests note on beat.grain.text
-        // being a static field with no data-slot equivalent today).
-        text: '1 dot = $75,000 traded again · this is the whole tournament · it never leaves',
+        // "Return" variant (CONTRACT §7 / design-revision-spec CR-20).
+        // Gate-5 provenance audit (WRONG_SCOPE, piece-wide): the dollar
+        // figure is a `{grainUsd}` token, resolved by main.js's
+        // activateBeat() against the ACTUALLY loaded tile's own
+        // view.grain.usd, so a mobile reader (grain $250,000) is never
+        // shown the desktop tile's $75,000 figure.
+        text: '1 dot = {grainUsd} traded again · this is the whole tournament · it never leaves',
         variant: 'return',
       },
       overlayStep: 'b1',

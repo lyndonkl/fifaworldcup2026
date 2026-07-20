@@ -50,20 +50,59 @@ print(f"Elimination instants resolved: {n} / {len(losers)}")
 missing = con.execute("SELECT loser_code, match_id FROM elim WHERE elim_epoch IS NULL").df()
 print(missing)
 
-# futures winner-leg ticker + its own settlement
-con.execute(f"""
-CREATE OR REPLACE TEMP TABLE zombie AS
-SELECT e.match_id, e.loser_code, e.elim_epoch,
-       f.ticker AS futures_ticker, f.settlement_ts AS futures_settlement_ts,
-       epoch(CAST(f.settlement_ts AS TIMESTAMP)) AS futures_settle_epoch
-FROM elim e
-JOIN '{DATA}/catalog/markets.parquet' f
-  ON f.series_ticker = 'KXMENWORLDCUP' AND f.ticker LIKE 'KXMENWORLDCUP-26-%'
- AND (f.yes_sub_title = (SELECT team1_name FROM '{DATA}/audit/entity_map.parquet' em2 WHERE em2.match_id=e.match_id AND em2.team1_code=e.loser_code)
-      OR f.yes_sub_title = (SELECT team2_name FROM '{DATA}/audit/entity_map.parquet' em2 WHERE em2.match_id=e.match_id AND em2.team2_code=e.loser_code))
-""")
-zdf = con.execute("SELECT * FROM zombie").df()
+# futures winner-leg ticker + its own settlement.
+#
+# BUGFIX (Gate-5 provenance audit, s13 zombie_money finding): the original
+# JOIN matched on exact `yes_sub_title` string equality against entity_map's
+# own team1_name/team2_name, which silently dropped any team whose Kalshi
+# catalog title text does not match entity_map's text byte-for-byte --
+# DR Congo (entity_map "DR Congo" vs catalog "Congo DR", a word-order
+# difference) and United States (entity_map "United States" vs catalog
+# "USA", a true abbreviation) both fell out of the 26-loser result with no
+# error, no warning, just two silently-missing rows. Normalized matching
+# (lowercase, whitespace-collapsed, word-order-invariant via a sorted token
+# set) catches the word-order case for free; the one genuine abbreviation
+# needs a tiny explicit alias map, kept short and auditable rather than a
+# general fuzzy-match threshold that could silently mismatch two DIFFERENT
+# teams instead of just missing one.
+NAME_ALIASES = {
+    "united states": "usa",
+}
+
+
+def norm_name(s):
+    s = str(s).strip().lower()
+    s = NAME_ALIASES.get(s, s)
+    return " ".join(sorted(s.split()))
+
+
+futures = con.execute(f"""
+    SELECT ticker AS futures_ticker, yes_sub_title, settlement_ts AS futures_settlement_ts,
+           epoch(CAST(settlement_ts AS TIMESTAMP)) AS futures_settle_epoch
+    FROM '{DATA}/catalog/markets.parquet'
+    WHERE series_ticker = 'KXMENWORLDCUP' AND ticker LIKE 'KXMENWORLDCUP-26-%'
+""").df()
+futures["_norm"] = futures["yes_sub_title"].map(norm_name)
+
+elim_df = con.execute("SELECT * FROM elim").df()
+loser_names = con.execute(f"""
+    SELECT match_id,
+           CASE WHEN team1_code = (SELECT loser_code FROM losers l WHERE l.match_id = em.match_id)
+                THEN team1_name ELSE team2_name END AS loser_name
+    FROM '{DATA}/audit/entity_map.parquet' em
+    WHERE match_id IN (SELECT match_id FROM losers)
+""").df()
+elim_df = elim_df.merge(loser_names, on="match_id", how="left")
+elim_df["_norm"] = elim_df["loser_name"].map(norm_name)
+
+zdf = elim_df.merge(futures, on="_norm", how="inner")[
+    ["match_id", "loser_code", "elim_epoch", "futures_ticker", "futures_settlement_ts", "futures_settle_epoch"]
+]
 print(f"\nfutures leg matched: {len(zdf)} / {len(losers)}")
+if len(zdf) < len(losers):
+    missed = elim_df[~elim_df["_norm"].isin(futures["_norm"])]
+    print(f"WARNING: {len(losers) - len(zdf)} loser(s) still unmatched after normalization:\n"
+          f"{missed[['loser_code', 'loser_name']].to_string(index=False)}")
 print(zdf[["match_id","loser_code","futures_ticker"]].to_string())
 
 rows = []

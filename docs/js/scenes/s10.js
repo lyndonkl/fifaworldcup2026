@@ -103,11 +103,21 @@
  *     "_provenance": { "sources": [...], "generated": ISO },
  *     "knockout_window": { "start": ISO, "end": ISO },
  *     "gap_summary": {
- *       "mean_1min_gap_pts": 0.74,     // dossier R2; ~ mean of
- *                                      // calibration/kalshi_vs_polymarket_max_gaps.csv's
- *                                      // mean_abs_gap_pp column across all 84 legs
- *       "goal_second_spike_pts": 41.6,
- *       "goal_second_spike_duration_s": 60,
+ *       "mean_1min_gap_pts": 1.3,      // Gate-5 provenance audit: no longer
+ *                                      // read by this module (meanGap is
+ *                                      // now d3.mean(gapPts) -- the exact
+ *                                      // same array the line draws, see
+ *                                      // overlay() below); kept for
+ *                                      // provenance, class-A recompute off
+ *                                      // this scene's own shipped braid,
+ *                                      // not the differently-windowed
+ *                                      // kalshi_vs_polymarket_max_gaps.csv
+ *                                      // this field used to repack verbatim
+ *       "goal_second_spike_pts": 83.5, // same braid, still unread by this
+ *                                      // module (kept for provenance only)
+ *       "goal_second_spike_duration_s": null,  // was a fabricated "60s"
+ *                                      // guess never actually measured;
+ *                                      // also unread here
  *       "n_legs": 84
  *     },
  *     // Chronologically sorted, LIVE-WINDOW-ONLY points (sparse, not a
@@ -384,8 +394,14 @@ export default {
 
     const scene = data.scene || {};
     const terms = scene.pinnacle_terminations || [];
-    const meanGap = scene.gap_summary ? scene.gap_summary.mean_1min_gap_pts : null;
     const gapPts = scales.gapPts || [];
+    // Gate-5 provenance audit (WRONG_SCOPE): scene.gap_summary.mean_1min_gap_pts
+    // is scoped to a fixed 150-minute pre-resolution window (a narrower,
+    // differently-anchored population than what this chart actually
+    // draws); computed here instead as the mean of gapPts, the EXACT SAME
+    // array the line below plots, so the readout and the chart can never
+    // describe two different populations again.
+    const meanGap = gapPts.length ? d3.mean(gapPts, (d) => d.v) : null;
     const domainMax = scales.gap.domain()[1];
     const BAND = Math.min(5, domainMax);
     const yTop = scales.gap(BAND);
@@ -662,7 +678,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>Every match in the knockout stage has three tickets: one pays out on a home win, one on a draw, one on an away win. Traders call this the three-way. A point on this chart is one cent of price, so a five-point gap is five cents, about five chances out of a hundred.</p><p>Two rival markets priced every one of those tickets, all month: Kalshi, built in the United States, and Polymarket, built offshore. The chart below tracks how far apart the two ran, minute by minute, averaged across all three tickets. The two never sat five points apart for even thirty minutes. Minute by minute, the average gap stayed under one cent.${FN(15)}</p><p>Here is why the gap almost never opens. When one market prices a ticket a little rich and the other prices it a little cheap, traders buy the cheap ticket and sell the rich one until the two prices meet. That trade is close to free money, so the gap closes fast.</p>`,
+      html: `<p>Every match in the knockout stage has three tickets: one pays out on a home win, one on a draw, one on an away win. Traders call this the three-way. A point on this chart is one cent of price, so a five-point gap is five cents, about five chances out of a hundred.</p><p>Two rival markets priced every one of those tickets, all month: Kalshi, built in the United States, and Polymarket, built offshore. The chart below tracks how far apart the two ran, minute by minute, averaged across all three tickets. The two never sat five points apart for even thirty minutes. Minute by minute, the average gap stayed close to a penny.${FN(15)}</p><p>Here is why the gap almost never opens. When one market prices a ticket a little rich and the other prices it a little cheap, traders buy the cheap ticket and sell the rich one until the two prices meet. That trade is close to free money, so the gap closes fast.</p>`,
       trigger: 'step',
       state: 'rest',
       kind: 'resort',

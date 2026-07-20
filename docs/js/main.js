@@ -398,10 +398,18 @@ function zoomGrainText(scene, template) {
   const v = n % 100;
   const ordSuffix = (v >= 11 && v <= 13) ? 'th'
     : (n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th');
+  // Gate-5 provenance audit (s06 finding, WRONG_SCOPE): `spec.trades` is
+  // every zoom tile's own RAW pre-thin lifetime count (build_tiles.py
+  // ships `n_raw`, not the post-thin packed row count, for every one of
+  // the four zoom tiles) -- {count} reads it directly. The previous
+  // `spec.trades * spec.build_stride` double-applied the thinning factor
+  // for any tile whose meta already carried the raw count (mexeng:
+  // 999,889 raw -> was reported as 1,999,778), silently contradicting
+  // that same scene's own prose ("in about a million separate trades").
   return (template || scene.zoom.grainText)
     .replace('{n}th', nTxt + ordSuffix)
     .replace('{n}', nTxt)
-    .replace('{count}', formatSlot(spec.trades * (spec.build_stride || 1), 'count'));
+    .replace('{count}', formatSlot(spec.trades, 'count'));
 }
 
 /* ---------------------------------------------------------------- */
@@ -590,7 +598,19 @@ function activateBeat(entry) {
     // s01's beat appends "France–Spain, July 14") so the template comes
     // from the beat itself, not always the scene's bare zoom.grainText.
     const needsZoomFill = entry.scene.zoom && /\{n\}|\{count\}/.test(beat.grain.text);
-    setGrainPlate(needsZoomFill ? zoomGrainText(entry.scene, beat.grain.text) : beat.grain.text);
+    let text = needsZoomFill ? zoomGrainText(entry.scene, beat.grain.text) : beat.grain.text;
+    // Non-zoom "return" plates (S2/S3/S5/S9/S12-S19) restate the LIVE
+    // per-device grain dollar figure via a `{grainUsd}` token instead of
+    // a hardcoded desktop-only literal (Gate-5 provenance audit: shipped
+    // beats read a flat "$75,000" even on the mobile tier, where the
+    // loaded population tile's own grain is $250,000 -- view.grain.usd
+    // is always the figure for the ACTUALLY loaded tile, set once at
+    // boot from the tile's own manifest spec). Full-dollar form (not
+    // fmt.usd's "$75K" abbreviation) matches this prose register.
+    if (text.indexOf('{grainUsd}') !== -1) {
+      text = text.replace('{grainUsd}', `$${Math.round(view.grain.usd).toLocaleString('en-US')}`);
+    }
+    setGrainPlate(text);
   } else if (entry.scene.zoom && DATA.zoom[entry.scene.zoom.key]) {
     // Zoom scenes with no beat-level grain override at all (s06/s07/s08:
     // every one of their beats omits `grain`) still owe the reader the

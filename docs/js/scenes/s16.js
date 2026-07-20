@@ -853,7 +853,7 @@ export default {
         { token: 'venue-kalshi', glyph: 'dot', label: 'cyan dot = one minute, both venues' },
         { token: 'ink-low', glyph: 'dash', label: 'dashed = perfect agreement' },
       ],
-      grain: { text: '1 dot = $75,000 of real money traded' },
+      grain: { text: '1 dot = {grainUsd} of real money traded' },
       overlayStep: 'l1',
     },
     {
