@@ -51,6 +51,35 @@ function restFieldXY(i, view) {
 function lerpRgba(a, b, t) {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t];
 }
+
+// Shared scrub-reveal timeline (used by both layout()'s keyframes and
+// overlay()'s progressive line draw, so the D3 lines and the particle
+// reveal always agree on "how much of the tape has played").
+function computeCuts(whistleTs, winStartMs, winEndMs) {
+  return whistleTs
+    ? [
+      { at: 0.0, cutoff: winStartMs },
+      { at: 0.35, cutoff: whistleTs - 30000 },
+      { at: 0.55, cutoff: whistleTs + 150000 }, // the gold-coin dwell: paths visibly split
+      { at: 1.0, cutoff: winEndMs },
+    ]
+    : [
+      { at: 0.0, cutoff: winStartMs },
+      { at: 1.0, cutoff: winEndMs },
+    ];
+}
+function cutoffAt(cuts, t) {
+  if (t <= cuts[0].at) return cuts[0].cutoff;
+  for (let i = 1; i < cuts.length; i++) {
+    if (t <= cuts[i].at) {
+      const prev = cuts[i - 1];
+      const span = cuts[i].at - prev.at;
+      const frac = span > 0 ? (t - prev.at) / span : 1;
+      return prev.cutoff + (cuts[i].cutoff - prev.cutoff) * frac;
+    }
+  }
+  return cuts[cuts.length - 1].cutoff;
+}
 function pinnedCaption(container, text, cls) {
   return container.html.append('div')
     .attr('class', `pinned-caption ${cls || ''}`)
@@ -183,17 +212,7 @@ export default {
     const winStartMs = spec ? new Date(spec.window[0]).getTime() : null;
     const winEndMs = spec ? new Date(spec.window[1]).getTime() : null;
 
-    const cuts = whistleTs
-      ? [
-        { at: 0.0, cutoff: winStartMs },
-        { at: 0.35, cutoff: whistleTs - 30000 },
-        { at: 0.55, cutoff: whistleTs + 150000 }, // the gold-coin dwell: paths visibly split
-        { at: 1.0, cutoff: winEndMs },
-      ]
-      : [
-        { at: 0.0, cutoff: winStartMs },
-        { at: 1.0, cutoff: winEndMs },
-      ];
+    const cuts = computeCuts(whistleTs, winStartMs, winEndMs);
 
     const states = {};
     const keyframes = [];
@@ -244,13 +263,16 @@ export default {
     g.append('g').attr('transform', `translate(${view.region.x - 8},0)`)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
       .call(d3.axisLeft(yReg).ticks(4));
-    g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.reg + 10)
+    // Titles sit 22px (not 10px) below each lane's top so they clear the
+    // "REGULATION ·" / "ADVANCE ·" descriptor line 6px above the lane,
+    // which the tighter spacing let them run into (perception-brief P4).
+    g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.reg + 22)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
       .attr('fill', 'var(--ink-mid)').text('regulation-market price (cents)');
     g.append('g').attr('transform', `translate(${view.region.x - 8},0)`)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
       .call(d3.axisLeft(yAdv).ticks(4));
-    g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.adv + 10)
+    g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.adv + 22)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
       .attr('fill', 'var(--ink-mid)').text('advance-market price (cents)');
 
@@ -260,6 +282,51 @@ export default {
     g.append('text').attr('x', view.region.x).attr('y', laneTop.adv - 6)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
       .attr('fill', 'var(--ink-low)').text('ADVANCE · Germany goes through, still trading');
+
+    // Chart-first fix (design-review C2): the regulation leg is only ~650
+    // dots' worth of tagged population, split further into ~50 for this
+    // lane -- at rest opacity, scattered across a 22-minute pre-whistle
+    // window, those dots never composited above the field's own noise
+    // floor and the split never read as a change. Two connected D3 price
+    // paths, built straight from the zoom tile (not the population), carry
+    // the message the particles alone could not: a labeled line, not a
+    // sole-carrier scatter (RESHAPE doctrine). The dots stay as texture
+    // underneath.
+    const legSpec = data.manifest.zoom.gerpar;
+    let regLegIdx = -1; let advLegIdx = -1;
+    if (legSpec && legSpec.legs) {
+      advLegIdx = findLegIndex(legSpec.legs, /advance/i);
+      regLegIdx = legSpec.legs.findIndex((l, i) => i !== advLegIdx);
+    }
+    const gpTile = data.zoom.gerpar;
+    function buildLegPoints(legIdx, maxPts) {
+      if (!gpTile || legIdx < 0) return [];
+      const rows = [];
+      for (let r = 0; r < gpTile.count; r++) if (gpTile.leg[r] === legIdx) rows.push(r);
+      if (!rows.length) return [];
+      const stride = Math.max(1, Math.ceil(rows.length / maxPts));
+      const pts = [];
+      for (let i = 0; i < rows.length; i += stride) {
+        const r = rows[i];
+        pts.push({ ts: gpTile.t0 + gpTile.ts_ms[r], price: gpTile.price_c[r] });
+      }
+      const rLast = rows[rows.length - 1];
+      const lastTs = gpTile.t0 + gpTile.ts_ms[rLast];
+      if (!pts.length || pts[pts.length - 1].ts !== lastTs) {
+        pts.push({ ts: lastTs, price: gpTile.price_c[rLast] });
+      }
+      return pts;
+    }
+    const regPts = buildLegPoints(regLegIdx, 400);
+    const advPts = buildLegPoints(advLegIdx, 700);
+    const regLineGen = d3.line().x((d) => x(d.ts)).y((d) => yReg(d.price));
+    const advLineGen = d3.line().x((d) => x(d.ts)).y((d) => yAdv(d.price));
+    const regPathEl = g.append('path')
+      .attr('fill', 'none').attr('stroke', 'var(--state-expiring)')
+      .attr('stroke-width', 2).attr('stroke-linecap', 'round');
+    const advPathEl = g.append('path')
+      .attr('fill', 'none').attr('stroke', 'var(--side-yes)')
+      .attr('stroke-width', 2).attr('stroke-linecap', 'round');
 
     const whistleG = g.append('g').style('display', 'none');
     if (whistleTs !== null) {
@@ -340,9 +407,21 @@ export default {
       })()
       : 0.35;
 
+    const lineCuts = computeCuts(
+      whistleTs,
+      data.manifest.zoom.gerpar ? new Date(data.manifest.zoom.gerpar.window[0]).getTime() : null,
+      data.manifest.zoom.gerpar ? new Date(data.manifest.zoom.gerpar.window[1]).getTime() : null,
+    );
+
     function step() {} // no discrete steps in this scrub scene
 
     function scrub(t) {
+      const cutoff = cutoffAt(lineCuts, t);
+      const regDrawn = regPts.filter((d) => d.ts <= cutoff);
+      const advDrawn = advPts.filter((d) => d.ts <= cutoff);
+      regPathEl.attr('d', regDrawn.length > 1 ? regLineGen(regDrawn) : null);
+      advPathEl.attr('d', advDrawn.length > 1 ? advLineGen(advDrawn) : null);
+
       const past = t >= whistleAt;
       whistleG.style('display', past ? null : 'none');
       decayCaption.style('display', past ? null : 'none');

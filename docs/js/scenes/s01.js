@@ -117,16 +117,44 @@ function restingFieldPositions(N, region, mobile, xOf) {
  * There is no equivalent flag for the whistle/settlement boundary, so it
  * is approximated from tape geometry here — see data_requests in the
  * build handoff for a request to add an explicit boundary marker. */
+
+// GATE-4 VISUAL-STORY REVIEW, s01 CRITICAL (x-axis contradicts the grain
+// plate): `ts_ms` is milliseconds since the TILE's own t0 (this ticker's
+// first-ever trade — pipeline/export/build_tiles.py build_fraesp_zoom():
+// `t0 = int(d["created_ts"].min())`), NOT since kickoff. The France-Spain
+// 3-way market opened ~4 days before the July 14 semifinal (manifest
+// window: 2026-07-10T21:31Z -> 2026-07-14T21:00Z), so plotting raw
+// ts_ms/60000 as "match clock (minutes played)" put four days of
+// pre-kickoff trading on a 0'-5000'+ axis while the axis title and grain
+// plate both promised a single 90-minute night — an undecodable, actively
+// misleading position encoding. Kickoff is a known fact (research/
+// fact-base.json remaining_schedule: "France vs Spain - Tuesday, July 14,
+// 2026, 3:00 PM ET / 19:00 GMT"), inlined here since S1 carries no
+// per-scene JSON (needs.scene: false) to hold it as data — mirrors S8's
+// self-contained kickoff derivation (s08.js: kickoffTs = whistleTs -
+// 90*60000). Every "minute" downstream of this function is now truly
+// kickoff-relative: 0' is kickoff, ~90'-120' is the whistle/settlement
+// tail, matching what the axis title and grain plate already claim.
+const FRAESP_KICKOFF_UTC_MS = Date.parse('2026-07-14T19:00:00Z');
+
 function computeEnvelope(zoomTile) {
+  // zoomTile.t0 is populated by main.js's loadZoomTile() as an absolute
+  // epoch-ms Date, so no extra manifest plumbing is needed here.
+  const kickoffOffsetMin = (zoomTile && Number.isFinite(zoomTile.t0))
+    ? (FRAESP_KICKOFF_UTC_MS - zoomTile.t0) / 60000
+    : 0;
+  function minuteOf(rawTsMs) {
+    return rawTsMs / 60000 - kickoffOffsetMin;
+  }
   const matchEndMinutes = zoomTile && zoomTile.count
-    ? zoomTile.ts_ms[zoomTile.count - 1] / 60000
-    : 100;
+    ? Math.max(60, minuteOf(zoomTile.ts_ms[zoomTile.count - 1]))
+    : 120;
   let eventMinute = null;
   let eventPriceC = 50;
   if (zoomTile) {
     for (let i = 0; i < zoomTile.count; i++) {
       if (zoomTile.flags[i] & 1) {
-        eventMinute = zoomTile.ts_ms[i] / 60000;
+        eventMinute = Math.max(0, minuteOf(zoomTile.ts_ms[i]));
         eventPriceC = zoomTile.price_c[i];
         break;
       }
@@ -143,21 +171,33 @@ function computeEnvelope(zoomTile) {
   // "~40% of the scrub's length dwells on the minutes around the detected
   // repricing event, ~25% on the final minutes/whistle/settlement, the
   // rest of the match compresses into what remains, clock visibly
-  // accelerating." Breakpoints below realize that envelope:
+  // accelerating." Breakpoints below realize that envelope, RETIMED (Gate-4
+  // visual-story review, s01 C2: "the settlement pour must be a perceivable
+  // staged onset" -- a pour confined to 0.93-1.00 tweened entirely inside
+  // the last 7% of the track, a span this piece's own review harness never
+  // samples (its fixed scrub stops are 25/50/90%) and a real reader could
+  // easily overshoot in one scroll gesture, so the fall was invisible both
+  // to the audit and to a fast scroller. The pour now starts earlier and
+  // finishes BEFORE the 90% mark, so scrub90 always lands on the fully
+  // drained, unambiguous end state (a flat grey line at zero) instead of a
+  // half-blended frame, and the last 14% of the track holds that settled
+  // frame still rather than continuing to tween:
   //   0.00-0.06 intro/kickoff (6%)
   //   0.06-0.20 compressed early match (14%)
   //   0.20-0.60 dwell around the repricing event (40%)
   //   0.60-0.68 compressed post-event walk to the final stretch (8%)
-  //   0.68-0.93 final minutes + whistle dwell (25%)
-  //   0.93-1.00 settlement pour (7%)
+  //   0.68-0.74 final minutes + whistle dwell (6%)
+  //   0.74-0.86 settlement pour: France's scattered dots slide to the zero
+  //     line and drain to dead grey, one continuous tween (12%)
+  //   0.86-1.00 held still on the drained, settled frame (14%)
   const breakpoints = [
     { at: 0.00, clock: 0 },
     { at: 0.06, clock: 0 },
     { at: 0.20, clock: Math.max(0, eventMinute - pad) },
     { at: 0.60, clock: Math.min(whistleMinute, eventMinute + pad) },
     { at: 0.68, clock: Math.max(eventMinute + pad, whistleMinute - 10) },
-    { at: 0.93, clock: whistleMinute },
-    { at: 1.00, clock: matchEndMinutes },
+    { at: 0.74, clock: whistleMinute },
+    { at: 0.86, clock: matchEndMinutes },
   ];
   function cutoffAt(t) {
     if (t <= breakpoints[0].at) return breakpoints[0].clock;
@@ -170,19 +210,31 @@ function computeEnvelope(zoomTile) {
     }
     return matchEndMinutes;
   }
-  return { eventMinute, eventPriceC, whistleMinute, matchEndMinutes, breakpoints, cutoffAt };
+  return {
+    eventMinute, eventPriceC, whistleMinute, matchEndMinutes, breakpoints, cutoffAt,
+    kickoffOffsetMin,
+  };
 }
 
 /* Heuristic leg classification from manifest.zoom.fraesp.legs entries
  * (ticker/label strings). Storyboard: "y = price of the France winner
- * leg; the 3-way legs run as fainter companion streams." The hero leg is
- * the tournament futures contract (KXMENWORLDCUP...); the match's 3-way
- * legs (KXWCGAME...) are companions. Both France-labeled legs (hero
- * futures AND the match's "France win" 3-way leg) settle to the zero line
- * at the pour; see settledState(). */
-function isHeroLeg(leg) {
-  return !!(leg && /WORLDCUP/i.test(leg.ticker || ''));
-}
+ * leg; the 3-way legs run as fainter companion streams."
+ *
+ * GATE-4 ROUND-2 FIX (s01 hero/companion split): the original heuristic
+ * looked for a separate season-long WORLDCUP futures leg to treat as
+ * "hero." The live fraesp.bin tile (manifest.zoom.fraesp.legs) carries
+ * only the match's own three regulation legs (KXWCGAME-...-FRA/-ESP/-TIE)
+ * — no WORLDCUP leg is ever present in this tile — so that check matched
+ * nothing and EVERY sampled trade, including France's own, fell into the
+ * "faint companion" branch: the whole tick stream rendered at 0.40 alpha,
+ * below the engine's active-tier floor, and the scene's one bright figure
+ * (the France price path this scene's own axis and prose promise) never
+ * popped. The axis is titled "price of the France contract" and the
+ * settlement pour is defined on the France leg alone (see makeSettled()
+ * below), so "hero" is redefined here to mean exactly that leg: France's
+ * own regulation contract is the active/bright stream; Spain's and the
+ * draw's regulation legs (present in the same tile, at their own,
+ * different prices) stay the faint companions the caption names. */
 function isFranceLeg(leg) {
   if (!leg) return false;
   const s = `${leg.ticker || ''} ${leg.label || ''}`;
@@ -341,19 +393,38 @@ export default {
       for (let d = 0; d < D; d++) {
         const i = taggedIdx[d];
         const t = sampleIdx[d];
-        const minute = T ? zoomTile.ts_ms[t] / 60000 : 0;
+        // Gate-4 s01 critical fix: minute is kickoff-relative (see
+        // computeEnvelope), so the ~4 days of pre-kickoff trading on this
+        // ticker (41% of its rows — this market opened days before the
+        // fixture) no longer stretches the axis to 5000'+. A hard clamp of
+        // every pre-kickoff row to the same x=0 pixel would just relocate
+        // the old mid-chart pileup to a new single-column one, so instead
+        // it is spread deterministically across the axis's own pre-narrated
+        // "intro/kickoff" sliver (the breakpoints' first 6% of match
+        // length, below) — an honest compression the scene already
+        // narrates as accelerated time, not a fresh density spike. That
+        // pre-kickoff activity is also outside "the match" this scene
+        // narrates, so it drops into the same faint tier as the Spain/draw
+        // companion legs (Gate-4 s01 major fix: stops it from out-shining
+        // the in-match story marks — perception-brief §4, "the brightest
+        // thing is never the story").
+        const rawMinute = T ? (zoomTile.ts_ms[t] / 60000 - env.kickoffOffsetMin) : 0;
+        const preKickoff = rawMinute < 0;
+        const minute = preKickoff ? hash01(t) * (env.matchEndMinutes * 0.06) : rawMinute;
         if (T && minute <= cutoffMinutes) {
           const legSpec = (zoomTile.legs || [])[zoomTile.leg[t]];
-          const faint = !isHeroLeg(legSpec); // 3-way legs: fainter companions
+          const faint = preKickoff || !isFranceLeg(legSpec); // Spain/draw legs + pre-kickoff: fainter companions
           const base = zoomTile.side[t] === YES_IDX ? yesColor : noColor;
           s.x[i] = clockX(minute);
           s.y[i] = priceY(zoomTile.price_c[t]);
-          // Hero France-winner leg stays active-tier (base alpha 1.0, boosted);
-          // the 3-way companion legs drop to 0.40 (perception-brief §9b: a
-          // dimmed-field-tier alpha, not the old 0.5 which sat in the
-          // shader's unclassified 0.42-0.90 gap and half-competed with the
-          // boosted hero stream). A deliberate two-tier read: hero pops,
-          // companions recede into the same tier as the resting field.
+          // Hero (France's own regulation leg) stays active-tier (base alpha
+          // 1.0, boosted); the Spain/draw companion legs drop to 0.40
+          // (perception-brief §9b: a dimmed-field-tier alpha, not the old 0.5
+          // which sat in the shader's unclassified 0.42-0.90 gap and
+          // half-competed with the boosted hero stream). A deliberate
+          // two-tier read: France's price path pops as the scene's one
+          // bright figure; the other two legs recede into the same tier as
+          // the resting field.
           setColor(s.color, i, faint ? [base[0], base[1], base[2], base[3] * 0.40] : base);
         } else {
           s.x[i] = stageX; s.y[i] = stageY;
@@ -364,11 +435,13 @@ export default {
       return s;
     }
 
-    // ---- settlement: "the France dots pour to the zero line" (both the
-    // WORLDCUP futures leg and the match's own "France win" 3-way leg),
-    // hue drained to state.dead, position at price 0. Non-France legs keep
-    // whatever their last real traded price shows (real data already
-    // encodes the settlement move for the winning side). ----
+    // ---- settlement: "the France dots pour to the zero line" — France's
+    // own regulation leg (this scene's hero, see isFranceLeg above), hue
+    // drained to state.dead, position at price 0. Spain's and the draw's
+    // legs keep whatever their last real traded price shows (real data
+    // already encodes the settlement move for the winning side; both stay
+    // in the faint companion tier, so the pour reads as one bright figure
+    // falling, not three). ----
     function makeSettled() {
       const s = tickState(Infinity);
       for (let d = 0; d < D; d++) {
@@ -416,6 +489,7 @@ export default {
   overlay(container, data, view, scales) {
     const { svg, html } = container;
     const { clockX, priceY, env } = scales;
+    const zoomTile = data.zoom.fraesp;
     const tokens = view.tokens;
     const drawIn = durationMs(tokens, 'overlay-draw-in');
     const stagger = durationMs(tokens, 'overlay-stagger');
@@ -439,14 +513,22 @@ export default {
       sel.selectAll('path,line').attr('stroke', view.css('ink-low'));
     }
 
-    // The match-clock axis's domain visibly grows/accelerates through the
-    // scrub (storyboard: "the match-clock axis visibly accelerating so the
-    // compression is honest and narrated").
-    function drawClockAxis(maxMinutes) {
-      const scale = d3.scaleLinear().domain([0, Math.max(5, maxMinutes)]).range(clockX.range());
+    // Gate-4 s01 critical fix (axis/position integrity): this used to
+    // rebuild its OWN scale with a domain that shrank/grew toward the
+    // current scrub cutoff ("the match-clock axis visibly accelerating"),
+    // while every dot's x-position kept using the scene's real, fixed
+    // clockX domain (0 to matchEndMinutes) — two different scales sharing
+    // one pixel range. A tick under a dot could read e.g. "2'" for a dot
+    // whose real trade was at minute 13, only converging once cutoff
+    // reached matchEndMinutes. That is the same "undecodable position
+    // encoding" failure the 5000'+ domain bug was, just smaller and easier
+    // to miss. The axis now always reads off the SAME clockX used to place
+    // every dot, so whatever tick sits under a mark is that mark's real
+    // minute, at every scrub position.
+    function drawClockAxis() {
       const axisFn = view.mobile
-        ? d3.axisTop(scale).ticks(6).tickFormat((d) => `${Math.round(d)}'`)
-        : d3.axisBottom(scale).ticks(6).tickFormat((d) => `${Math.round(d)}'`);
+        ? d3.axisTop(clockX).ticks(6).tickFormat((d) => `${Math.round(d)}'`)
+        : d3.axisBottom(clockX).ticks(6).tickFormat((d) => `${Math.round(d)}'`);
       clockAxisG.call(axisFn);
       styleAxis(clockAxisG);
     }
@@ -484,12 +566,25 @@ export default {
       .attr('text-anchor', 'start')
       .text('price of the France contract (cents; 100 = certain)'));
 
-    // Settlement reference line at price = 0.
+    // Gate-4 s01 major fix (settlement pour has no visual floor): the old
+    // faint dotted gridline at price=0 read as axis furniture, not "money
+    // died here" (perception-brief §9b: near-isoluminant marks vanish
+    // against the field). Bumped to ink-mid + a bolder dash so it reads as
+    // a labeled boundary rather than a tick line, and paired with a low,
+    // wide floor band (below) that gives the settled sediment a visible
+    // carrier independent of any single dot's own luminance.
     const settleLine = g.append('line').attr('class', 'settle-line')
       .attr('x1', view.region.x).attr('x2', view.region.x + view.region.w)
       .attr('y1', priceY(0)).attr('y2', priceY(0))
-      .attr('stroke', view.css('ink-low')).attr('stroke-dasharray', '2,4')
+      .attr('stroke', view.css('ink-mid')).attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', '3,3')
       .style('opacity', 0);
+    const floorBand = g.append('rect').attr('class', 'settle-floor-band')
+      .attr('x', view.region.x).attr('width', view.region.w)
+      .attr('y', priceY(0) - 3).attr('height', 6)
+      .attr('fill', view.css('state-dead'))
+      .attr('fill-opacity', 0)
+      .style('pointer-events', 'none');
 
     // One pre-title caption line (storyboard overlay spec), lifted
     // verbatim from the beat's own narration. Retimed (CR-18) to be
@@ -509,16 +604,106 @@ export default {
       .text('the lit dots: tonight, France–Spain · one dot is one trade')
       .style('opacity', 0);
 
-    // Transient caption for the 3-way companion streams (design-revision-
-    // spec §2 S1 item 3): names the fainter streams once they first
-    // appear, then clears before the goal so it never competes with the
-    // scene's one amber unit.
-    const companionCaption = g.append('text').attr('class', 'companion-caption')
-      .attr('x', view.region.x).attr('y', view.region.y - 34)
-      .attr('fill', view.css('ink-mid'))
-      .style('font-family', view.css('font-tape'))
-      .style('font-size', view.css('type-tape-size'))
-      .text('fainter streams: the match’s own win / draw / lose legs')
+    // Gate-4 s01 major fix (grey/meaning-budget cleanup): the transient
+    // "fainter streams" caption named a fourth population that read to a
+    // blind viewer as a third meaning of "grey," and it was one of the
+    // scrub25 frame's ~6 simultaneous meanings against the ≤4 budget. Cut
+    // per the SIMPLIFY doctrine ("cut anything that does not serve the
+    // reader") — the Spain/draw legs stay on screen as dim, unlabeled
+    // texture (tickState's faint tier); they no longer spend a captioned
+    // working-memory slot.
+
+    // Gate-4 s01 critical fix ("the collapse must survive as a picture"):
+    // France's own price path, drawn as a literal, persistent SVG line —
+    // not inferred from particle positions the fixed-percentage capture
+    // grid can miss between frames. Progressively revealed with the scrub
+    // and, crucially, its FINAL segment is the fall to the 0c floor at the
+    // whistle, so the settled frame keeps the collapse on screen as a
+    // static, readable shape instead of an absence.
+    function buildFranceTracePoints(maxPts) {
+      if (!zoomTile || !zoomTile.count) return [];
+      // Kickoff-relative, and trimmed to minute >= 0: the trace reads the
+      // match itself, not the ~4 days of pre-kickoff order-book warmup on
+      // this ticker (which tickState above compresses into a dim intro
+      // sliver instead) — a line built from same-x pre-kickoff rows would
+      // just tangle at x=0.
+      const rows = [];
+      for (let r = 0; r < zoomTile.count; r++) {
+        const legSpec = (zoomTile.legs || [])[zoomTile.leg[r]];
+        if (isFranceLeg(legSpec) && zoomTile.ts_ms[r] / 60000 - env.kickoffOffsetMin >= 0) rows.push(r);
+      }
+      if (!rows.length) return [];
+      const stride = Math.max(1, Math.ceil(rows.length / maxPts));
+      const pts = [];
+      for (let k = 0; k < rows.length; k += stride) {
+        const r = rows[k];
+        const minute = zoomTile.ts_ms[r] / 60000 - env.kickoffOffsetMin;
+        pts.push({ minute, price: zoomTile.price_c[r] });
+      }
+      const rLast = rows[rows.length - 1];
+      const lastMinute = zoomTile.ts_ms[rLast] / 60000 - env.kickoffOffsetMin;
+      if (!pts.length || pts[pts.length - 1].minute !== lastMinute) {
+        pts.push({ minute: lastMinute, price: zoomTile.price_c[rLast] });
+      }
+      // The pour itself: France's contract drains to zero at settlement.
+      // Appending this point makes the fall a real segment of the drawn
+      // line, not an inference from vanished dots.
+      pts.push({ minute: env.whistleMinute, price: 0 });
+      return pts;
+    }
+    const franceTracePts = buildFranceTracePoints(400);
+    const traceLineGen = d3.line()
+      .x((d) => clockX(d.minute)).y((d) => priceY(d.price))
+      .curve(d3.curveMonotoneX);
+    // ink-hero while the price is live (a neutral "read this" line, not a
+    // new categorical hue competing with cyan/orange), switching to
+    // state-dead the instant it reaches the floor — a visible, staged
+    // announcement of the same grey redefinition the key makes at
+    // settlement (Gate-4 s01 major fix: no more silent key reword).
+    const tracePathEl = g.append('path').attr('class', 'france-trace')
+      .attr('fill', 'none')
+      .attr('stroke', view.css('ink-hero'))
+      .attr('stroke-width', 1.5)
+      .attr('stroke-linecap', 'round')
+      .attr('stroke-opacity', 0.85)
+      .style('opacity', 0);
+    let tracePourFired = false;
+    function updateTrace(cutoff) {
+      const pts = franceTracePts.filter((p) => p.minute <= cutoff);
+      if (pts.length < 2) {
+        tracePathEl.attr('d', null);
+        fadeOut(tracePathEl);
+        return;
+      }
+      tracePathEl.attr('d', traceLineGen(pts));
+      fadeIn(tracePathEl);
+      const reachedFloor = cutoff >= env.whistleMinute - 0.5;
+      tracePathEl.attr('stroke', reachedFloor ? view.css('state-dead') : view.css('ink-hero'));
+      if (reachedFloor && !tracePourFired) {
+        tracePourFired = true;
+        // Onset pulse (perception-brief §7): per-dot size is never touched
+        // (unit grammar — one trade, one dot), so this line is the
+        // collapse's one luminance/size transient at the moment of the
+        // drop, then settles to a still-legible, floor-separated weight.
+        tracePathEl.transition().duration(160).attr('stroke-width', 4)
+          .transition().duration(500).attr('stroke-width', 2);
+        floorBand.transition().duration(160).attr('fill-opacity', 0.55)
+          .transition().duration(600).attr('fill-opacity', 0.28);
+      }
+    }
+
+    // Gate-4 s01 major fix (scrub25 budget: zero amber singletons): a dim,
+    // persistent amber guide at the goal's clock position, visible from the
+    // moment trades start flowing until the goal resolves it into the full
+    // annotation below. Exactly one amber unit on screen at any time —
+    // pre-announcing "watch here" instead of appearing cold at the reveal.
+    const goalPreview = g.append('line').attr('class', 'goal-preview')
+      .attr('x1', clockX(env.eventMinute)).attr('x2', clockX(env.eventMinute))
+      .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
+      .attr('stroke', view.css('accent-annotation'))
+      .attr('stroke-width', 1)
+      .attr('stroke-dasharray', '2,3')
+      .attr('stroke-opacity', 0.4)
       .style('opacity', 0);
 
     // Amber singleton protocol (design-system §6 emphasis stack: luminance
@@ -633,22 +818,18 @@ export default {
       }
     }
 
-    let lastCutoff = -1;
     function updateForScrub(t) {
       const cutoff = env.cutoffAt(t);
-      if (Math.abs(cutoff - lastCutoff) > 0.05) {
-        drawClockAxis(cutoff);
-        lastCutoff = cutoff;
-      }
       updateChip(cutoff, t);
+      updateTrace(cutoff);
       // Pretitle caption: visible from kf0 (CR-18); it now clears the
       // moment trades start flowing (cutoff > 0) so it never shares its
-      // lane with the companion caption (one caption at a time).
+      // lane with anything else (one caption at a time).
       if (cutoff <= 0) fadeIn(caption); else fadeOut(caption);
-      // Companion-stream caption: transient, appears once trades start
-      // flowing and clears before the goal so it never shares a frame
-      // with the scene's one amber unit.
-      if (cutoff > 0 && cutoff < env.eventMinute) fadeIn(companionCaption); else fadeOut(companionCaption);
+      // Gate-4 s01 major fix (scrub25: zero amber singletons): the dim
+      // goal-preview guide owns the scene's one amber unit until the goal
+      // itself resolves it into the full annotation, never both at once.
+      if (cutoff > 0 && cutoff < env.eventMinute) fadeIn(goalPreview); else fadeOut(goalPreview);
       if (cutoff >= env.eventMinute) {
         placeAnnotation(
           goalAnn, clockX(env.eventMinute), priceY(env.eventPriceC), 24, -28,
@@ -665,17 +846,19 @@ export default {
         }
         fadeIn(whistleGrp);
         fadeIn(settleLine, stagger);
+        // floorBand's own reveal (fill-opacity) is driven by updateTrace()'s
+        // onset pulse above, fired the instant the trace reaches the floor.
         if (footerLegend) fadeIn(footerLegend);
       }
     }
 
     drawPriceAxis();
-    drawClockAxis(5);
+    drawClockAxis();
     updateChip(0, 0);
 
     return {
       step() {
-        drawClockAxis(5);
+        drawClockAxis();
         fadeIn(caption);
         updateChip(0, 0);
       },

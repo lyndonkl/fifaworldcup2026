@@ -83,6 +83,36 @@ const HOST_IDENTITY = {
   ecuador: 'identity-lavender', croatia: 'identity-ref',
 };
 
+/* RESHAPE (chart-first pass): "DRAWN poll-vs-money bars ... dots as fill
+ * texture inside bars." Both layout() (where the dots go) and overlay()
+ * (the drawn bar outline) need the identical footprint, so the width/
+ * spacing constants live here once and both consume them -- a mismatch
+ * between the two would make the outline lie about what the dots show. */
+const PAIR_BAR_W = 64;
+const HOST_BAR_SPACING = 2.2;
+
+/* Real pre-tournament dot count per host team, shared by layout() (which
+ * stacks each dot to its own rank -> the same total) and overlay() (which
+ * only needs the total, to draw a bar outline the stacked dots actually
+ * fill). One population pass; never a fabricated or estimated height. */
+function countHostDots(data, hostTeams, cutoff) {
+  const counts = new Map(hostTeams.map((t) => [t.key, 0]));
+  if (cutoff === undefined) return counts;
+  const pop = data.pop;
+  const manifest = data.manifest;
+  const famIdx = manifest.enums.family.indexOf('winner_futures');
+  if (famIdx < 0) return counts;
+  const keyByTeamIdx = new Map(hostTeams.map((t) => [manifest.teams.indexOf(t.team), t.key]));
+  for (let i = 0; i < pop.count; i++) {
+    if (pop.family[i] !== famIdx) continue;
+    if (pop.birth_ts[i] >= cutoff) continue;
+    const key = keyByTeamIdx.get(pop.team[i]);
+    if (!key) continue;
+    counts.set(key, counts.get(key) + 1);
+  }
+  return counts;
+}
+
 /* ---------------------------------------------------------------- */
 
 function scales(data, view) {
@@ -145,9 +175,14 @@ function layout(data, view) {
     }
   }
 
-  // --- Pair steps: one country's winner-futures dots pulled to a price
-  // column at its own traded price level (§0: dots are money; position is
-  // the price, count is the volume that sat there). ---
+  // --- Pair steps: one country's winner-futures dots FILL a bar footprint
+  // from the zero baseline up to its own traded price level (§0: dots are
+  // money; the drawn bar overlay in overlay() outlines this exact same
+  // footprint, so the outline and the fill are the same claim, not two
+  // separately-eyeballed marks). Previously these dots sat in a thin
+  // horizontal streak at a single height, which read as a scatter, not a
+  // bar (design-revision-spec: "dots as fill texture inside bars"). ---
+  const barBottom = view.region.y + view.region.h;
   if (famIdx >= 0) {
     for (const pair of pairs) {
       const teamIdx = manifest.teams.indexOf(pair.team);
@@ -159,9 +194,11 @@ function layout(data, view) {
         if (pop.family[i] !== famIdx || pop.team[i] !== teamIdx) continue;
         const priceC = pop.price_band[i];
         if (priceC === 255) continue;
-        const jitter = (hash01(i) - 0.5) * 10;
-        targetState.x[i] = pairX.price + jitter;
-        targetState.y[i] = y(priceC);
+        const barTop = y(priceC);
+        const fx = pairX.price - PAIR_BAR_W / 2 + hash01(i) * PAIR_BAR_W;
+        const fy = barTop + hash01(i * 13 + 5) * Math.max(1, barBottom - barTop);
+        targetState.x[i] = fx;
+        targetState.y[i] = fy;
         setColor(targetState.color, i, rgba);
       }
     }
@@ -172,7 +209,7 @@ function layout(data, view) {
   // count) is the "honest pre-tournament scale." Zero-baselined (§4.5). ---
   if (famIdx >= 0 && hostTeams.length) {
     const bottom = view.region.y + view.region.h;
-    const spacing = 2.2;
+    const spacing = HOST_BAR_SPACING;
     const ranks = new Map(hostTeams.map((t) => [t.key, 0]));
     const teamIdxByKey = new Map(hostTeams.map((t) => [t.key, manifest.teams.indexOf(t.team)]));
     const keyByTeamIdx = new Map(hostTeams.map((t) => [manifest.teams.indexOf(t.team), t.key]));
@@ -235,7 +272,10 @@ function overlay(container, data, view, scalesObj) {
   const footnoteChip = g.append('text')
     .attr('class', 's13-zombie-chip')
     .attr('x', view.region.x)
-    .attr('y', view.region.y + view.region.h + 32)
+    // b4 leaves the b3 host panel on screen (see step(), "dots stay"), so
+    // this sits below BOTH the country-name row (h+20) and the host
+    // panel's own unit label (h+40), not stacked within 12px of them.
+    .attr('y', view.region.y + view.region.h + 60)
     .style('font-family', view.css('font-tape'))
     .style('font-size', view.css('type-tape-size'))
     .style('fill', view.css('ink-low'))
@@ -250,14 +290,16 @@ function overlay(container, data, view, scalesObj) {
     // scale titles at first pair" -- shown on every pair so the units are
     // never more than one screen away from the marks they describe).
     pairG.append('text')
-      .attr('x', pairX.poll).attr('y', view.region.y - 48)
+      // Lifted from -48 to -74: the standing two-line units caption sits at
+      // region.y-32, and the previous 16px gap let this line crowd it.
+      .attr('x', pairX.poll).attr('y', view.region.y - 74)
       .attr('text-anchor', 'middle')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
       .style('fill', view.css('ink-low'))
       .text('fans who said their team would win (poll %)');
     pairG.append('text')
-      .attr('x', pairX.price).attr('y', view.region.y - 48)
+      .attr('x', pairX.price).attr('y', view.region.y - 74)
       .attr('text-anchor', 'middle')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
@@ -265,12 +307,11 @@ function overlay(container, data, view, scalesObj) {
       .text('market price (cents)');
 
     // Poll bar: outline-only D3 mark (respondents are not trades, §0).
-    const barW = 64;
     const pollH = (pair.poll_pct / 100) * view.region.h;
     pairG.append('rect')
-      .attr('x', pairX.poll - barW / 2)
+      .attr('x', pairX.poll - PAIR_BAR_W / 2)
       .attr('y', view.region.y + view.region.h - pollH)
-      .attr('width', barW).attr('height', pollH)
+      .attr('width', PAIR_BAR_W).attr('height', pollH)
       .style('fill', 'none')
       .style('stroke', view.css('neutral-data'))
       .style('stroke-width', 1.5);
@@ -284,14 +325,26 @@ function overlay(container, data, view, scalesObj) {
       // 7.000000000000001) never render (Gate-4 visual-story review).
       .text(`${Math.round(pair.poll_pct * 10) / 10}% poll`);
 
-    // Price reference line at the dot column's traded level.
-    pairG.append('line')
-      .attr('x1', pairX.price - 40).attr('x2', pairX.price + 40)
-      .attr('y1', y(pair.kalshi_price_pct)).attr('y2', y(pair.kalshi_price_pct))
-      .style('stroke', view.css('accent-annotation'))
+    // Money bar: a DRAWN outline over the exact footprint layout()'s dot
+    // fill uses (PAIR_BAR_W, same zero baseline) -- the population itself
+    // is the fill texture inside this shape, never a separate mark
+    // (design-revision-spec: "dots as fill texture inside bars"). Stroke
+    // is the player's own identity hue (matches the key row); the price
+    // number is the beat's one amber callout.
+    const priceTop = y(pair.kalshi_price_pct);
+    const priceH = Math.max(0, (view.region.y + view.region.h) - priceTop);
+    pairG.append('rect')
+      .attr('x', pairX.price - PAIR_BAR_W / 2)
+      .attr('y', priceTop)
+      .attr('width', PAIR_BAR_W).attr('height', priceH)
+      .style('fill', 'none')
+      .style('stroke', view.css(PAIR_IDENTITY[key] || 'identity-ref'))
       .style('stroke-width', 1.5);
     pairG.append('text')
-      .attr('x', pairX.price).attr('y', y(pair.kalshi_price_pct) - 10)
+      // -18, not -10: the bar's own dot fill starts exactly at priceTop and
+      // jitters across its full width, so a label only 10px above it got
+      // dots rendered through the glyphs.
+      .attr('x', pairX.price).attr('y', priceTop - 18)
       .attr('text-anchor', 'middle')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-annotation-size'))
@@ -325,18 +378,35 @@ function overlay(container, data, view, scalesObj) {
     // height here is a dot count, not a price, so the honest label ties
     // back to the piece's own grain grammar rather than borrowing a price
     // axis this panel does not actually have.
+    // Moved from inside the chart (baseline - 8) to the footer, below the
+    // country-name row: at the baseline, this text crossed the SHORTER
+    // bars' own top edges and dot fill (Ecuador, Croatia) once those bars
+    // gained a drawn outline this pass. Zone F placement (G5): left-aligned
+    // to region.x, clear of every bar regardless of height.
     hostG.append('text')
-      .attr('x', view.region.x + view.region.w).attr('y', view.region.y + view.region.h - 8)
-      .attr('text-anchor', 'end')
+      .attr('x', view.region.x).attr('y', view.region.y + view.region.h + 40)
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
       .style('fill', view.css('ink-low'))
       .text('each dot: $75,000 of real money, before kickoff');
 
+    // Bar outlines: the SAME per-host dot count layout() stacked into a
+    // column, drawn once as a rectangle so the stacked dots read as "fill
+    // texture inside a bar" rather than a loose scatter (design-revision-
+    // spec: "DRAWN ... host columns").
+    const hostCounts = countHostDots(data, hostTeams, hostPeers.pretournament_cutoff_s);
+
     hostTeams.forEach((t) => {
       const cx = hostX(t.key);
       if (cx === undefined) return;
       const bw = hostX.bandwidth();
+      const barH = (hostCounts.get(t.key) || 0) * HOST_BAR_SPACING;
+      hostG.append('rect')
+        .attr('x', cx).attr('y', view.region.y + view.region.h - barH)
+        .attr('width', bw).attr('height', barH)
+        .style('fill', 'none')
+        .style('stroke', view.css(HOST_IDENTITY[t.key] || 'identity-ref'))
+        .style('stroke-width', 1.5);
       hostG.append('text')
         .attr('x', cx + bw / 2).attr('y', view.region.y + view.region.h + 20)
         .attr('text-anchor', 'middle')

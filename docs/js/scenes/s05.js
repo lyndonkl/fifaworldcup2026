@@ -124,7 +124,16 @@ export default {
     const N = pop.count;
     const region = view.region;
 
-    const sweepColor = colorOf(view.tokens, SWEEP_COLOR, view.tokens.dot['opacity-alive']);
+    // Gate-4 visual-story review (s05 C1, "b1-t0 is a mid-morph explosion
+    // with no figure"): this population is context/texture for the D3
+    // Lorenz chart (the shape it sweeps into IS the message), never the
+    // story figure, so it never needs active-tier brightness. At the old
+    // opacity-alive (1.0) the whole re-sort tween spent most of its
+    // duration in the engine's active tone-map chain, so 30k+ dots
+    // converging at once bloomed to the tile cap mid-flight. Capping at
+    // opacity-dimmed-field-max keeps it in the ground tier (tiered
+    // Reinhard cap) for the whole tween, not just the settled frame.
+    const sweepColor = colorOf(view.tokens, SWEEP_COLOR, view.tokens.dot['opacity-dimmed-field-max']);
     const baseSize = view.tokens.dot['radius-base-px'] * 2;
     const restRgba = particleState(view.tokens, 'rest');
 
@@ -389,7 +398,11 @@ export default {
       state: 'sweep',
       kind: 'resort',
       chip: [
-        { token: 'field-rest', glyph: 'dot', label: 'pale blue = markets, sorted by size' },
+        // glyph 'dim' (not 'dot'): the key swatch must match what is
+        // actually on screen (design-revision-spec G1) -- this population
+        // now renders at rest-tier alpha for the whole scene, so its key
+        // row renders at rest-tier alpha too.
+        { token: 'field-rest', glyph: 'dim', label: 'pale blue = markets, sorted by size' },
       ],
       grain: { text: '1 dot = $75,000 of real money traded' },
     },

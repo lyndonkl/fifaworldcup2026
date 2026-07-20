@@ -194,9 +194,23 @@
   --pop-mobile-grain-usd-per-dot: 250000;
   --pop-mobile-dot-count-approx: 49000;
 
-  /* ---- Density tone-mapping (WebGL luminance-compression policy) ---- */
+  /* ---- Density tone-mapping (WebGL luminance-compression policy) ----
+     REVISION (Gate-4 visual-story review P1/Tier 0.1): the tone-map is
+     TIERED. The ground tier (every dot below --dot-opacity-active-
+     classify-min: rest field plus the dead/expiring band) accumulates
+     separately in engine.js and its composited luminance asymptotes to
+     --density-rest-luminance-cap via a Reinhard soft-knee
+     (--density-rest-knee), so summed resting mass can NEVER bloom past
+     it. The old single 0.92 cap let any dense rest field climb the same
+     gamma curve as story marks and render near-white ("walls of pale
+     static", 15 of 18 scenes). 0.30 keeps story marks at the tile cap
+     >= 3:1 luminance over the fully-summed ground (0.92 / 0.30 = 3.07,
+     the review's floor); the soft knee (vs a hard min) keeps density
+     ordering monotone inside the ground. */
   --density-gamma: 0.35;
   --density-tile-luminance-cap: 0.92;
+  --density-rest-luminance-cap: 0.30;
+  --density-rest-knee: 1.0;
   --density-bloom-radius-px-1x: 3;
   --density-bloom-radius-px-2x: 4.5;
   --density-text-route-threshold-x: 75;

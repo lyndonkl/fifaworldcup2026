@@ -48,6 +48,29 @@ function restFieldXY(i, view) {
     view.region.y + hash01(i * 2 + 1) * view.region.h,
   ];
 }
+// Chart-first fix (design-review S9: "linear cents axis crushes the story
+// into the bottom 3%"): each team's own pre-shock price becomes the axis's
+// x1 reference, computed from the population's own trade history (median
+// price_band among that team's dots born before the anchor instant) --
+// data-derived, never a fabricated constant.
+function computeBaseline(idxs, pop, epochMs, anchorTs) {
+  const prices = [];
+  for (const i of idxs) {
+    if (pop.price_band[i] === 255) continue;
+    const hrs = (epochMs + pop.birth_ts[i] * 1000 - anchorTs) / 3600000;
+    if (hrs < 0) prices.push(pop.price_band[i]);
+  }
+  if (!prices.length) return null;
+  prices.sort((a, b) => a - b);
+  const median = prices[Math.floor(prices.length / 2)];
+  // BUG FIX: `median || null` previously discarded a genuine median of 0
+  // (JS falsy-zero) and silently dropped Paraguay's whole line -- its
+  // pre-shock price floors to 0 whole cents, a real value, not a missing
+  // one. A whole-cent price of 0 is itself a flooring artifact (Kalshi's
+  // minimum tradable tick is 1 cent), so the divisor floors at 1 -- "times
+  // its pre-shock price" stays defined instead of dividing by zero.
+  return Math.max(1, median);
+}
 function pinnedCaption(container, text, cls) {
   return container.html.append('div')
     .attr('class', `pinned-caption ${cls || ''}`)
@@ -86,7 +109,12 @@ export default {
       .range([view.region.x, view.region.x + view.region.w]);
     const xFull = d3.scaleLinear().domain([-2, 74])
       .range([view.region.x, view.region.x + view.region.w]);
-    const y = d3.scaleLinear().domain([0, 100])
+    // Chart-first fix: these tickets trade in low cents both before and
+    // after their shock, so a raw 0-100c axis wastes nearly the whole
+    // chart height (design-review S9: "crushes the story into the bottom
+    // 3%"). The axis is multiples of each team's own pre-shock price
+    // instead -- a 5x jump now uses most of the chart.
+    const y = d3.scaleLinear().domain([0, 6]).clamp(true)
       .range([view.region.y + view.region.h, view.region.y]);
     registry.register('s09.xPop', xPop);
     registry.register('s09.xFull', xFull);
@@ -128,6 +156,15 @@ export default {
     };
     const norwayShockTs = shockTsFor('NOR');
 
+    const baselineFor = {};
+    for (const cfg of TEAMS) {
+      const shockTs = shockTsFor(cfg.code);
+      baselineFor[cfg.code] = shockTs !== null
+        ? computeBaseline(dotsByTeam[cfg.code], pop, epochMs, shockTs) : null;
+    }
+    baselineFor.ARG = norwayShockTs !== null
+      ? computeBaseline(dotsByTeam.ARG, pop, epochMs, norwayShockTs) : null;
+
     function dotHoursSince(i, anchorTs) {
       return (epochMs + pop.birth_ts[i] * 1000 - anchorTs) / 3600000;
     }
@@ -140,42 +177,70 @@ export default {
     const divState = cloneOf(base);
     const mirrorState = cloneOf(base);
 
+    // design-review S9 critical #1/#2 fix: the population tile's price_band
+    // is whole cents only. Paraguay and Norway are extreme longshots whose
+    // real price sits in fractions of a cent near their shocks (a 0.2c ->
+    // 1c move is a real 5x, but floors to "0 vs 1" here), and Norway's
+    // winner_futures family has just two sampled dots in the entire
+    // population tile. Coloring these real-but-under-resolved dots at full
+    // team saturation made Paraguay's dots read as "collapsed to zero" --
+    // the inverse of the headline fact -- and left Norway invisible. These
+    // per-dot marks stay (real trades, real timing: "every dot is money
+    // that actually moved"), but recolor to the same dim texture tone as
+    // the ambient rest field so they read as supporting texture, not the
+    // scene's price signal. The signal moves to the verified step-lines
+    // built below in overlay(), from data.scene.shocks[].pop_multiple.
+    const dimRgba = particleState(view.tokens, 'dimmed-field-max');
     for (const cfg of TEAMS) {
       const shockTs = shockTsFor(cfg.code);
-      if (shockTs === null || pop.price_band === undefined) continue;
-      const rgba = colorOf(view.tokens, cfg.color);
-      const dimRgba = particleState(view.tokens, 'dimmed-field-max');
+      const baseline = baselineFor[cfg.code];
+      if (shockTs === null || !baseline || pop.price_band === undefined) continue;
       for (const i of dotsByTeam[cfg.code]) {
         if (pop.price_band[i] === 255) continue; // mixed-price bucket: no single y position
         const hrs = dotHoursSince(i, shockTs);
-        popState.x[i] = xPop(Math.max(-0.5, Math.min(4, hrs)));
-        popState.y[i] = y(pop.price_band[i]);
-        setColor(popState.color, i, rgba);
-        popState.size[i] = baseSize;
+        const mult = pop.price_band[i] / baseline;
+        // Chart-first fix: a team's own winner-futures dots span its whole
+        // market life (months), not just the hours around this one shock.
+        // Clamping far-away dots into the domain's edges piled unrelated
+        // trading (different price regime, same fixed baseline) into
+        // spurious horizontal bands that buried the actual jump
+        // (design-review: b2/b3 read as near-empty). Dots outside each
+        // panel's own window are left out of that state entirely -- they
+        // stay part of the ambient resting field instead.
+        if (hrs >= -0.5 && hrs <= 4) {
+          popState.x[i] = xPop(hrs);
+          popState.y[i] = y(mult);
+          setColor(popState.color, i, dimRgba);
+          popState.size[i] = baseSize;
+        }
+        if (hrs >= -2 && hrs <= 74) {
+          divState.x[i] = xFull(hrs);
+          divState.y[i] = y(mult);
+          setColor(divState.color, i, dimRgba);
+          divState.size[i] = baseSize;
 
-        divState.x[i] = xFull(Math.max(-2, Math.min(74, hrs)));
-        divState.y[i] = y(pop.price_band[i]);
-        setColor(divState.color, i, rgba);
-        divState.size[i] = baseSize;
-
-        mirrorState.x[i] = divState.x[i];
-        mirrorState.y[i] = divState.y[i];
-        // Norway stays emphasized; Paraguay/Belgium dim (field-dim protocol).
-        setColor(mirrorState.color, i, cfg.code === 'NOR' ? rgba : dimRgba);
-        mirrorState.size[i] = baseSize;
+          mirrorState.x[i] = divState.x[i];
+          mirrorState.y[i] = divState.y[i];
+          setColor(mirrorState.color, i, dimRgba);
+          mirrorState.size[i] = baseSize;
+        }
       }
     }
 
     // Argentina: background in 'pop'/'divergence'; enters aligned to
-    // Norway's own shock instant only at the mirror step.
-    if (norwayShockTs !== null) {
-      const argRgba = colorOf(view.tokens, ARG.color);
+    // Norway's own shock instant only at the mirror step. Same texture
+    // treatment: the mirror's two figures (Norway rising, Argentina
+    // falling) are carried by the labeled lines in overlay(), not by raw
+    // scatter competing with them for the beat's luminance budget.
+    if (norwayShockTs !== null && baselineFor.ARG) {
+      const argBaseline = baselineFor.ARG;
       for (const i of dotsByTeam.ARG) {
         if (pop.price_band[i] === 255) continue;
         const hrs = dotHoursSince(i, norwayShockTs);
-        mirrorState.x[i] = xFull(Math.max(-2, Math.min(74, hrs)));
-        mirrorState.y[i] = y(pop.price_band[i]);
-        setColor(mirrorState.color, i, argRgba);
+        if (hrs < -2 || hrs > 74) continue; // outside the panel's window: stays ambient
+        mirrorState.x[i] = xFull(hrs);
+        mirrorState.y[i] = y(pop.price_band[i] / argBaseline);
+        setColor(mirrorState.color, i, dimRgba);
         mirrorState.size[i] = baseSize;
       }
     }
@@ -187,20 +252,171 @@ export default {
     const { xPop, xFull, y } = scales;
     const g = container.svg;
 
+    // Chart-first fix (RESHAPE brief: "three labeled team lines"): a
+    // scatter of tick-grain dots at this population's grain doesn't read
+    // as a trajectory once the window widens past a few hours (b2/b3's
+    // dots devolved into faint horizontal speckle). Each team's own price
+    // path is drawn as a connected line straight from the population's own
+    // winner-futures dots (sorted by trade time, restricted to the panel's
+    // window) -- never a fabricated curve, only what actually traded.
+    const { pop, manifest } = data;
+    const epochMsL = new Date(manifest.epoch).getTime();
+    const famIdxL = manifest.enums.family.indexOf('winner_futures');
+    const dotsByTeamL = {};
+    for (const cfg of TEAMS.concat([ARG])) dotsByTeamL[cfg.code] = [];
+    for (let i = 0; i < pop.count; i++) {
+      if (pop.family[i] !== famIdxL) continue;
+      const code = manifest.teams[pop.team[i]];
+      if (dotsByTeamL[code]) dotsByTeamL[code].push(i);
+    }
+    const shocksL = (data.scene && data.scene.shocks) || [];
+    const shockTsForL = (code) => {
+      const s = shocksL.find((s2) => s2.team === code);
+      return s ? new Date(s.shock_ts).getTime() : null;
+    };
+    const norwayShockTsL = shockTsForL('NOR');
+    const shocksMapL = {};
+    shocksL.forEach((s) => { shocksMapL[s.team] = s; });
+
+    // design-review S9 critical #1 fix: each team's price LINE is a
+    // verified step -- flat at its own pre-shock level (x1) through t=0, a
+    // vertical jump at the shock instant, flat at its true post-shock
+    // multiple -- built only from data.scene.shocks[].pop_multiple, the
+    // same sourced R9 class-B shock/beneficiary number the prose already
+    // quotes (Paraguay 5x, Norway 3.6x, Belgium 2x). This replaces a
+    // population-tile-derived line that could not carry the claim: whole
+    // -cent price resolution floors Paraguay/Norway's real sub-cent moves
+    // to "0 vs 1", and Norway's winner_futures family has only two sampled
+    // dots tile-wide. Never a fabricated curve -- the two numbers plotted
+    // (1x baseline, verified multiple) are both real, sourced values.
+    function verifiedStepPoints(anchorTs, minHrs, maxHrs, multiple) {
+      if (anchorTs === null || multiple == null) return [];
+      return [
+        { hrs: minHrs, mult: 1 },
+        { hrs: 0, mult: 1 },
+        { hrs: 0, mult: multiple },
+        { hrs: maxHrs, mult: multiple },
+      ];
+    }
+
+    // Binned-median series, not a raw connect-the-dots line: at this
+    // population's grain, consecutive trades by timestamp are noisy (and
+    // this family can carry more than one related instrument per team), so
+    // a literal point-to-point line oscillated between price levels in a
+    // way no reader could parse. Each time bucket takes the median of the
+    // dots that actually traded inside it -- the standard way to turn a
+    // tick series into a readable price path, still entirely data-derived.
+    function teamSeries(code, anchorTs, minHrs, maxHrs, bucketCount) {
+      if (anchorTs === null) return [];
+      const idxs = dotsByTeamL[code] || [];
+      const baseline = computeBaseline(idxs, pop, epochMsL, anchorTs);
+      if (!baseline) return [];
+      const span = maxHrs - minHrs;
+      const buckets = Array.from({ length: bucketCount }, () => []);
+      for (const i of idxs) {
+        if (pop.price_band[i] === 255) continue;
+        const hrs = (epochMsL + pop.birth_ts[i] * 1000 - anchorTs) / 3600000;
+        if (hrs < minHrs || hrs > maxHrs) continue;
+        const bi = Math.min(bucketCount - 1, Math.max(0, Math.floor(((hrs - minHrs) / span) * bucketCount)));
+        buckets[bi].push(pop.price_band[i] / baseline);
+      }
+      const pts = [];
+      buckets.forEach((vals, bi) => {
+        if (!vals.length) return;
+        vals.sort((a, b) => a - b);
+        pts.push({
+          hrs: minHrs + (bi + 0.5) * (span / bucketCount),
+          mult: vals[Math.floor(vals.length / 2)],
+        });
+      });
+      return pts;
+    }
+
+    // design-review S9 critical #3 fix: identity.blue vs field.rest is
+    // ~1.15:1 contrast (perception-brief §9b) -- close to isoluminant, so a
+    // plain hue-only stroke is exactly the kind of change the motion system
+    // barely registers (brief §2). `halo` draws a wider near-white stroke
+    // first so the line clears a real luminance floor over the locally
+    // -summed rest field, not just a hue difference (brief §10.1).
+    function makeLine(xs, pts, colorToken, opts) {
+      opts = opts || {};
+      const gen = d3.line().x((d) => xs(d.hrs)).y((d) => y(d.mult));
+      const d = pts.length > 1 ? gen(pts) : null;
+      const wrap = g.append('g').style('display', 'none');
+      if (opts.halo) {
+        wrap.append('path')
+          .attr('fill', 'none').attr('stroke', 'var(--ink-hero)')
+          .attr('stroke-width', (opts.strokeWidth || 1.5) + 3)
+          .attr('stroke-opacity', 0.5).attr('stroke-linecap', 'round')
+          .attr('d', d);
+      }
+      const path = wrap.append('path')
+        .attr('fill', 'none')
+        .attr('stroke', `var(--${colorToken})`)
+        .attr('stroke-width', opts.strokeWidth || 1.5)
+        .attr('stroke-opacity', 0.85)
+        .attr('d', d);
+      if (opts.label) {
+        wrap.append('text')
+          .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
+          .attr('fill', `var(--${colorToken})`).attr('text-anchor', 'end')
+          .attr('x', opts.labelX).attr('y', opts.labelY)
+          .text(opts.label);
+      }
+      return {
+        style(...a) { wrap.style(...a); return this; },
+        attr(...a) { path.attr(...a); return this; },
+      };
+    }
+
+    // Direct end-labels (design-review S9 critical #1 suggested fix): each
+    // line states its own verified multiple where it lands, so the
+    // three-way comparison this scene exists to make is legible without
+    // requiring a reader to cross-reference the KEY against the y-axis.
+    const popLinePAR = makeLine(xPop, verifiedStepPoints(shockTsForL('PAR'), -0.5, 4, shocksMapL.PAR && shocksMapL.PAR.pop_multiple), 'identity-teal', {
+      label: shocksMapL.PAR ? `×${shocksMapL.PAR.pop_multiple}` : null,
+      labelX: xPop(4) - 4, labelY: y(shocksMapL.PAR ? shocksMapL.PAR.pop_multiple : 1) - 8,
+    });
+    const popLineNOR = makeLine(xPop, verifiedStepPoints(shockTsForL('NOR'), -0.5, 4, shocksMapL.NOR && shocksMapL.NOR.pop_multiple), 'identity-blue', {
+      halo: true, strokeWidth: 2,
+      label: shocksMapL.NOR ? `×${shocksMapL.NOR.pop_multiple}` : null,
+      labelX: xPop(4) - 4, labelY: y(shocksMapL.NOR ? shocksMapL.NOR.pop_multiple : 1) - 8,
+    });
+    const popLineBEL = makeLine(xPop, verifiedStepPoints(shockTsForL('BEL'), -0.5, 4, shocksMapL.BEL && shocksMapL.BEL.pop_multiple), 'identity-pink', {
+      label: shocksMapL.BEL ? `×${shocksMapL.BEL.pop_multiple}` : null,
+      labelX: xPop(4) - 4, labelY: y(shocksMapL.BEL ? shocksMapL.BEL.pop_multiple : 1) - 8,
+    });
+    const fullLinePAR = makeLine(xFull, verifiedStepPoints(shockTsForL('PAR'), -2, 74, shocksMapL.PAR && shocksMapL.PAR.pop_multiple), 'identity-teal');
+    const fullLineNOR = makeLine(xFull, verifiedStepPoints(shockTsForL('NOR'), -2, 74, shocksMapL.NOR && shocksMapL.NOR.pop_multiple), 'identity-blue', { halo: true, strokeWidth: 2 });
+    const fullLineBEL = makeLine(xFull, verifiedStepPoints(shockTsForL('BEL'), -2, 74, shocksMapL.BEL && shocksMapL.BEL.pop_multiple), 'identity-pink');
+    const fullLineARG = makeLine(xFull, teamSeries('ARG', norwayShockTsL, -2, 74, 20), 'identity-lavender', { halo: true, strokeWidth: 2 });
+
     // No amber anywhere in this scene (design-revision-spec S9: all four
     // prior amber usages deleted). The shock line and the bracket-news
     // markers are structural apparatus, the same ink-mid/ink-low dashed
     // grammar S7's kickoff line already teaches -- not story points of
     // their own.
     const shockLine = g.append('g').style('display', 'none');
-    shockLine.append('line')
+    const shockLineEl = shockLine.append('line')
       .attr('x1', xPop(0)).attr('x2', xPop(0))
       .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
       .attr('stroke', 'var(--ink-mid)').attr('stroke-width', 1)
       .attr('stroke-dasharray', '1,3');
-    shockLine.append('text').attr('x', xPop(0) + 6).attr('y', view.region.y + 14)
+    const shockLabelEl = shockLine.append('text').attr('x', xPop(0) + 6).attr('y', view.region.y + 22)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-annotation-size)')
       .attr('fill', 'var(--ink-mid)').text('shock, t=0');
+    // Reference line at "x1" (each dot's own pre-shock level) -- the zero
+    // line a multiples axis needs to read at a glance.
+    const baseLine = g.append('g').style('display', 'none');
+    baseLine.append('line')
+      .attr('x1', view.region.x).attr('x2', view.region.x + view.region.w)
+      .attr('y1', y(1)).attr('y2', y(1))
+      .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1)
+      .attr('stroke-dasharray', '2,4');
+    baseLine.append('text').attr('x', view.region.x + view.region.w).attr('y', y(1) - 6)
+      .attr('text-anchor', 'end')
+      .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
+      .attr('fill', 'var(--ink-low)').text('x1: each team’s own pre-shock price');
 
     const divAxis = g.append('g').style('display', 'none');
     divAxis.append('g')
@@ -211,27 +427,39 @@ export default {
       .attr('x', view.region.x + view.region.w / 2).attr('y', view.region.y + view.region.h + 8 + 24)
       .attr('text-anchor', 'middle')
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
-      .attr('fill', 'var(--ink-mid)').text('hours after the shock');
-    // Y title: honest to the bound scale. The population's price_band
-    // carries the winner ticket's own price in cents (0-100), the same
-    // quantity every other scene's price axis uses -- it does not carry a
-    // pre-shock ratio, so the axis says what the dots actually are rather
-    // than the multiple quoted in prose (that multiple is a beat-copy
-    // fact, not a plotted channel).
-    divAxis.append('text')
+      // design-review S9 major fix: b1's window was -0.5..4h; this axis
+      // widens it to -2..74h with no other cue that the domain changed
+      // ("grain changes are always narrated"). The title says so directly.
+      .attr('fill', 'var(--ink-mid)').text('hours after the shock — widened to the next three days');
+    // Y axis: multiples of each team's own pre-shock price (computed in
+    // layout() from the population's own trade history), not raw cents --
+    // a fixed 0-100c domain left this scene's story crushed into the
+    // bottom few percent of the chart (design-review S9 fix).
+    const yTickG = g.append('g').style('display', 'none');
+    yTickG.append('g')
+      .attr('transform', `translate(${view.region.x - 8},0)`)
+      .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
+      .call(d3.axisLeft(y).tickValues([1, 2, 3, 5]).tickFormat((d) => `x${d}`));
+    yTickG.append('text')
       .attr('x', view.region.x).attr('y', view.region.y - 6)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
-      .attr('fill', 'var(--ink-mid)').text('winner-ticket price (cents)');
+      .attr('fill', 'var(--ink-mid)').text('winner-ticket price (times its pre-shock price)');
 
     const annoG = g.append('g').style('display', 'none');
     if (data.scene && Array.isArray(data.scene.annotations)) {
-      data.scene.annotations.forEach((a) => {
+      // design-review S9 major fix: Belgium's annotation lands at t_hours=0,
+      // the same instant as "shock, t=0" -- same x, same prior y, garbling
+      // both into illegible overprinted text. Each label gets its own row
+      // (shock label owns row 0), so every dotted vertical binds to exactly
+      // one readable label regardless of how close two events land in time.
+      data.scene.annotations.forEach((a, idx) => {
         const ax = xFull(a.t_hours);
+        const rowY = view.region.y + 22 + (idx + 1) * 20;
         annoG.append('line').attr('x1', ax).attr('x2', ax)
           .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
           .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1)
           .attr('stroke-dasharray', '2,3');
-        annoG.append('text').attr('x', ax + 4).attr('y', view.region.y + 24)
+        annoG.append('text').attr('x', ax + 4).attr('y', rowY)
           .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-annotation-size)')
           .attr('fill', 'var(--ink-mid)').text(a.label);
       });
@@ -246,8 +474,38 @@ export default {
       .style('display', 'none');
 
     function step(beatId) {
-      if (beatId === 'b1') shockLine.style('display', null);
-      if (beatId === 'b2') { divAxis.style('display', null); annoG.style('display', null); }
+      if (beatId === 'b1') {
+        shockLine.style('display', null); baseLine.style('display', null); yTickG.style('display', null);
+        popLinePAR.style('display', null);
+        popLineNOR.style('display', null);
+        popLineBEL.style('display', null);
+      }
+      if (beatId === 'b2') {
+        fullLinePAR.style('display', null).attr('stroke-opacity', 0.85);
+        fullLineNOR.style('display', null).attr('stroke-opacity', 0.85);
+        fullLineBEL.style('display', null).attr('stroke-opacity', 0.85);
+      }
+      if (beatId === 'b3') {
+        // Norway is this beat's figure ("the clearest proof"); Paraguay and
+        // Belgium drop to near-rest luminance so they read as ghosted
+        // context, not a third competing bright element (design-review S9
+        // critical #3: "ONE figure owns the luminance peak").
+        fullLinePAR.style('display', null).attr('stroke-opacity', 0.12);
+        fullLineBEL.style('display', null).attr('stroke-opacity', 0.12);
+        fullLineNOR.style('display', null).attr('stroke-opacity', 0.95).attr('stroke-width', 2);
+        fullLineARG.style('display', null).attr('stroke-opacity', 0.95).attr('stroke-width', 2);
+      }
+      if (beatId === 'b2' || beatId === 'b3') {
+        // The shock line was built against xPop(0) for b1's narrower
+        // window; b2/b3 switch to xFull, where t=0 sits at a different
+        // pixel. Re-anchor it so "shock, t=0" stays truthfully at t=0
+        // instead of drifting to wherever xPop(0) used to be
+        // (perception-brief P4/chart-geometry fix).
+        const zx = xFull(0);
+        shockLineEl.attr('x1', zx).attr('x2', zx);
+        shockLabelEl.attr('x', zx + 6);
+      }
+      if (beatId === 'b2') { divAxis.style('display', null); annoG.style('display', null); yTickG.style('display', null); }
       if (beatId === 'b3') {
         // Both bracket annotations clear before the mirror callout lands
         // (CR-9): the mirror gets an uncluttered pair of lines.
@@ -327,7 +585,11 @@ export default {
       kind: 'resort',
       chip: [
         { token: 'identity-blue', glyph: 'dot', label: 'blue = Norway, rising' },
-        { token: 'identity-lavender', glyph: 'dot', label: 'lavender = Argentina, falling' },
+        // design-review S9 major fix: the mark is a V -- Argentina's ticket
+        // crashes near zero, then fully recovers -- so a chip reading
+        // "falling" contradicted the line's own end state (it lands higher
+        // than it starts). Relabeled to match what the eye actually verifies.
+        { token: 'identity-lavender', glyph: 'dot', label: 'lavender = Argentina, nearly dead for an hour' },
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
       overlayStep: 'b3',

@@ -22,6 +22,53 @@
  * receipt), prose only. No data binding, layout, or engine change; every
  * edit below is text, color, or position only.
  *
+ * GATE-4 ROUND 3, SIMPLIFY (research/design-review/visual-story-review.md
+ * §5 S11 doctrine: "solid-fill bars, rest band out of the chart frame,
+ * scrim under the verdict annotation, strike-through as a labeled visible
+ * event"). Three changes, all inside this file's own SVG overlay:
+ * (1) the three-source columns were outline-only rects on a resting field
+ * the blind audit read as "a grey outline on white speckle" — they are now
+ * solid venue-hue fills, so the comparison reads as columns, not a hunt for
+ * thin strokes. (2) this scene's population is pinned pixel-identical to
+ * s10's resting field for object constancy (b1 is `kind: 'instant'`,
+ * nothing may visibly move) — dots cannot be relocated, so "the rest band
+ * out of the chart frame" is achieved the way the engine's own density cap
+ * is achieved: a dedicated backdrop panel (`bg-card-composite-cap`, the
+ * token design-system.md already documents as "hard cap on worst-case
+ * translucent composite over lit particles") behind the whole plot
+ * rectangle, giving the columns and axes a quiet reading surface distinct
+ * from the ambient population outside it. (3) the verdict annotation (the
+ * "closed book" line) gets that same treatment locally, via the
+ * getBBox()-measured scrim pattern s04.js already established for exactly
+ * this failure mode.
+ *
+ * GATE-4 ROUND 4, BLIND-REVIEW FIX-PASS (research/design-review/
+ * visual-story-review.md, s11 critical/major findings; blind match 5/10 ->
+ * repair). Six changes, all inside this file: (1) the T-5min professional
+ * bar now renders with a hatch fill (venue-pinnacle-terminated diagonal
+ * lines over bg-card-composite-cap, the same "no longer quoting" token
+ * s10.js already uses for Pinnacle's dashed requote lines) plus an
+ * always-on adjacent label, "graded after the book closed (90:00)" --
+ * visible from the moment the bar first draws at b2, not only once b3's
+ * prose explains it, so an images-only reader is never shown the blowout
+ * as an unqualified result. (2) `matchedLeg`, `smallN`, and the b3 verdict
+ * annotation move out of the cramped footer (which had at most ~30px free
+ * before the viewport edge, once the x-axis title is accounted for) and
+ * into the open top-left margin under the y-axis title, stacked one line
+ * apart, left-aligned -- this also pulls the verdict annotation clear of
+ * the fixed KEY panel's footprint, which was swallowing its middle third.
+ * (3) the verdict annotation is promoted to ink-hi (the scene's one
+ * luminance peak) and the strike-through demoted to ink-mid, so chrome no
+ * longer outranks the payoff. (4) the receipt panel gets the shared
+ * `.scrim-card` treatment and ink-mid instead of bare ink-low over the
+ * particle field, and moves to a bottom-right anchor clear of the new
+ * artifact label. (5) bar grow-in delay keys on horizon (group), not row
+ * index, so every bar in a trio starts and grows in lockstep -- the tie
+ * can no longer read as a 7x gap mid-tween. (6) the backdrop scrim widens
+ * toward the viewport edge and darkens (0.45 -> 0.68 opacity) so the rest
+ * field recedes hard enough that a bar reads as a bar, not camouflage
+ * against the population. No data, layout, or engine change.
+ *
  * ---------------------------------------------------------------------
  * DATA CONTRACT ASSUMPTIONS (flagged in this build's data_requests; per
  * CONTRACT §5.5 the exact per-scene JSON shape is a scene-builder proposal
@@ -157,11 +204,12 @@ export default {
   layout(data, view) {
     // Figure/ground per research/revision/perception-brief.md §4, §9b: like S10,
     // this scene has NO active PARTICLE subset — a score is not money, so the
-    // movers are outline-only D3 columns, not dots. The whole population is the
+    // movers are solid-fill D3 columns, not dots. The whole population is the
     // dimmed GROUND at 'dimmed-field-min' (alpha 0.25, inside the engine's
-    // rest-tier so emphasis-rest-dim recedes it further each frame). The FIGURE
-    // that pops is the D3 columns in bright venue hues, named by the persistent
-    // color key so the reader knows which source each color is.
+    // rest-tier so emphasis-rest-dim recedes it further each frame), further
+    // receded behind this scene's own backdrop panel (see overlay() below).
+    // The FIGURE that pops is the D3 columns in bright venue hues, named by
+    // the persistent color key so the reader knows which source each color is.
     return { states: { rest: restField(data, view) } };
   },
 
@@ -182,6 +230,36 @@ export default {
     const spacing = view.tokens.spacing_px; // [4,8,12,16,24,32,48,64,96,128]
 
     const g = svg.append('g').attr('class', 's11-columns');
+    // Backdrop panel (visual-story-review §5 S11: "rest band out of the
+    // chart frame"). Object constancy with s10 pins this scene's resting
+    // dots pixel-identical to s10's — they cannot be relocated without an
+    // unannounced silent re-sort, so the field itself stays put and this
+    // panel instead gives the chart its own quiet reading surface, the way
+    // `bg.card-composite-cap` is already documented to do for exactly this
+    // case ("hard cap on worst-case translucent composite over lit
+    // particles", research/design-system.md). Drawn first (bottom of this
+    // scene's stack) so every bar, axis, and label composites cleanly on
+    // top of it; the population still shows through at reduced strength,
+    // texture rather than figure, per the task's chart-first rule.
+    const scrimLayer = g.append('g').attr('class', 's11-scrim');
+    // FIX-PASS (visual-story-review §3 s11 major, "grey camouflage"): the
+    // panel now reaches toward the viewport's right edge, not just the
+    // plot rectangle, so the population's own right-edge bloom column
+    // (visible past "5 min out" in every captured frame, easily misread as
+    // a fourth data column) recedes along with the rest of the field, and
+    // opacity is raised so a bar reads as figure against ground rather
+    // than camouflage against it. Particles still show through as faint
+    // texture -- this is a stronger recede, not a hard cut.
+    const scrimRight = Math.min(view.W - spacing[1], view.region.x + view.region.w + spacing[7]);
+    scrimLayer.append('rect')
+      .attr('x', view.region.x - spacing[3])
+      .attr('y', view.region.y - spacing[5])
+      .attr('width', scrimRight - (view.region.x - spacing[3]))
+      .attr('height', view.region.h + spacing[5] + spacing[6])
+      .attr('rx', 4)
+      .attr('fill', view.css('bg-card-composite-cap'))
+      .attr('fill-opacity', 0.68)
+      .attr('stroke', 'none');
     const axisLayer = g.append('g').attr('class', 's11-axes');
     const barLayer = g.append('g').attr('class', 's11-bars');
     const annoLayer = g.append('g').attr('class', 's11-anno');
@@ -195,18 +273,29 @@ export default {
         .style('pointer-events', 'none'),
       view,
     );
+    // FIX-PASS (visual-story-review §3 s11 critical, text collision): the
+    // footer slot below the x-axis has room for exactly one line -- the
+    // axis title "when the price was read" -- before the viewport edge;
+    // `smallN` and `matchedLeg` used to share that same cramped band and
+    // overprint each other and the axis title in every captured frame.
+    // Both move to the open top-left margin instead, stacked one line
+    // under the y-axis title, where there is genuine clear space down to
+    // the tallest bar (~130px) that nothing else on desktop competes for.
+    if (!view.mobile) {
+      smallN.style('top', `${view.region.y - leaderStandoff + 44}px`);
+    }
     const matchedLeg = html.append('div').attr('class', 's11-matched-leg')
       .style('position', 'absolute')
+      .style('left', `${view.region.x}px`)
+      .style('top', `${view.region.y - leaderStandoff + 22}px`)
       .style('font', '13px var(--font-apparatus)')
       .style('color', view.css('ink-mid'))
-      .style('text-align', 'center')
-      .style('max-width', '22ch')
-      .style('transform', 'translateX(-50%)')
+      .style('white-space', 'nowrap')
       .style('pointer-events', 'none');
-    const receipt = html.append('div').attr('class', 's11-receipt')
+    const receipt = html.append('div').attr('class', 's11-receipt scrim-card')
       .style('position', 'absolute')
       .style('font', '13px var(--font-tape)')
-      .style('color', view.css('ink-low'))
+      .style('color', view.css('ink-mid'))
       .style('max-width', '30ch')
       .style('text-align', 'right')
       .style('pointer-events', 'none')
@@ -244,11 +333,79 @@ export default {
       .style('font', '12px var(--font-apparatus)')
       .text('when the price was read');
 
+    // Solid-fill columns (visual-story-review §5 S11: "solid-fill bars" —
+    // the blind audit read the old outline-only rects as "a grey outline
+    // on white speckle," invisible against the resting field). A column is
+    // now a filled block in its venue hue; the key still explains the
+    // color, but the eye no longer has to hunt a 1.5px stroke to find it.
+    //
+    // FIX-PASS (visual-story-review §3 s11 critical): the T-5min pros bar
+    // is not a genuine result — Pinnacle's book shuts at 90:00, so this
+    // score grades a stale quote against a whistle it never saw. It gets a
+    // hatch fill instead of a solid one so the mark survives on the chart
+    // itself, before the reader ever reaches beat 3's prose. The hatch
+    // reuses `venue-pinnacle-terminated`, the same "no longer quoting"
+    // token s10.js already uses for Pinnacle's dashed requote lines, so
+    // the vocabulary carries forward rather than inventing a new one.
+    const ARTIFACT_HORIZON = 'T-5min';
+    const ARTIFACT_SOURCE = 'pinnacle_devig';
+    function isArtifact(d) {
+      return d.horizon === ARTIFACT_HORIZON && d.source === ARTIFACT_SOURCE;
+    }
+    const hatchId = 's11-artifact-hatch';
+    const hatchDefs = g.append('defs');
+    const hatchPattern = hatchDefs.append('pattern')
+      .attr('id', hatchId)
+      .attr('width', 7).attr('height', 7)
+      .attr('patternUnits', 'userSpaceOnUse')
+      .attr('patternTransform', 'rotate(45)');
+    hatchPattern.append('rect')
+      .attr('width', 7).attr('height', 7)
+      .attr('fill', view.css('bg-card-composite-cap'));
+    hatchPattern.append('line')
+      .attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 7)
+      .attr('stroke', view.css('venue-pinnacle-terminated'))
+      .attr('stroke-width', 2.5)
+      .attr('stroke-opacity', 0.95);
+
     function barRect(sel) {
       sel.attr('x', (d) => scales.x(d.horizon) + scales.xSub(d.source))
         .attr('width', scales.xSub.bandwidth())
-        .attr('fill', 'none')
-        .attr('stroke-width', leaderWeight);
+        .attr('stroke', (d) => (isArtifact(d) ? view.css('venue-pinnacle-terminated') : 'none'))
+        .attr('stroke-width', (d) => (isArtifact(d) ? 1.5 : 0));
+    }
+
+    // Always-on label for the artifact bar (visual-story-review §3 s11
+    // critical: "no on-chart marker distinguishes artifact from result").
+    // Fires the moment the T-5min group draws (beat 2), well before beat
+    // 3's crossout — an images-only reader at b2 must not be able to read
+    // the tall bar as an unqualified finding.
+    function artifactLabel() {
+      const d = byKey.get(`${ARTIFACT_HORIZON}|${ARTIFACT_SOURCE}`);
+      if (!d) return;
+      const cx = scales.x(ARTIFACT_HORIZON) + scales.xSub(ARTIFACT_SOURCE) + scales.xSub.bandwidth() / 2;
+      const ly = scales.y(d.brier) - leaderStandoff;
+      annoLayer.selectAll('text.artifact-cap, rect.artifact-cap-scrim').remove();
+      const label = annoLayer.append('text').attr('class', 'artifact-cap')
+        .attr('x', cx).attr('y', ly)
+        .attr('text-anchor', 'middle')
+        .attr('fill', view.css('ink-hi'))
+        .style('font', '11.5px var(--font-apparatus)')
+        .attr('opacity', view.reducedMotion ? 1 : 0)
+        .text('graded after the book closed (90:00)');
+      const bb = label.node().getBBox();
+      const scrim = annoLayer.insert('rect', 'text.artifact-cap')
+        .attr('class', 'artifact-cap-scrim')
+        .attr('x', bb.x - spacing[1]).attr('y', bb.y - spacing[0])
+        .attr('width', bb.width + spacing[1] * 2).attr('height', bb.height + spacing[0] * 2)
+        .attr('rx', 3)
+        .attr('fill', view.css('bg-card-composite-cap'))
+        .attr('opacity', view.reducedMotion ? 0.85 : 0);
+      if (!view.reducedMotion) {
+        const onset = Math.min(HORIZONS.indexOf(ARTIFACT_HORIZON), maxSeq - 1) * stagger + drawIn;
+        label.transition().delay(onset).duration(recolorMs).attr('opacity', 1);
+        scrim.transition().delay(onset).duration(recolorMs).attr('opacity', 0.85);
+      }
     }
 
     function drawGroup(horizons, animate) {
@@ -257,13 +414,21 @@ export default {
         .data(rows, (d) => `${d.horizon}|${d.source}`);
       const enter = sel.enter().append('rect').attr('class', 'bar')
         .call(barRect)
-        .attr('stroke', (d) => view.css(SOURCE_TOKEN[d.source]))
+        .attr('fill', (d) => (isArtifact(d) ? `url(#${hatchId})` : view.css(SOURCE_TOKEN[d.source])))
+        .attr('fill-opacity', (d) => (isArtifact(d) ? 1 : 0.88))
         .attr('y', y0).attr('height', 0)
         .attr('opacity', 1);
       const merged = enter.merge(sel);
       if (animate && !view.reducedMotion) {
         merged.transition()
-          .delay((d, i) => Math.min(i, maxSeq - 1) * stagger)
+          // Synced within a horizon group (visual-story-review §3 s11
+          // major: a per-row index delay let one bar in a trio start
+          // growing before its group-mates, momentarily asserting a false
+          // relative ranking mid-tween — e.g. cyan reading ~7x lavender at
+          // "an hour out" while both were headed to a statistical tie).
+          // Delay now keys on the horizon only, so every bar in a trio
+          // starts and grows together and the tie holds at every step.
+          .delay((d) => Math.min(HORIZONS.indexOf(d.horizon), maxSeq - 1) * stagger)
           .duration(drawIn)
           .attr('y', (d) => scales.y(d.brier))
           .attr('height', (d) => y0 - scales.y(d.brier));
@@ -272,17 +437,14 @@ export default {
           .attr('y', (d) => scales.y(d.brier))
           .attr('height', (d) => y0 - scales.y(d.brier));
       }
+      if (horizons.includes(ARTIFACT_HORIZON)) artifactLabel();
     }
 
     function matchedLegAnnotation() {
       const k = byKey.get('T-24h|kalshi');
       const p = byKey.get('T-24h|pinnacle_devig');
       if (!k || !p) return;
-      const cx = scales.x('T-24h') + scales.xSub.bandwidth() * 1.5;
-      matchedLeg
-        .style('left', `${cx}px`)
-        .style('top', `${y0 + spacing[2] + 14}px`)
-        .text(`matched leg for leg: ${k.brier.toFixed(3)} vs ${p.brier.toFixed(3)}`);
+      matchedLeg.text(`matched leg for leg: ${k.brier.toFixed(3)} vs ${p.brier.toFixed(3)}`);
     }
 
     function crossOutT5min() {
@@ -291,14 +453,34 @@ export default {
       // One common-fate event (design-revision-spec §2 S11 item 2): the two
       // parity groups recede to context while the T-5min columns desaturate
       // to state.dead, in the same recolor beat as the strike itself.
+      // FIX-PASS (visual-story-review §3 s11 major, working-memory budget):
+      // dimmed further than the original 0.7 — at b3 these two groups are
+      // pure context for a payoff that lives entirely in the T-5min column
+      // and the verdict annotation, so they recede to a silhouette rather
+      // than staying a third bright competitor.
       barLayer.selectAll('rect.bar')
         .filter((d) => d.horizon !== 'T-5min')
         .transition().duration(recolorMs)
-        .attr('opacity', 0.7);
+        .attr('opacity', 0.35);
+      // Re-assert y/height (not just fill) in this same transition: a
+      // reader who reaches b3 quickly can still have b2's grow-in
+      // transition running on these same rects, and D3's default-named
+      // `.transition()` interrupts any transition already in flight on an
+      // element, regardless of which attributes it targets. Without this,
+      // an interrupted grow-in freezes the T-5min bars at whatever
+      // fractional height they had reached — invisible often enough to be
+      // the actual cause behind "the blowout bar reads as a grey outline
+      // on white speckle" once bars became solid fills and had nothing
+      // left to hide a near-zero height. Re-declaring the same target
+      // values here makes the fill transition also finish the grow-in if
+      // it was still running, and is a no-op if it had already finished.
       barLayer.selectAll('rect.bar')
         .filter((d) => d.horizon === 'T-5min')
         .transition().duration(recolorMs)
-        .attr('stroke', view.css('state-dead'));
+        .attr('y', (d) => scales.y(d.brier))
+        .attr('height', (d) => y0 - scales.y(d.brier))
+        .attr('fill', view.css('state-dead'))
+        .attr('fill-opacity', 1);
 
       strikeLayer.selectAll('line.strike').remove();
       const strikeSel = strikeLayer.selectAll('line.strike').data(rows, (d) => d.source);
@@ -307,36 +489,66 @@ export default {
         .attr('x2', (d) => scales.x(d.horizon) + scales.xSub(d.source) + scales.xSub.bandwidth())
         .attr('y1', (d) => scales.y(d.brier))
         .attr('y2', y0)
-        // NOT ink-hero: design-system.md §2 reserves that pure white
-        // strictly for "S17 hero numerals + annotated-dot halo ring
-        // only". The "white strike" the design note describes uses
-        // ink-hi, the piece's near-white primary-prose tone, instead.
-        .attr('stroke', view.css('ink-hi'))
+        // FIX-PASS (visual-story-review §3 s11 major, salience-matches-
+        // priority): was ink-hi (the piece's near-white primary-prose
+        // tone) — that made the leader line brighter than the verdict
+        // text it was supposed to be supporting. Demoted to ink-mid so the
+        // crossout annotation below is the one thing on screen holding
+        // the luminance peak. NOT ink-hero either way: design-system.md
+        // §2 reserves that pure white strictly for "S17 hero numerals +
+        // annotated-dot halo ring only".
+        .attr('stroke', view.css('ink-mid'))
         .attr('stroke-width', leaderWeight)
         .attr('opacity', view.reducedMotion ? 1 : 0);
       if (!view.reducedMotion) {
         enter.transition().delay((d, i) => i * stagger).duration(drawIn).attr('opacity', 1);
       }
 
-      annoLayer.selectAll('text.crossout-cap').remove();
-      annoLayer.append('text').attr('class', 'crossout-cap')
-        .attr('x', scales.x('T-5min')).attr('y', view.region.y - leaderStandoff)
-        .attr('fill', view.css('ink-mid'))
+      // The verdict annotation gets its own local scrim (visual-story-
+      // review §5 S11: "scrim under the verdict annotation"), the same
+      // getBBox()-measured pattern s04.js uses for its headline label —
+      // this is the scene's one sentence of payoff text, and it must read
+      // cleanly even where the backdrop panel above is thinnest (its top
+      // edge, right where this line sits).
+      // FIX-PASS (visual-story-review §3 s11 critical + major): the old
+      // x-anchor (`scales.x('T-5min')`, ~1130px) put this text directly
+      // behind the fixed KEY panel — only "sco…" and "…t, n" survived on
+      // either side of it in every b3 frame — and made it the dimmest
+      // (ink-mid) thing on screen despite being the scene's one payoff
+      // line. It now joins the top-left caption stack (clear of the KEY's
+      // footprint) as ink-hi, the scene's single luminance peak.
+      annoLayer.selectAll('text.crossout-cap, rect.crossout-cap-scrim').remove();
+      const crossoutText = annoLayer.append('text').attr('class', 'crossout-cap')
+        .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff + 66)
+        .attr('fill', view.css('ink-hi'))
         .style('font', '15px var(--font-apparatus)')
         .text('scores a closed book against a live market, not a fair fight');
+      const coBB = crossoutText.node().getBBox();
+      annoLayer.insert('rect', 'text.crossout-cap')
+        .attr('class', 'crossout-cap-scrim')
+        .attr('x', coBB.x - spacing[1]).attr('y', coBB.y - spacing[0])
+        .attr('width', coBB.width + spacing[1] * 2).attr('height', coBB.height + spacing[0] * 2)
+        .attr('rx', 3)
+        .attr('fill', view.css('bg-card-composite-cap')).attr('opacity', 0.85);
 
       // Mobile carries this content in the beat's own prose instead (b3's
       // closing sentence names all three traps inline), so the floating
       // panel below is a desktop-only echo, never a second copy crowding a
       // narrow screen (design-revision-spec §2 S11 item 2, mobile clause).
+      // FIX-PASS (visual-story-review §3 s11 major): re-anchored from
+      // vertical-center (which sat on top of the artifact label added at
+      // b2) to a bottom-right anchor clear of it, and given the shared
+      // `.scrim-card` treatment (added at creation) plus ink-mid instead
+      // of bare ink-low directly over the particle field — it was the
+      // dimmest text on screen with no ground of its own.
       if (view.mobile) {
         receipt.style('display', 'none');
       } else {
         receipt
           .style('display', null)
           .style('right', `${view.W - view.region.x - view.region.w + spacing[4]}px`)
-          .style('top', `${view.region.y + view.region.h / 2}px`)
-          .style('transform', 'translateY(-50%)')
+          .style('top', `${y0 - spacing[6]}px`)
+          .style('transform', 'translateY(-100%)')
           .html(
             '<div>the same mistake, three times:</div>'
             + THREE_TRAPS.map((t) => `<div>&middot; ${t}</div>`).join(''),
@@ -377,10 +589,15 @@ export default {
       // Re-narrate the venue colour meaning at the mark. S11 inherits S10's
       // chip when scrolled in sequence, but a direct deep-link into s11
       // (CONTRACT §10.9 acceptance check 9) needs the legend set here too.
+      // Glyph 'block' (solid), not 'box' (outline): visual-story-review §5
+      // S11 moved the columns themselves to solid fills (the old outline
+      // rects read as "a grey outline on white speckle"), so the key's
+      // swatch must reproduce that — a swatch that still drew an empty
+      // outline here would silently misdescribe the mark on screen.
       chip: [
-        { token: 'venue-kalshi', glyph: 'box', label: 'cyan = Kalshi' },
-        { token: 'venue-polymarket', glyph: 'box', label: 'lavender = Polymarket' },
-        { token: 'venue-pinnacle', glyph: 'box', label: "grey = the pros, devigged (bookmaker's cut removed)" },
+        { token: 'venue-kalshi', glyph: 'block', label: 'cyan = Kalshi' },
+        { token: 'venue-polymarket', glyph: 'block', label: 'lavender = Polymarket' },
+        { token: 'venue-pinnacle', glyph: 'block', label: "grey = the pros, devigged (bookmaker's cut removed)" },
         { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
       ],
       grain: {

@@ -47,6 +47,31 @@ function hash01(i) {
   return (x >>> 0) / 4294967296;
 }
 
+/* Fresh blind review (score 3/10), s18 SIMPLIFY fix pass -- C1 "the
+ * invitation has no visual carrier": pick ONE contract to stay lit past
+ * the S17->S18 handoff instead of settling into the grey field like every
+ * other dot. Preferring a FINAL_CONTRACT dot (the same population S17 just
+ * lit) keeps the amber meaning continuous across the cut -- "the final's
+ * contracts settle" becomes "except this one, still open" -- rather than
+ * introducing a fresh, unexplained amber unit. Deterministic and pure (no
+ * shared state): layout() and overlay() each call this and agree, because
+ * they're given the same data/view. Position is fixed off the timeline,
+ * clear of THE LAB card (top-left), the KEY (top-right) and the skip pill
+ * (bottom-left) -- an open lane so the ring+label reads as one drawing,
+ * not a collision (perception-brief §4, figure-ground).
+ */
+function pickExemplar(data, view) {
+  const { manifest, pop } = data;
+  const N = pop.count;
+  let idx = Math.floor(hash01(1) * N);
+  try {
+    const bit = flagBit(manifest, 'FINAL_CONTRACT');
+    const finalIdx = indicesWithFlag(pop.flags, bit);
+    if (finalIdx.length) idx = finalIdx[Math.floor(finalIdx.length / 2)];
+  } catch (e) { /* flag not in this build's enum -- hash fallback above stands */ }
+  return { idx, x: view.W * 0.52, y: view.H * 0.46 };
+}
+
 async function fetchJsonLocal(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`[rt/s18] fetch ${url}: ${r.status}`);
@@ -56,6 +81,30 @@ async function fetchBufferLocal(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`[rt/s18] fetch ${url}: ${r.status}`);
   return r.arrayBuffer();
+}
+
+/* One-shot amber ring on the picker's search field (Gate-4 visual-story
+ * review, s18 SIMPLIFY: "onset pulse ... on the picker"). Scene-scoped and
+ * self-contained: injected once into <head> from this module rather than
+ * added to the shared docs/index.html stylesheet, so this scene's own
+ * repair carries no risk of colliding with a concurrent edit to shared
+ * chrome. Mirrors the existing #chip.pulse ring in shape (box-shadow
+ * expand-and-fade) but is entirely local to s18. */
+function injectInvitePulseStyleOnce() {
+  if (document.getElementById('s18-invite-pulse-style')) return;
+  const style = document.createElement('style');
+  style.id = 's18-invite-pulse-style';
+  style.textContent = `
+    .s18-invite-pulse.s18-pulse-fire { animation: s18-invite-pulse-ring 1.2s ease-out 1; }
+    @keyframes s18-invite-pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(204, 161, 62, 0.55); }
+      100% { box-shadow: 0 0 0 10px rgba(204, 161, 62, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .s18-invite-pulse.s18-pulse-fire { animation: none; }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 /* ---------------------------------------------------------------- */
@@ -69,13 +118,62 @@ function computeRestingField(data, view) {
   const t0 = new Date(manifest.epoch).getTime();
   const t1 = new Date(manifest.frozen_at || manifest.generated).getTime();
   const timeX = d3.scaleUtc().domain([t0, t1]).range([view.W * 0.04, view.W * 0.96]);
+
+  // Density-aware rest-alpha floor (fresh blind review M3: "mid, settled:
+  // resting field below perceptual threshold" -- brief §9b/§10.1). A flat
+  // 0.35 reads fine wherever dots overlap, but most of the timeline is
+  // sparse -- real volume piles into the tournament's final weeks (see the
+  // y-spread note below), so a lone early dot sits close to canvas. Bin
+  // births and push sparse bins toward, never past, the engine's own
+  // rest/active classify line (dot.opacity-rest-classify-max), so this
+  // raises the floor where it is actually dark without adding energy to
+  // the late-tournament mass that already clears the tone-map cap on its
+  // own.
+  const BINS = 40;
+  const counts = new Uint32Array(BINS);
+  const binOf = new Uint16Array(N);
+  const span = Math.max(1, t1 - t0);
+  for (let i = 0; i < N; i++) {
+    const frac = Math.min(0.999999, Math.max(0, (pop.birth_ts[i] * 1000) / span));
+    const b = Math.min(BINS - 1, Math.floor(frac * BINS));
+    binOf[i] = b; counts[b]++;
+  }
+  let maxCount = 1;
+  for (let b = 0; b < BINS; b++) if (counts[b] > maxCount) maxCount = counts[b];
+  const classifyMax = (view.tokens.dot && view.tokens.dot['opacity-rest-classify-max']) || 0.42;
+  const alphaCeiling = Math.max(rest[3], classifyMax - 0.02); // stay under the active-tier line
+
+  const exemplar = pickExemplar(data, view);
+  const amber = view.color('accent-annotation', 1.0);
+
   for (let i = 0; i < N; i++) {
     state.x[i] = timeX(new Date(t0 + pop.birth_ts[i] * 1000));
-    state.y[i] = view.H * (0.22 + 0.62 * hash01(i * 9 + 5));
+    // Wider vertical spread (Gate-4 visual-story review, s15/s17/s18 shared
+    // finding: real trade volume skews hard toward the tournament's final
+    // weeks, so x alone already piles most of the population into a few
+    // pixels near the right edge; y carries no claim, so widening it lowers
+    // local overlap density ahead of the engine's rest-tier cap).
+    state.y[i] = view.H * (0.10 + 0.80 * hash01(i * 9 + 5));
+    const density = counts[binOf[i]] / maxCount;
+    const a = rest[3] + (alphaCeiling - rest[3]) * (1 - density);
     state.color[i * 4] = rest[0]; state.color[i * 4 + 1] = rest[1];
-    state.color[i * 4 + 2] = rest[2]; state.color[i * 4 + 3] = rest[3];
+    state.color[i * 4 + 2] = rest[2]; state.color[i * 4 + 3] = a;
     state.size[i] = view.tokens.dot['radius-base-px'];
   }
+
+  // The one exemplar contract (see pickExemplar): pulled out of the
+  // timeline into a clear spot, lit at full amber -- the scene's single
+  // findable "click this" mark. Crossing the engine's active-tier
+  // classify line (alpha >= 0.9) on a genuine color change gets it the
+  // same automatic onset pulse + luminance boost every other lit mark in
+  // the piece gets (perception-brief §7, §9b) -- no extra engine call.
+  state.x[exemplar.idx] = exemplar.x;
+  state.y[exemplar.idx] = exemplar.y;
+  state.color[exemplar.idx * 4] = amber[0];
+  state.color[exemplar.idx * 4 + 1] = amber[1];
+  state.color[exemplar.idx * 4 + 2] = amber[2];
+  state.color[exemplar.idx * 4 + 3] = amber[3];
+
   return state;
 }
 
@@ -192,15 +290,28 @@ export default {
       .html('The story is told. Every dot above is still yours to open. Pick a contract and step through its price, from the day it was listed to the day it settled. Open a zoom match and step through it trade by trade. Nothing here is a simulation. Every dot is money that moved. If you doubted anything above, or want to test your own read before kickoff, open a market and check it here.');
 
     /* -------- Market picker -------- */
+    // Invitation carrier (Gate-4 visual-story review, s18 SIMPLIFY: "give
+    // the explorable invitation a visual carrier: onset pulse + label on
+    // the picker" — Tier-1 C1, "the invitation has no visual carrier"). The
+    // picker was plain form chrome with nothing to draw the eye once the
+    // rail released; a one-shot amber ring (bound to the same reveal event
+    // as the shell's own fade-up, never a second motion trigger) plus a
+    // plain-words label on the search field give the reader something to
+    // look at and something that tells them what it is.
     const pickerWrap = shell.append('div').attr('class', 's18-picker interactive')
+      .style('position', 'relative')
       .style('margin-top', view.css('space-32'));
-    pickerWrap.append('div')
+    const pickerHeader = pickerWrap.append('div')
       .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
-      .style('letter-spacing', view.css('type-micro-tracking')).style('color', view.css('ink-low'))
-      .text('PICK A CONTRACT');
+      .style('letter-spacing', view.css('type-micro-tracking')).style('color', view.css('ink-low'));
+    pickerHeader.append('span').text('PICK A CONTRACT');
+    pickerHeader.append('span')
+      .style('color', view.css('accent-annotation')).style('margin-left', view.css('space-8'))
+      .text('— every one below is still live, open one');
     const searchInput = pickerWrap.append('input')
       .attr('type', 'search').attr('placeholder', 'Search by ticker or title…')
       .attr('aria-label', 'Search markets')
+      .attr('class', 's18-invite-pulse')
       .style('width', '100%').style('margin-top', view.css('space-8'))
       .style('background', view.css('bg-card')).style('color', view.css('ink-hi'))
       .style('border', `1px solid ${view.css('ink-low')}`).style('border-radius', view.css('space-4'))
@@ -414,16 +525,88 @@ export default {
       zoomStatus.text(`trade ${fmt.count(centerIdx + 1)} of ${fmt.count(n)}${leg ? ` · ${leg.label}` : ''}`);
     }
 
+    /* -------- The coda's one amber singleton (see pickExemplar) --------
+     * Ring + label around the exemplar dot, matching the piece's amber-
+     * singleton protocol (s01/s14: halo + core + leader + label, one
+     * findable mark, exactly one amber meaning on screen). Starts hidden:
+     * fresh blind review C1 flagged that a ring drawn here at t0 would sit
+     * over an empty patch of stage while the actual dot is still mid-
+     * flight from wherever S17 left it -- reveal() below fades it in once
+     * the resort tween has landed the dot at this spot. */
+    const singleton = container.svg.append('g').attr('class', 's18-singleton').style('opacity', 0);
+    const exemplar = pickExemplar(data, view);
+    singleton.append('circle').attr('class', 'halo')
+      .attr('cx', exemplar.x).attr('cy', exemplar.y)
+      .attr('r', view.tokens.dot['radius-annotated-halo-px'])
+      .style('fill', 'none').style('stroke', view.css('accent-annotation'))
+      .style('stroke-width', view.tokens.dot['halo-stroke-px']);
+    singleton.append('circle').attr('class', 'core')
+      .attr('cx', exemplar.x).attr('cy', exemplar.y)
+      .attr('r', view.tokens.dot['radius-annotated-core-px'])
+      .style('fill', view.css('accent-annotation'));
+    singleton.append('line').attr('class', 'leader')
+      .attr('x1', exemplar.x + view.tokens.dot['radius-annotated-halo-px']).attr('y1', exemplar.y)
+      .attr('x2', exemplar.x + 32).attr('y2', exemplar.y)
+      .style('stroke', view.css('accent-annotation'))
+      .style('stroke-width', view.tokens.layout['annotation-leader-weight-px']);
+    const singletonLabel = singleton.append('text').attr('class', 'label')
+      .attr('x', exemplar.x + 38).attr('y', exemplar.y).attr('dy', '0.32em')
+      .style('fill', view.css('accent-annotation'))
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-annotation-size'))
+      .text('still open — explore it below');
+    const singletonBB = singletonLabel.node().getBBox();
+    singleton.insert('rect', 'text.label').attr('class', 'label-scrim')
+      .attr('x', singletonBB.x - 6).attr('y', singletonBB.y - 4)
+      .attr('width', singletonBB.width + 12).attr('height', singletonBB.height + 8)
+      .attr('rx', 3)
+      .style('fill', view.css('bg-card-composite-cap')).style('opacity', 0.85);
+
     /* -------- Fade-up entry (design-system.md §9 S18: 800ms) -------- */
     function reveal() {
       if (codaEl) codaEl.hidden = false;
       shell.transition().duration(view.tokens.motion.durations_ms['ui-chrome-fade-up'])
         .style('opacity', 1).style('transform', 'translateY(0px)');
+      // The invitation's onset pulse rides the same one-time reveal event
+      // above, not a second motion trigger (design-revision-spec G6: "one
+      // motion event per beat"): it fires once, on arrival, and never
+      // repeats.
+      injectInvitePulseStyleOnce();
+      searchInput.classed('s18-pulse-fire', true);
+
+      // Announce the S17->S18 handoff once the population's own resort
+      // tween (fired by this beat's `state: 'rest'` / `kind: 'resort'`)
+      // has actually landed the exemplar dot at the ring above (fresh
+      // blind review M2: "the largest luminance change in the scene ...
+      // is silent" -- pulse the key and swap its text at the moment of
+      // collapse, the same change-blindness countermeasure the chip
+      // already uses everywhere else, brief §7).
+      const resortMs = view.tokens.motion.durations_ms['resort-total-target'] || 1700;
+      const settleFadeMs = view.tokens.motion.durations_ms['recolor-max'] || 600;
+      const settledChip = [
+        { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
+        { token: 'accent-annotation', glyph: 'dot', label: 'amber = one contract, still open' },
+      ];
+      if (view.reducedMotion) {
+        view.setChip(settledChip);
+        singleton.style('opacity', 1);
+      } else {
+        setTimeout(() => {
+          view.setChip(settledChip);
+          singleton.transition().duration(settleFadeMs).style('opacity', 1);
+        }, resortMs);
+      }
     }
 
     return {
       step(beatId) { if (beatId === 'b1') reveal(); },
-      exit() { /* the coda persists past the rail by design; nothing to tear down */ },
+      // The #coda picker/scrubber persists past the rail by design (file
+      // header note) -- but container.svg's scene-layer `g` is the normal
+      // per-visit scroll-tracked overlay every other scene tears down on
+      // exit(), and this pass is the first thing s18 has ever drawn into
+      // it (the singleton ring). Remove just that, so scrolling back up
+      // past s18 and down again doesn't stack a second ring on the first.
+      exit() { singleton.remove(); },
     };
   },
 
@@ -434,7 +617,15 @@ export default {
       trigger: 'step',
       state: 'rest',
       kind: 'resort',
+      // Transitional key (fresh blind review M1: "key/visual mismatch and
+      // amber-budget violation" -- at the instant this beat activates the
+      // engine is still tweening away from S17's own amber-lit final's-
+      // contracts state, so a grey-only key is momentarily undecodable.
+      // Naming both marks that are actually on screen keeps the key true
+      // at every frame; reveal() swaps this to the settled-state key once
+      // the resort tween lands (see the M2 fix there).
       chip: [
+        { token: 'accent-annotation', glyph: 'dot', label: 'amber = the final’s contracts, settling' },
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
       grain: { text: '1 dot = $75,000 of real money traded' },

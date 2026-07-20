@@ -59,54 +59,79 @@
  *
  *  7. EMPHASIS: RESTING-FIELD-DIM / ACTIVE-SUBSET-BOOST + ONSET PULSE
  *     (post-Gate-3 revision, research/revision/perception-brief.md §2,
- *     §4, §7, §9b, §10) — the ACTIVE/REST distinction was carrying its
- *     "did that just change" signal on hue alone: every identity/side
- *     token measures <=1.24:1 against field.rest at swatch level
- *     (functionally isoluminant), and no swatch-hex change can buy real
- *     separation there — field.rest's own luminance is already high
- *     enough that even white clears only ~2.1:1 against it. Luminance
- *     and motion-onset, not hue, are the channels the magnocellular
- *     pathway actually uses for a figure/ground "did that just change"
- *     judgment (brief §1, §2). So this fix runs where the actual
- *     premultiplied energy is decided, per fragment, every frame:
- *       (a) REST/ACTIVE classification (FRAG_POINTS) — each dot's OWN
- *           current alpha (vColor.a, already computed by the vertex
- *           stage's A/B mix, no new attribute needed) sorts it into
- *           rest-tier (alpha <= uRestClassifyMax) or active-tier (alpha
- *           >= uActiveClassifyMin); rest-tier energy is scaled by
- *           uRestDim (<1), active-tier by uActiveBoost (>1). The
- *           0.42-0.90 alpha band (state.dead / state.expiring, both
- *           already-audited receding states, FIX #1 for S8) is left
- *           unclassified on purpose — this revision must not touch that
- *           settled semantics. This is a GLOBAL, per-dot policy, not a
- *           true per-pixel local-density sample (that would need a
- *           density-estimate pre-pass this close to ship is too much new
- *           surface to add safely); dimming every rest-tier contributor
- *           by a flat factor still directly attacks the brief's own
- *           §9b compounding table (apparent field luminance catching up
- *           to a single active dot by ~5 overlaps) by making the whole
- *           curve climb more slowly, without a new render pass.
- *       (b) ONSET PULSE (VERT_POINTS + FRAG_POINTS) — Rensink et al.'s
- *           change-blindness literature (brief §7) says a silent hue
- *           swap is exactly the change a reader looking right at the
- *           field will miss; what reliably gets seen is a late-onset
- *           luminance/size transient. Every tween already carries
- *           per-dot aColA (frozen current value, via bakeCurrentIntoA)
- *           and aColB (new target) — colorDelta = length(aColB - aColA)
- *           is therefore already exactly "is this dot's color actually
- *           changing in THIS transition," recomputed fresh on every
- *           tween() call including interrupts, so a retarget correctly
- *           re-fires its own pulse. The pulse envelope is a function of
- *           each dot's own post-stagger progress u in [0,1], not
- *           wall-clock time, so it rides correctly under scroll-scrub
- *           and is automatically absent under reduced motion (A===B in
- *           applyReduced, so colorDelta is always 0 there — no special
- *           casing needed). Object constancy is untouched: neither (a)
- *           nor (b) ever changes aPosA/aPosB/gl_Position, only the
- *           energy and (for the pulse) the size already being tweened.
- *     All seven numbers are tokens.json `emphasis.*` /
- *     `dot.opacity-*-classify-*` (tokens are law, same as everywhere
- *     else in this file); see tokens.css for the human-readable version.
+ *     §4, §7, §9b, §10) — the ACTIVE/REST distinction rides luminance
+ *     and motion-onset, not hue (every identity/side token is
+ *     functionally isoluminant with field.rest at swatch level; the
+ *     magnocellular pathway that answers "did that just change" is
+ *     blind to hue, brief §1-§2):
+ *       (a) REST/ACTIVE classification (VERT_POINTS) — each dot's OWN
+ *           current alpha (the vertex stage's A/B mix, no new attribute)
+ *           sorts it into rest-tier (alpha <= uRestClassifyMax, energy
+ *           scaled by uRestDim), active-tier (alpha >= uActiveClassifyMin,
+ *           scaled by uActiveBoost), or the 0.42-0.90 receding band
+ *           (state.dead / state.expiring, FIX #1 for S8, left at 1.0x —
+ *           that settled hue semantics is untouched).
+ *       (b) ONSET PULSE (VERT_POINTS + tone-map) — colorDelta =
+ *           length(aColB - aColA) is exactly "is this dot's color
+ *           changing in THIS transition" (recomputed fresh on every
+ *           tween() including interrupts, because bakeCurrentIntoA
+ *           freezes the true current value into aColA), and it drives a
+ *           brief size + luminance transient across the first
+ *           uPulseWindow fraction of each dot's own post-stagger
+ *           progress. Progress-driven, so it is scrub-safe and
+ *           automatically absent under reduced motion (A===B there).
+ *           ON BY DEFAULT for every tween()/scrubBetween(); callers opt
+ *           a transition out with { pulse: false }. Two mechanisms make
+ *           the transient PERCEIVABLE (the Gate-4 audit found recolors
+ *           rendering silently because the old luminance-gain pulse was
+ *           eaten by the 0.92 cap on any subset already at the cap):
+ *           the accumulation target's previously-unused alpha channel
+ *           accumulates a pulse-presence map, and the compress/composite
+ *           passes LIFT the luminance cap toward ink-hero (1.0) where
+ *           that map is hot — an at-cap subset still flashes; and a
+ *           pulsing GROUND dot contributes its transient energy sliver
+ *           to the ACTIVE pass, so an onset is never trapped under the
+ *           rest-tier ceiling (note #8). Object constancy is untouched:
+ *           neither (a) nor (b) ever changes aPosA/aPosB, only energy
+ *           and the size already being tweened.
+ *
+ *  8. TIERED TONE-MAP — THE FIGURE-GROUND REPAIR (Gate-4 review,
+ *     research/design-review/visual-story-review.md P1 / Tier 0.1) —
+ *     one shared accumulation pass let SUMMED rest-dot energy climb the
+ *     same gamma-0.35 curve as story marks to the same 0.92 cap: any
+ *     dense resting mass rendered near-white and out-shone every story
+ *     mark ("walls of pale static" in 15 of 18 scenes). No flat per-dot
+ *     alpha can fix that (holding a 100-overlap region under the cap at
+ *     gamma 0.35 needs per-dot energy so low a lone dot vanishes). The
+ *     tiers therefore accumulate and tone-map SEPARATELY:
+ *       - GROUND pass — every dot below uActiveClassifyMin (rest tier
+ *         plus the dead/expiring band) accumulates into a HALF-RES
+ *         float target (ground needs no edge acuity; quarter fill
+ *         cost). Its tone-map (FRAG_COMPRESS_REST) applies the same
+ *         gamma, then a Reinhard soft-knee to uRestLumCap
+ *         (`density-rest-luminance-cap`, 0.30): composited ground
+ *         luminance can NEVER exceed the ceiling, while density
+ *         ordering inside the ground stays monotone — the §3.4
+ *         "density reads as luminance" physics survives inside the
+ *         tier, where a hard min() would flatten it to a plateau.
+ *       - ACTIVE pass — dots at/above uActiveClassifyMin accumulate at
+ *         full res under the existing gamma + uLumCap (0.92) chain,
+ *         plus the note-#7 pulse-map cap lift.
+ *       - BLOOM feeds on the active tier only (story-mark glow; a
+ *         blooming ground was half of the wall).
+ *       - COMPOSITE draws ground UNDER active: ground light is occluded
+ *         in proportion to the active layer's share of the luminance
+ *         budget, so a bright mark keeps its own hue instead of gaining
+ *         the field tint, and story marks hold >= 3:1 luminance over
+ *         the fully-summed ground by construction (0.92 / 0.30).
+ *     Object constancy, interrupt-retargeting, the zoom order channel,
+ *     reduced motion, and the WebGL1 / RGBA8-prescale fallback are all
+ *     unchanged: the split is a per-vertex routing decision inside one
+ *     frame, not a population or API change.
+ *     All numeric knobs are tokens.json `emphasis.*`,
+ *     `dot.opacity-*-classify-*`, and `density_tone_mapping.*` (tokens
+ *     are law, same as everywhere else in this file); see tokens.css
+ *     for the human-readable version.
  *
  * Tokens are law: every color, duration, easing curve, gamma, cap and
  * bloom radius is read from opts.tokens (parsed docs/design/tokens.json).
@@ -132,6 +157,10 @@ const BLOOM_GAIN = 0.5;      // bloom STRENGTH is an implementation constant
 const BLUR_TAPS = 5;         // symmetric 9-tap Gaussian (0..4 each side),
 const BLUR_SIGMA_TAPS = 2.0; //   sigma = 2 taps; tap spacing = radius/4 px,
                              //   so the kernel spans ±radius device px
+const REST_TIER_RES = 0.5;   // ground tier accumulates at half resolution
+                             // (reuses the bloom chain's halfW/halfH targets'
+                             // dimensions; ground needs no edge acuity and the
+                             // quarter fill cost pays for the second pass)
 const EASE_LUT_N = 1024;     // CPU easing LUT resolution (interrupt baking)
 const NEWTON_ITERS_JS = 8;   // CPU cubic-bezier solve (LUT build only)
 const FRAME_STAMPS = 4;      // ring buffer for frameCost() (3 intervals)
@@ -191,8 +220,20 @@ uniform float uDpr;
 uniform float uPulseWindow;
 uniform float uPulseSizeGain;
 uniform float uPulseColorEps;
+uniform float uPulseEnable;   // 1 unless the caller passed { pulse: false }
+uniform float uPulseLumGain;
+/* Tiered tone-map routing (header note #8): which tier THIS draw call
+ * accumulates. 0 = ground (rest + dead/expiring band, half-res target),
+ * 1 = active (story tier + any ground dot's live onset transient). */
+uniform float uTierPass;
+uniform float uSizeScale;     // 1.0 full-res target; REST_TIER_RES on ground
+uniform float uRestClassifyMax;
+uniform float uActiveClassifyMin;
+uniform float uRestDim;
+uniform float uActiveBoost;
 varying vec4 vColor;
-varying float vPulse;     // 0..1 envelope, consumed by FRAG_POINTS for the luminance half
+varying float vPulse;     // 0..1 envelope; also the pulse-map contribution
+varying float vEnergy;    // per-dot premultiplied energy scale for THIS pass
 
 /* Solve the CSS cubic-bezier timing function y(x) by Newton iteration.
  * 5 iterations from t=x keeps deviation from the CSS curve far below the
@@ -228,44 +269,66 @@ void main() {
    * delta size, so even a modest recolor gets the full change-blindness
    * countermeasure, not a partial one. */
   float colorDelta = length(aColB - aColA);
-  float changeMag = clamp(colorDelta / max(uPulseColorEps, 1e-4), 0.0, 1.0);
+  float changeMag = clamp(colorDelta / max(uPulseColorEps, 1e-4), 0.0, 1.0) * uPulseEnable;
   float pulseT = clamp(u / max(uPulseWindow, 1e-4), 0.0, 1.0);
   float envelope = sin(3.14159265 * pulseT); // 0 -> 1 -> 0 across [0, uPulseWindow], 0 after
   vPulse = changeMag * envelope;
 
+  /* Tier routing (header note #8). The ground pass takes every dot below
+   * the active threshold at its base energy. The active pass takes the
+   * story tier, PLUS any ground dot with a live onset pulse — but only
+   * its transient energy sliver, so the onset flashes above the ground
+   * ceiling and fades back into the ground continuously (no tier pop). */
+  float isActive = step(uActiveClassifyMin, c.a);
+  float pulsing = step(0.001, vPulse);
+  float inPass = uTierPass > 0.5 ? max(isActive, pulsing) : 1.0 - isActive;
+  if (inPass < 0.5) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);  // outside the clip volume: culled
+    gl_PointSize = 0.0;
+    vColor = vec4(0.0);
+    vPulse = 0.0;
+    vEnergy = 0.0;
+    return;
+  }
+  if (uTierPass > 0.5) {
+    vEnergy = isActive > 0.5
+      ? uActiveBoost * (1.0 + vPulse * uPulseLumGain)
+      : vPulse * uPulseLumGain;   // ground dot: onset transient sliver only
+    /* Onset flash tilts toward ink-hero white (same token as the energy
+     * gain): a saturated hue at the cap is channel-clamped, so an energy
+     * gain alone cannot brighten it — whitening is the only luminance
+     * headroom left, and a brief white-core flash is already the
+     * annotated-singleton grammar. Ground-pass base color never tilts. */
+    c.rgb = mix(c.rgb, vec3(1.0), vPulse * uPulseLumGain);
+  } else {
+    /* rest-tier dim below the classify ceiling; the dead/expiring band
+     * (uRestClassifyMax..uActiveClassifyMin) stays at 1.0x — FIX #1 (S8)
+     * audited that pair and this revision must not disturb it. */
+    vEnergy = c.a <= uRestClassifyMax ? uRestDim : 1.0;
+  }
+
   vec2 clip = (p / uRes) * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-  gl_PointSize = max(s * (1.0 + vPulse * uPulseSizeGain), 0.0) * uDpr;
+  gl_PointSize = max(s * (1.0 + vPulse * uPulseSizeGain), 0.0) * uDpr * uSizeScale;
   vColor = c;
 }`;
 
 const FRAG_POINTS = `
 precision mediump float;
 uniform float uPreScale;  // 1.0 on the float path; 1/32 on the RGBA8 path
-/* Resting-field-dim / active-subset-boost (engine.js header note #7 /
- * tokens.json emphasis.* + dot.opacity-*-classify-*): classifies THIS
- * fragment's energy contribution by its own current alpha, every frame,
- * independent of hue or which scene set it. The 0.42-0.90 alpha band
- * (state.dead / state.expiring) is intentionally left at 1.0x -- FIX #1
- * (S8) already audited that pair and this revision must not disturb it. */
-uniform float uRestDim;
-uniform float uActiveBoost;
-uniform float uRestClassifyMax;
-uniform float uActiveClassifyMin;
-uniform float uPulseLumGain;
 varying vec4 vColor;
 varying float vPulse;
+varying float vEnergy;    // tier/emphasis energy scale, decided per-vertex (note #7/#8)
 void main() {
   vec2 d = gl_PointCoord - vec2(0.5);
   float dist = length(d) * 2.0;
   float alpha = (1.0 - smoothstep(${DOT_EDGE_IN.toFixed(4)}, ${DOT_EDGE_OUT.toFixed(4)}, dist)) * vColor.a;
   if (alpha < ${ALPHA_DISCARD.toFixed(4)}) discard;
-  float emphasis = 1.0;
-  if (vColor.a <= uRestClassifyMax) emphasis = uRestDim;
-  else if (vColor.a >= uActiveClassifyMin) emphasis = uActiveBoost;
-  emphasis *= 1.0 + vPulse * uPulseLumGain;
-  /* premultiplied energy, summed additively (blend ONE, ONE) */
-  gl_FragColor = vec4(vColor.rgb, 1.0) * alpha * uPreScale * emphasis;
+  /* premultiplied energy, summed additively (blend ONE, ONE).
+   * rgb = tier-scaled light; a = pulse-presence map (meaningful in the
+   * ACTIVE pass, where FRAG_COMPRESS reads it to lift the luminance cap
+   * under an onset flash; the ground pass never reads its alpha). */
+  gl_FragColor = vec4(vColor.rgb * vEnergy, vPulse) * alpha * uPreScale;
 }`;
 
 const VERT_QUAD = `
@@ -277,10 +340,15 @@ void main() {
   gl_Position = vec4(aXY, 0.0, 1.0);
 }`;
 
-/* Tone-map stage 1 (contract §3.4): power-law compression of accumulated
- * luminance, then the luminance cap. Compression runs in the luminance
- * domain so chromaticity survives; the cap guarantees no cluster outshines
- * the annotated singleton (uLumCap is a fraction of ink-hero luminance). */
+/* Tone-map stage 1, ACTIVE tier (contract §3.4): power-law compression of
+ * accumulated luminance, then the luminance cap. Compression runs in the
+ * luminance domain so chromaticity survives; the cap guarantees no cluster
+ * outshines the annotated singleton (uLumCap is a fraction of ink-hero
+ * luminance) — EXCEPT under a live onset pulse (header note #7b): the
+ * accumulated pulse map lifts the cap toward 1.0 so a subset already
+ * sitting at the cap still flashes perceivably when it recolors. The map
+ * rides through to FRAG_COMPOSITE in the output alpha so the post-bloom
+ * re-cap honors the same lift. */
 const FRAG_COMPRESS = `
 precision mediump float;
 varying vec2 vUv;
@@ -290,11 +358,38 @@ uniform float uLumCap;      // tokens.density_tone_mapping["tile-luminance-cap"]
 uniform float uAccumScale;  // 1.0 float path; 32.0 RGBA8 pre-scale path
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 void main() {
+  vec4 t = texture2D(uTex, vUv);
+  vec3 c = t.rgb * uAccumScale;
+  float pulse = clamp(t.a * uAccumScale, 0.0, 1.0);
+  float y = dot(c, LUMA);
+  if (y <= 0.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, pulse); return; }
+  float cap = mix(uLumCap, 1.0, pulse);
+  float yc = min(pow(y, uGamma), cap);
+  gl_FragColor = vec4(c * (yc / y), pulse);
+}`;
+
+/* Tone-map stage 1, GROUND tier (header note #8): same gamma, then a
+ * Reinhard soft-knee to the rest ceiling instead of a hard min(). The
+ * asymptote guarantees composited ground luminance NEVER exceeds
+ * uRestLumCap (well below every story mark), while density ordering
+ * inside the ground stays monotone — a hard cap would flatten any mass
+ * past ~1 overlap into one plateau and kill the §3.4 density read. */
+const FRAG_COMPRESS_REST = `
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform float uGamma;        // tokens.density_tone_mapping.gamma (shared)
+uniform float uRestLumCap;   // tokens.density_tone_mapping["rest-luminance-cap"]
+uniform float uRestKnee;     // tokens.density_tone_mapping["rest-knee"]
+uniform float uAccumScale;
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+void main() {
   vec3 c = texture2D(uTex, vUv).rgb * uAccumScale;
   float y = dot(c, LUMA);
   if (y <= 0.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
-  float yc = min(pow(y, uGamma), uLumCap);
-  gl_FragColor = vec4(c * (yc / y), 1.0);
+  float yc = pow(y, uGamma);
+  float yr = uRestLumCap * yc / (yc + uRestKnee);
+  gl_FragColor = vec4(c * (yr / y), 1.0);
 }`;
 
 /* Separable Gaussian blur at half resolution. uStep is one tap spacing in
@@ -314,21 +409,32 @@ void main() {
   gl_FragColor = vec4(acc, 1.0);
 }`;
 
-/* Tone-map stage 2: fixed-radius bloom add, cap re-applied, composite over
- * bg-canvas (the canvas is opaque; the shader IS the compositor). */
+/* Tone-map stage 2: fixed-radius bloom add (active tier only), cap
+ * re-applied (with the pulse lift preserved), then the GROUND layer
+ * composited UNDER the active layer, all over bg-canvas (the canvas is
+ * opaque; the shader IS the compositor). Ground-under-active: the ground's
+ * light is occluded in proportion to the active layer's share of the
+ * luminance budget, so a bright story mark keeps its own hue instead of
+ * gaining the field tint, and total luminance never exceeds the (lifted)
+ * cap: y_total <= cap*s + restCap*(1-s) <= cap. */
 const FRAG_COMPOSITE = `
 precision mediump float;
 varying vec2 vUv;
-uniform sampler2D uScene;
-uniform sampler2D uBloom;
+uniform sampler2D uScene;   // active tier: rgb light + pulse map in alpha
+uniform sampler2D uBloom;   // blurred active tier
+uniform sampler2D uRest;    // ground tier (half-res, already rest-capped)
 uniform vec3 uBg;           // tokens.colors["bg-canvas"].rgba
 uniform float uLumCap;
 uniform float uBloomGain;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 void main() {
-  vec3 light = texture2D(uScene, vUv).rgb + texture2D(uBloom, vUv).rgb * uBloomGain;
+  vec4 act = texture2D(uScene, vUv);
+  vec3 light = act.rgb + texture2D(uBloom, vUv).rgb * uBloomGain;
+  float cap = mix(uLumCap, 1.0, act.a);   // preserve the onset flash (note #7b)
   float y = dot(light, LUMA);
-  if (y > uLumCap) light *= uLumCap / y;
+  if (y > cap) { light *= cap / y; y = cap; }
+  float occlusion = 1.0 - clamp(y / uLumCap, 0.0, 1.0);
+  light += texture2D(uRest, vUv).rgb * occlusion;
   gl_FragColor = vec4(uBg + light, 1.0);
 }`;
 
@@ -410,6 +516,9 @@ export function createEngine(canvas, opts = {}) {
   const PULSE_SIZE_GAIN = emphasis['pulse-size-gain'];
   const PULSE_LUM_GAIN = emphasis['pulse-luminance-gain'];
   const PULSE_COLOR_EPS = emphasis['pulse-color-epsilon'];
+  // Tiered tone-map (header note #8): the ground tier's composite ceiling.
+  const REST_LUM_CAP = density['rest-luminance-cap'];
+  const REST_KNEE = density['rest-knee'];
   for (const [name, v] of [
     ['dot.opacity-rest-classify-max', REST_CLASSIFY_MAX],
     ['dot.opacity-active-classify-min', ACTIVE_CLASSIFY_MIN],
@@ -419,6 +528,8 @@ export function createEngine(canvas, opts = {}) {
     ['emphasis.pulse-size-gain', PULSE_SIZE_GAIN],
     ['emphasis.pulse-luminance-gain', PULSE_LUM_GAIN],
     ['emphasis.pulse-color-epsilon', PULSE_COLOR_EPS],
+    ['density_tone_mapping.rest-luminance-cap', REST_LUM_CAP],
+    ['density_tone_mapping.rest-knee', REST_KNEE],
   ]) {
     if (typeof v !== 'number' || !isFinite(v)) {
       throw new Error(`[rt-engine] tokens.json missing/invalid numeric token: ${name}`);
@@ -526,6 +637,8 @@ export function createEngine(canvas, opts = {}) {
   let activeOrder = staggerHash;    // CPU view of the bound order channel
   let customOrderRef = null;        // caller's emitOrder array, if bound
   let anim = null;                  // { start, duration, onDone }
+  let pulseEnabled = true;          // onset pulse: ON by default per transition
+                                    // (header note #7b); { pulse: false } opts out
   let fade = null;                  // reduced-motion crossfade { start, dur, onDone }
   let scrubPair = null;             // { a, b } caller state refs (reduced snap)
   let reducedSnap = -1;             // which end of scrubPair is applied (0|1)
@@ -544,9 +657,9 @@ export function createEngine(canvas, opts = {}) {
   let lastCpuMs = 0;
 
   /* ---- GL objects (built by initGL; rebuilt on context restore) ---- */
-  let progPoint, progCompress, progBlur, progComposite, progPresent;
+  let progPoint, progCompress, progCompressRest, progBlur, progComposite, progPresent;
   let buf = null;                   // posA/posB/colA/colB/sizeA/sizeB/orderHash/orderCustom/quad
-  let tex = null;                   // accum/scene/halfA/halfB/frame/capture[2]
+  let tex = null;                   // accum/accumRest/scene/sceneRest/halfA/halfB/frame/capture[2]
   let fbo = null;
   let capIdx = 0;
   let accumFormat = null;           // 'rgba16f' | 'half-float' | 'rgba8-prescale'
@@ -572,8 +685,8 @@ export function createEngine(canvas, opts = {}) {
     return tx;
   }
 
-  function specAccum(w, h) {
-    gl.bindTexture(gl.TEXTURE_2D, tex.accum);
+  function specAccum(tx, w, h) {
+    gl.bindTexture(gl.TEXTURE_2D, tx);
     if (accumFormat === 'rgba16f') {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
     } else if (accumFormat === 'half-float') {
@@ -600,16 +713,26 @@ export function createEngine(canvas, opts = {}) {
   }
 
   /* Pick the accumulation format: float16 render target where available,
-   * RGBA8 pre-scale as the documented high-headroom fallback (§3.4). */
+   * RGBA8 pre-scale as the documented high-headroom fallback (§3.4).
+   * Both accumulation targets (active full-res, ground half-res — header
+   * note #8) share one format; completeness is checked on both. */
+  function accumPairComplete() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accum);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.accum, 0);
+    if (!fboComplete()) return false;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accumRest);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.accumRest, 0);
+    return fboComplete();
+  }
   function chooseAccumFormat() {
     tex.halfFloatType = null;
     if (mode === 'webgl2' && gl.getExtension('EXT_color_buffer_float')) {
       accumFormat = 'rgba16f';
-      gl.bindTexture(gl.TEXTURE_2D, tex.accum);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 4, 4, 0, gl.RGBA, gl.HALF_FLOAT, null);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accum);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.accum, 0);
-      if (fboComplete()) { preScale = 1; accumScale = 1; return; }
+      for (const tx of [tex.accum, tex.accumRest]) {
+        gl.bindTexture(gl.TEXTURE_2D, tx);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 4, 4, 0, gl.RGBA, gl.HALF_FLOAT, null);
+      }
+      if (accumPairComplete()) { preScale = 1; accumScale = 1; return; }
     }
     if (mode === 'webgl1') {
       const ext = gl.getExtension('OES_texture_half_float');
@@ -617,20 +740,19 @@ export function createEngine(canvas, opts = {}) {
       if (ext) {
         accumFormat = 'half-float';
         tex.halfFloatType = ext.HALF_FLOAT_OES;
-        gl.bindTexture(gl.TEXTURE_2D, tex.accum);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, ext.HALF_FLOAT_OES, null);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accum);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.accum, 0);
-        if (fboComplete()) { preScale = 1; accumScale = 1; return; }
+        for (const tx of [tex.accum, tex.accumRest]) {
+          gl.bindTexture(gl.TEXTURE_2D, tx);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 4, 4, 0, gl.RGBA, ext.HALF_FLOAT_OES, null);
+        }
+        if (accumPairComplete()) { preScale = 1; accumScale = 1; return; }
       }
     }
     accumFormat = 'rgba8-prescale';
     preScale = 1 / PRESCALE_HEADROOM;
     accumScale = PRESCALE_HEADROOM;
     specRgba8(tex.accum, 4, 4);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accum);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex.accum, 0);
-    if (!fboComplete()) throw new Error('[rt-engine] no renderable accumulation format');
+    specRgba8(tex.accumRest, 4, 4);
+    if (!accumPairComplete()) throw new Error('[rt-engine] no renderable accumulation format');
   }
 
   function initGL() {
@@ -639,15 +761,19 @@ export function createEngine(canvas, opts = {}) {
     };
     progPoint.u = uniforms(gl, progPoint.p,
       ['uT', 'uStagger', 'uE1', 'uE2', 'uRes', 'uDpr', 'uPreScale',
-       'uPulseWindow', 'uPulseSizeGain', 'uPulseColorEps',
+       'uPulseWindow', 'uPulseSizeGain', 'uPulseColorEps', 'uPulseEnable',
+       'uTierPass', 'uSizeScale',
        'uRestDim', 'uActiveBoost', 'uRestClassifyMax', 'uActiveClassifyMin', 'uPulseLumGain']);
     progCompress = { p: link(gl, VERT_QUAD, FRAG_COMPRESS, ['aXY']) };
     progCompress.u = uniforms(gl, progCompress.p, ['uTex', 'uGamma', 'uLumCap', 'uAccumScale']);
+    progCompressRest = { p: link(gl, VERT_QUAD, FRAG_COMPRESS_REST, ['aXY']) };
+    progCompressRest.u = uniforms(gl, progCompressRest.p,
+      ['uTex', 'uGamma', 'uRestLumCap', 'uRestKnee', 'uAccumScale']);
     progBlur = { p: link(gl, VERT_QUAD, FRAG_BLUR, ['aXY']) };
     progBlur.u = uniforms(gl, progBlur.p, ['uTex', 'uStep', 'uW[0]']);
     progComposite = { p: link(gl, VERT_QUAD, FRAG_COMPOSITE, ['aXY']) };
     progComposite.u = uniforms(gl, progComposite.p,
-      ['uScene', 'uBloom', 'uBg', 'uLumCap', 'uBloomGain']);
+      ['uScene', 'uBloom', 'uRest', 'uBg', 'uLumCap', 'uBloomGain']);
     progPresent = { p: link(gl, VERT_QUAD, FRAG_PRESENT, ['aXY']) };
     progPresent.u = uniforms(gl, progPresent.p, ['uFrame', 'uPrev', 'uFade']);
 
@@ -665,7 +791,9 @@ export function createEngine(canvas, opts = {}) {
 
     tex = {
       accum: makeTexture(gl.NEAREST),
+      accumRest: makeTexture(gl.NEAREST),  // ground tier, half-res (note #8)
       scene: makeTexture(gl.LINEAR),
+      sceneRest: makeTexture(gl.LINEAR),   // rest-capped ground, half-res
       halfA: makeTexture(gl.LINEAR),
       halfB: makeTexture(gl.LINEAR),
       frame: makeTexture(gl.LINEAR),
@@ -674,7 +802,9 @@ export function createEngine(canvas, opts = {}) {
     };
     fbo = {
       accum: makeFbo(tex.accum),
+      accumRest: makeFbo(tex.accumRest),
       scene: makeFbo(tex.scene),
+      sceneRest: makeFbo(tex.sceneRest),
       halfA: makeFbo(tex.halfA),
       halfB: makeFbo(tex.halfB),
       frame: makeFbo(tex.frame),
@@ -850,12 +980,10 @@ export function createEngine(canvas, opts = {}) {
   function drawFrame(fadeT) {
     const start = performance.now();
 
-    /* Pass 1 — accumulation: all N dots, additive premultiplied energy. */
+    /* Passes 1a/1b — tiered accumulation (header note #8): every dot is
+     * routed per-vertex into exactly one tier per pass; energy still sums
+     * additively (blend ONE, ONE) inside each tier. */
     gl.useProgram(progPoint.p);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accum);
-    gl.viewport(0, 0, devW, devH);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
     bindPointAttribs();
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
@@ -871,11 +999,28 @@ export function createEngine(canvas, opts = {}) {
     gl.uniform1f(progPoint.u.uPulseWindow, PULSE_WINDOW);
     gl.uniform1f(progPoint.u.uPulseSizeGain, PULSE_SIZE_GAIN);
     gl.uniform1f(progPoint.u.uPulseColorEps, PULSE_COLOR_EPS);
+    gl.uniform1f(progPoint.u.uPulseEnable, pulseEnabled ? 1 : 0);
     gl.uniform1f(progPoint.u.uRestDim, REST_DIM);
     gl.uniform1f(progPoint.u.uActiveBoost, ACTIVE_BOOST);
     gl.uniform1f(progPoint.u.uRestClassifyMax, REST_CLASSIFY_MAX);
     gl.uniform1f(progPoint.u.uActiveClassifyMin, ACTIVE_CLASSIFY_MIN);
     gl.uniform1f(progPoint.u.uPulseLumGain, PULSE_LUM_GAIN);
+
+    /* 1a — GROUND tier into the half-res target. */
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accumRest);
+    gl.viewport(0, 0, halfW, halfH);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1f(progPoint.u.uTierPass, 0);
+    gl.uniform1f(progPoint.u.uSizeScale, REST_TIER_RES);
+    gl.drawArrays(gl.POINTS, 0, N);
+
+    /* 1b — ACTIVE tier (story dots + live onset transients) at full res. */
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.accum);
+    gl.viewport(0, 0, devW, devH);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1f(progPoint.u.uTierPass, 1);
+    gl.uniform1f(progPoint.u.uSizeScale, 1);
     gl.drawArrays(gl.POINTS, 0, N);
     gl.disable(gl.BLEND);
 
@@ -883,7 +1028,18 @@ export function createEngine(canvas, opts = {}) {
     const bloomR = dpr <= 1.5 ? BLOOM_1X : BLOOM_2X;   // device px, FIXED
     const tap = bloomR / (BLUR_TAPS - 1);              // tap spacing, device px
 
-    /* Pass 2 — gamma compression + luminance cap. */
+    /* Pass 2a — GROUND tone-map: gamma + Reinhard soft-knee to the rest
+     * ceiling; the composited ground can never exceed rest-luminance-cap. */
+    runQuad(progCompressRest, fbo.sceneRest, halfW, halfH, () => {
+      bindTex(0, tex.accumRest);
+      gl.uniform1i(progCompressRest.u.uTex, 0);
+      gl.uniform1f(progCompressRest.u.uGamma, GAMMA);
+      gl.uniform1f(progCompressRest.u.uRestLumCap, REST_LUM_CAP);
+      gl.uniform1f(progCompressRest.u.uRestKnee, REST_KNEE);
+      gl.uniform1f(progCompressRest.u.uAccumScale, accumScale);
+    });
+
+    /* Pass 2b — ACTIVE tone-map: gamma + luminance cap (pulse map lifts). */
     runQuad(progCompress, fbo.scene, devW, devH, () => {
       bindTex(0, tex.accum);
       gl.uniform1i(progCompress.u.uTex, 0);
@@ -892,7 +1048,8 @@ export function createEngine(canvas, opts = {}) {
       gl.uniform1f(progCompress.u.uAccumScale, accumScale);
     });
 
-    /* Passes 3+4 — fixed-radius separable bloom at half resolution. */
+    /* Passes 3+4 — fixed-radius separable bloom at half resolution,
+     * fed by the ACTIVE tier only (story-mark glow; ground never blooms). */
     runQuad(progBlur, fbo.halfA, halfW, halfH, () => {
       bindTex(0, tex.scene);
       gl.uniform1i(progBlur.u.uTex, 0);
@@ -906,12 +1063,15 @@ export function createEngine(canvas, opts = {}) {
       gl.uniform1fv(progBlur.u['uW[0]'], blurW);
     });
 
-    /* Pass 5 — composite over bg-canvas (cap re-applied post-bloom). */
+    /* Pass 5 — composite over bg-canvas: active (cap re-applied post-
+     * bloom, pulse lift preserved), then ground UNDER active. */
     runQuad(progComposite, fbo.frame, devW, devH, () => {
       bindTex(0, tex.scene);
       bindTex(1, tex.halfB);
+      bindTex(2, tex.sceneRest);
       gl.uniform1i(progComposite.u.uScene, 0);
       gl.uniform1i(progComposite.u.uBloom, 1);
+      gl.uniform1i(progComposite.u.uRest, 2);
       gl.uniform3f(progComposite.u.uBg, BG[0], BG[1], BG[2]);
       gl.uniform1f(progComposite.u.uLumCap, LUM_CAP);
       gl.uniform1f(progComposite.u.uBloomGain, BLOOM_GAIN);
@@ -1016,8 +1176,10 @@ export function createEngine(canvas, opts = {}) {
     canvas.height = devH;
     canvas.style.width = cssW + 'px';
     canvas.style.height = cssH + 'px';
-    specAccum(devW, devH);
+    specAccum(tex.accum, devW, devH);
+    specAccum(tex.accumRest, halfW, halfH);   // ground tier at half res (note #8)
     specRgba8(tex.scene, devW, devH);
+    specRgba8(tex.sceneRest, halfW, halfH);
     specRgba8(tex.frame, devW, devH);
     specRgba8(tex.capture[0], devW, devH);
     specRgba8(tex.capture[1], devW, devH);
@@ -1046,7 +1208,11 @@ export function createEngine(canvas, opts = {}) {
       applyInstant(state);
     },
 
-    /** Animated A->B; INTERRUPT RETARGETS from current interpolated values. */
+    /** Animated A->B; INTERRUPT RETARGETS from current interpolated values.
+     * Onset pulse (header note #7b) is ON by default: any dot whose color
+     * actually changes in this transition fires a brief size+luminance
+     * transient, so color-only tweens (recolor beats) are perceivable by
+     * construction. Pass { pulse: false } to opt a transition out. */
     tween(state, o = {}) {
       if (destroyed) return;
       validateState(state);
@@ -1073,6 +1239,7 @@ export function createEngine(canvas, opts = {}) {
       upload('A');
       upload('B');
       setOrder(o.emitOrder || null);
+      pulseEnabled = o.pulse !== false; // onset pulse on by default (note #7b)
       stag = o.stagger !== undefined ? o.stagger : STAGGER_DEFAULT;
       easeName = o.easing && EASE[o.easing] ? o.easing : 'ease.move';
       easeLut = lutFor(easeName);
@@ -1110,6 +1277,7 @@ export function createEngine(canvas, opts = {}) {
       upload('A');
       upload('B');
       setOrder(o.emitOrder || null);
+      pulseEnabled = o.pulse !== false; // onset pulse on by default (note #7b)
       stag = o.stagger !== undefined ? o.stagger : 0;
       easeName = o.easing && EASE[o.easing] ? o.easing : 'linear';
       easeLut = lutFor(easeName);
@@ -1216,13 +1384,13 @@ export function createEngine(canvas, opts = {}) {
       canvas.removeEventListener('webglcontextrestored', onRestored, false);
       if (!contextLost) {
         for (const k of Object.keys(buf)) gl.deleteBuffer(buf[k]);
-        for (const k of ['accum', 'scene', 'halfA', 'halfB', 'frame']) gl.deleteTexture(tex[k]);
+        for (const k of ['accum', 'accumRest', 'scene', 'sceneRest', 'halfA', 'halfB', 'frame']) gl.deleteTexture(tex[k]);
         gl.deleteTexture(tex.capture[0]);
         gl.deleteTexture(tex.capture[1]);
-        for (const k of ['accum', 'scene', 'halfA', 'halfB', 'frame']) gl.deleteFramebuffer(fbo[k]);
+        for (const k of ['accum', 'accumRest', 'scene', 'sceneRest', 'halfA', 'halfB', 'frame']) gl.deleteFramebuffer(fbo[k]);
         gl.deleteFramebuffer(fbo.capture[0]);
         gl.deleteFramebuffer(fbo.capture[1]);
-        for (const p of [progPoint, progCompress, progBlur, progComposite, progPresent]) {
+        for (const p of [progPoint, progCompress, progCompressRest, progBlur, progComposite, progPresent]) {
           gl.deleteProgram(p.p);
         }
       }

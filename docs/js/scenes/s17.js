@@ -68,7 +68,13 @@ export default {
 
     for (let i = 0; i < N; i++) {
       state.x[i] = timeX(new Date(t0 + pop.birth_ts[i] * 1000));
-      state.y[i] = view.H * (0.15 + 0.65 * hash01(i * 5 + 2));
+      // Wider vertical spread (Gate-4 visual-story review, s15/s17/s18
+      // shared finding: real trade volume skews hard toward the
+      // tournament's final weeks, so the quiet field's x already piles up
+      // in a few pixels near the right edge regardless of y; y carries no
+      // claim, so widening it lowers local overlap density ahead of the
+      // engine's rest-tier cap without changing what any dot means).
+      state.y[i] = view.H * (0.08 + 0.84 * hash01(i * 5 + 2));
       state.color[i * 4] = quiet[0]; state.color[i * 4 + 1] = quiet[1];
       state.color[i * 4 + 2] = quiet[2]; state.color[i * 4 + 3] = quiet[3];
       state.size[i] = view.tokens.dot['radius-base-px'];
@@ -76,15 +82,22 @@ export default {
 
     // The final's own contracts pour into the underline beneath the hero
     // number (storyboard S17 Units: "they arrange into the price figure's
-    // underline"). "60% amber" per design-system.md §9 S17 — colorOf()
-    // accepts an explicit alpha override (shared.js), sanctioned by that
-    // design note rather than an invented literal.
-    // ENCODING (perception-brief §9b): 0.6 lands intentionally in the
-    // unclassified 0.42-0.90 band — the underline is a ceremonial glyph, not a
-    // mover, so it neither boosts (active-tier) nor recedes (rest-tier); it
-    // reads as steady amber against the quiet 0.25 field, which the engine
-    // dims. "Nothing moves last except the population settling" (design §9 S17).
-    const amber = view.color('accent-annotation', 0.6);
+    // underline"). colorOf() accepts an explicit alpha override
+    // (shared.js), sanctioned by design note rather than an invented
+    // literal.
+    // ENCODING (perception-brief §9b; design-revision-spec CR-16): 0.45
+    // lands intentionally in the unclassified 0.42-0.90 band — the
+    // underline is a ceremonial glyph, not a mover, so it neither boosts
+    // (active-tier) nor recedes (rest-tier); it reads as steady amber
+    // against the quiet 0.25 field, which the engine dims. Lowered from the
+    // design system's original 0.6 (CR-16): the devig line and this
+    // underline are one composed amber unit, and at 0.6 a dense underline
+    // cluster can rival the hero number's white for first-glance salience
+    // in the piece's most-shared frame; 0.45 keeps the hierarchy monotonic
+    // (white > amber) without dropping the underline out of the amber
+    // family. "Nothing moves last except the population settling" (design
+    // system §9 S17).
+    const amber = view.color('accent-annotation', 0.45);
     const underlineY = view.H * 0.62;
     const spread = Math.min(view.W * 0.4, Math.max(120, finalIdx.length * 3));
     const cx = view.W / 2;

@@ -116,7 +116,24 @@ function layout(data, view) {
   // boosting the amber tail (alpha 0.9 = active-classify-min)
   // (research/revision/perception-brief.md §9b, §10.1); matches this scene's
   // own S16 curve anchor, which already dims to dimmed-field-min.
-  const restRgba = view.state('dimmed-field-min');
+  // Fresh blind review (s14 critical #1, perception-brief §4/§9b): b1-t0
+  // read as an undifferentiated bright snow field. An earlier version of
+  // this fix tried an extra instant pre-tween (a second engine.tween()
+  // call fired synchronously ahead of the beat's own resort) to snap the
+  // field dim before the condensation starts; re-capture testing showed
+  // that back-to-back tween() pair intermittently left the population
+  // stuck at the pre-tween state (a new, previously-unexercised call
+  // pattern -- no other scene fires engine.tween() from inside overlay()'s
+  // synchronous top-level body). Reverted as too risky for a bounded pass.
+  // What stays: the resting field's alpha, pushed below dimmed-field-min
+  // (0.25) to 0.15, the same escalation s01 used for the identical P1
+  // failure mode ("un-keyed near-white column... drop the in-zoom field to
+  // 0.10 alpha," docs/js/scenes/s01.js) -- a same-call-path, zero-risk
+  // change that measurably dims the settled/mid reading. It does not fully
+  // solve the t0 residue from whatever the previous scene left on screen
+  // (that needs the piece-wide Tier 0.1 engine cap, already deferred to
+  // the author per research/design-review/visual-story-review.md).
+  const restRgba = view.color('field-rest', 0.15);
   const neutral = view.color('neutral-data', 0.6);
   const tail = view.color('accent-annotation', 0.9);
   const tailBit = data.flagBit('LORENZ_TAIL');
@@ -251,6 +268,19 @@ function overlay(container, data, view, scalesObj) {
   // outline-only (design-revision-spec per-scene S14 #1): `side.no` means
   // "no buyer" everywhere else in the piece, so painting these markers
   // orange actively misreads as "NO money" here.
+  // Ghost of the count-weighted curve on the MAIN chart (major #3: the
+  // dollar reweighting needs a visible before/after here, not only in the
+  // corner inset). Appended before markerPath so it always paints
+  // underneath the live line; hidden until the toggle actually leaves
+  // 'markets'.
+  const mainGhost = g.append('path')
+    .attr('class', 's14-marker-ghost')
+    .style('fill', 'none')
+    .style('stroke', view.css('ink-low'))
+    .style('stroke-width', 1.5)
+    .style('stroke-dasharray', '4,3')
+    .style('opacity', 0);
+
   const markerPath = g.append('path')
     .attr('class', 's14-marker-path')
     .style('fill', 'none')
@@ -258,14 +288,63 @@ function overlay(container, data, view, scalesObj) {
     .style('stroke-width', 2);
   const markerDots = g.append('g').attr('class', 's14-marker-dots');
 
+  // Mode label (major #3: the reweighting previously read as an
+  // unexplained re-draw -- nothing on screen said the chart had changed
+  // what it was counting). Sits in the chart's own clear top-left corner
+  // and re-fires its onset transition on every real change, per the
+  // change-blindness countermeasure in perception-brief §7.
+  const modeLabel = g.append('text')
+    .attr('class', 's14-mode-label')
+    .attr('x', view.region.x + 4)
+    .attr('y', view.region.y - 8)
+    .style('font-family', view.css('font-apparatus'))
+    .style('font-size', view.css('type-caption-size'))
+    .style('font-weight', 600)
+    .style('fill', view.css('ink-hi'))
+    .text('weighted by: count of markets, equally');
+
   const line = d3.line().x((d) => x(d.px)).y((d) => y(d.py)).curve(d3.curveMonotoneX);
+
+  // Visual weight proportional to sample size (Gate-4 visual-story review,
+  // s14: "eye lands on noisy small-sample oscillation"): a bucket built
+  // from a handful of markets should not read with the same weight as one
+  // built from thousands. Radius only -- never position or color -- so this
+  // never invents a number, it just sizes the mark by one already-loaded
+  // real field (bucket.n_markets). A second scale, keyed to the bucket's
+  // own dollar volume, does the same job for the dollars-weighted reading
+  // (major #3: the loud high-price wiggle must visibly belong to
+  // near-zero dollar weight, or it reads as "the market got worse"
+  // instead of "that bucket barely traded").
+  const markerRadiusScale = d3.scaleSqrt()
+    .domain([0, d3.max(buckets, (b) => b.n_markets || 0) || 1])
+    .range([2, 6]).clamp(true);
+  const dollarRadiusScale = d3.scaleSqrt()
+    .domain([0, d3.max(buckets, (b) => b.total_volume || 0) || 1])
+    .range([1.5, 7]).clamp(true);
 
   function markerData(weighting) {
     return buckets.map((b) => ({
       px: weighting === 'dollars' && b.vol_weighted_price_c !== undefined ? b.vol_weighted_price_c : b.mean_price_c,
       py: weighting === 'dollars' && b.vol_weighted_win_rate_pct !== undefined ? b.vol_weighted_win_rate_pct : b.win_rate_pct,
       label: b.label || b.bucket,
+      n: b.n_markets || 0,
+      vol: b.total_volume || 0,
+      cheap: b.hi_c <= 10,
     }));
+  }
+
+  function radiusFor(weighting, dd) {
+    return weighting === 'dollars' ? dollarRadiusScale(dd.vol) : markerRadiusScale(dd.n);
+  }
+
+  // Amber singleton protocol (major #5): the penny-ticket buckets (1-10c,
+  // the chip's own "amber = the overpriced penny tickets" row) are the
+  // ONLY filled-amber markers; every other bucket is a solid pale fill
+  // matching the chip's "pale = money at each price level" row. Filled,
+  // not hollow, so the particle cloud underneath can no longer bleed
+  // through an empty circle and read as a curve-wide diluted yellow cast.
+  function fillFor(dd) {
+    return dd.cheap ? view.css('accent-annotation') : view.css('neutral-data');
   }
 
   function drawMarkers(weighting, animate) {
@@ -275,14 +354,132 @@ function overlay(container, data, view, scalesObj) {
     else sel.attr('d', line);
 
     const dots = markerDots.selectAll('circle').data(d);
-    dots.enter().append('circle').attr('r', 3.5)
-      .style('fill', 'none')
-      .style('stroke', view.css('ink-hi'))
-      .style('stroke-width', 1.5)
+    dots.enter().append('circle').attr('r', (dd) => radiusFor(weighting, dd))
+      .style('fill', fillFor)
+      .style('stroke', view.css('bg-canvas'))
+      .style('stroke-width', 1)
       .merge(dots)
+      .style('fill', fillFor)
       .transition().duration(animate ? view.tokens.motion.durations_ms['overlay-draw-in'] : 0)
+      .attr('r', (dd) => radiusFor(weighting, dd))
       .attr('cx', (dd) => x(dd.px)).attr('cy', (dd) => y(dd.py));
     dots.exit().remove();
+  }
+
+  function drawMainGhost(weighting) {
+    const dur = view.tokens.motion.durations_ms['overlay-draw-in'];
+    if (weighting === 'dollars') {
+      mainGhost.datum(markerData('markets')).attr('d', line)
+        .transition().duration(dur).style('opacity', 0.6);
+    } else {
+      mainGhost.transition().duration(dur).style('opacity', 0);
+    }
+  }
+
+  // RESHAPE: inset 0-10c magnifier (design-revision-spec ask: "an inset
+  // 0-10c magnifier panel for the penny-ticket story"). The main axes span
+  // the whole 0-100c domain, so the penny-ticket gap -- implied ~2-7c,
+  // realized a fraction of a percent -- is a 2-3px sliver against the
+  // origin. This re-plots the SAME two bucket rows (1-5c, 5-10c; no new
+  // numbers) at a zoomed scale in the chart's one empty corner (high-price
+  // buckets sit near the top-right at 70-99% realized; the bottom-right,
+  // high-price/low-realized corner is empty in this data, per the loaded
+  // buckets, so the inset covers no real mark).
+  const cheapBuckets = buckets.filter((b) => b.hi_c <= 10).sort((a, b) => a.lo_c - b.lo_c);
+  // Defensive default (this file's established pattern, e.g. s10's "degrades
+  // to an empty line"): if the cheap buckets are absent, the toggle/beat
+  // calls below still have something to call.
+  let drawInset = () => {};
+  if (cheapBuckets.length) {
+    const insetW = 190;
+    const insetH = 130;
+    const insetPad = 30;
+    const insetX0 = view.region.x + view.region.w - insetW - 8;
+    const insetY0 = view.region.y + view.region.h - insetH - 8;
+    const insetMax = 10;
+
+    const insetG = g.append('g').attr('class', 's14-inset');
+    insetG.append('rect')
+      .attr('x', insetX0).attr('y', insetY0)
+      .attr('width', insetW).attr('height', insetH)
+      .style('fill', view.css('bg-card'))
+      .style('fill-opacity', 0.88)
+      .style('stroke', view.css('ink-low'))
+      .style('stroke-dasharray', '2,3')
+      .style('stroke-opacity', 0.6)
+      .style('stroke-width', 1);
+    insetG.append('text')
+      .attr('x', insetX0 + 10).attr('y', insetY0 + 16)
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-micro-size'))
+      .style('fill', view.css('ink-mid'))
+      .text('0 to 10 cents, magnified');
+
+    const ix = d3.scaleLinear().domain([0, insetMax]).range([insetX0 + insetPad, insetX0 + insetW - 14]);
+    const iy = d3.scaleLinear().domain([0, insetMax]).range([insetY0 + insetH - 18, insetY0 + 30]);
+
+    insetG.append('g')
+      .attr('transform', `translate(0, ${insetY0 + insetH - 18})`)
+      .call(d3.axisBottom(ix).ticks(2).tickFormat((d) => `${d}c`))
+      .call((sel) => sel.selectAll('text').style('font-size', '9px').style('fill', view.css('ink-low')).style('font-family', view.css('font-apparatus')))
+      .call((sel) => sel.selectAll('line, path').style('stroke', view.css('ink-low')));
+    insetG.append('g')
+      .attr('transform', `translate(${insetX0 + insetPad}, 0)`)
+      .call(d3.axisLeft(iy).ticks(2).tickFormat((d) => `${d}%`))
+      .call((sel) => sel.selectAll('text').style('font-size', '9px').style('fill', view.css('ink-low')).style('font-family', view.css('font-apparatus')))
+      .call((sel) => sel.selectAll('line, path').style('stroke', view.css('ink-low')));
+
+    // The same "perfectly priced" promise, at this zoom.
+    insetG.append('line')
+      .attr('x1', ix(0)).attr('y1', iy(0)).attr('x2', ix(insetMax)).attr('y2', iy(insetMax))
+      .style('stroke', view.css('ink-hero')).style('stroke-width', 1).style('opacity', 0.5);
+
+    // A matching dashed bracket on the MAIN chart marks exactly the region
+    // this inset zooms into -- same corner, same dash style -- so the two
+    // panels read as one shape at two scales without a leader line crossing
+    // the whole chart.
+    g.append('rect')
+      .attr('x', x(0)).attr('y', y(insetMax))
+      .attr('width', x(insetMax) - x(0)).attr('height', y(0) - y(insetMax))
+      .style('fill', 'none').style('stroke', view.css('ink-low'))
+      .style('stroke-dasharray', '2,3').style('stroke-width', 1).style('opacity', 0.5);
+
+    const insetLineGen = d3.line().x((d) => ix(d.px)).y((d) => iy(d.py)).curve(d3.curveMonotoneX);
+
+    // Ghost: the market-weighted (count-every-market-equally) reading
+    // always shows underneath, dashed and dim, so the inset carries the
+    // "same tickets, different weighting" comparison on its own, without
+    // asking the reader to remember the earlier frame.
+    const insetGhost = insetG.append('path').attr('class', 's14-inset-ghost')
+      .style('fill', 'none').style('stroke', view.css('ink-low'))
+      .style('stroke-width', 1.5).style('stroke-dasharray', '3,2').style('opacity', 0.85);
+    const insetLive = insetG.append('path').attr('class', 's14-inset-live')
+      .style('fill', 'none').style('stroke', view.css('ink-hi')).style('stroke-width', 2);
+    const insetLiveDots = insetG.append('g').attr('class', 's14-inset-live-dots');
+    const insetPointLabel = insetG.append('text')
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', '10px')
+      .style('fill', view.css('ink-hi'));
+
+    drawInset = function drawInset(weighting) {
+      const insetPointsFor = (w) => cheapBuckets.map((b) => ({
+        px: w === 'dollars' && b.vol_weighted_price_c !== undefined ? b.vol_weighted_price_c : b.mean_price_c,
+        py: w === 'dollars' && b.vol_weighted_win_rate_pct !== undefined ? b.vol_weighted_win_rate_pct : b.win_rate_pct,
+      }));
+      insetGhost.attr('d', insetLineGen(insetPointsFor('markets')));
+      const live = insetPointsFor(weighting);
+      insetLive.attr('d', insetLineGen(live));
+      const dots = insetLiveDots.selectAll('circle').data(live);
+      dots.enter().append('circle').attr('r', 2.5).style('fill', view.css('ink-hi'))
+        .merge(dots).attr('cx', (d) => ix(d.px)).attr('cy', (d) => iy(d.py));
+      dots.exit().remove();
+      const worst = live[0]; // 1-5c: the deepest part of the sag
+      if (worst) {
+        insetPointLabel
+          .attr('x', ix(worst.px) + 7).attr('y', iy(worst.py) - 6)
+          .text(`paid ${worst.py.toFixed(1)}%`);
+      }
+    };
   }
 
   // Ladder-attribution caption (72% / 55%), one two-line ink-mid block
@@ -314,9 +511,17 @@ function overlay(container, data, view, scalesObj) {
 
   // 90-95c callout: the amber singleton protocol (halo core ring), an
   // overlay-only highlight independent of the current toggle weighting.
+  // Major #4: this used to fire from inside setWeighting(), so it appeared
+  // one beat early (during b3's reweighting, competing with that beat's
+  // own change) and left b4 with nothing new to show. `calloutUnlocked`
+  // gates the first real appearance to b4-t0; once unlocked, later toggle
+  // clicks still reposition it correctly (the gate only affects the
+  // beat-boundary timing, not the toggle's own behavior).
+  let calloutUnlocked = false;
   const callout = g.append('g').attr('class', 's14-callout').style('opacity', 0);
   function drawCallout(weighting) {
     callout.selectAll('*').remove();
+    if (!calloutUnlocked) return;
     const label = sceneJson.worst_bucket_label || '90-95c';
     const b = buckets.find((bb) => (bb.label || bb.bucket) === label);
     if (!b) return;
@@ -333,9 +538,14 @@ function overlay(container, data, view, scalesObj) {
       .attr('r', view.tokens.dot['radius-annotated-core-px'])
       .style('fill', view.css('accent-annotation'));
     // Trimmed to the 8-word annotation cap (design-revision-spec CR-14).
+    // The 90-95c bucket sits near the domain's right edge, where a
+    // right-reading label would run past the chart -- mirror left (G5)
+    // when that's the case, same as this scene's other at-mark labels.
+    const calloutMirror = x(px) + 14 + 260 > view.region.x + view.region.w;
     callout.append('text')
-      .attr('x', x(px) + 14).attr('y', y(py))
+      .attr('x', calloutMirror ? x(px) - 14 : x(px) + 14).attr('y', y(py))
       .attr('dy', '0.35em')
+      .attr('text-anchor', calloutMirror ? 'end' : 'start')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-annotation-size'))
       .style('fill', view.css('accent-annotation'))
@@ -369,10 +579,24 @@ function overlay(container, data, view, scalesObj) {
     .on('click', (event, d) => setWeighting(d.key, true));
 
   function setWeighting(weighting, animate) {
+    const changed = weighting !== currentWeighting;
     currentWeighting = weighting;
     buttons.attr('aria-checked', (d) => d.key === weighting);
     drawMarkers(weighting, animate);
+    drawInset(weighting);
+    drawMainGhost(weighting);
     drawCallout(weighting);
+    // Mode label onset (major #3): fade out/in on a genuine change so the
+    // reweighting reads as a state change, not a silent re-draw
+    // (perception-brief §7). Left alone on the implicit first call (b1's
+    // default 'markets' reading has nothing yet to contrast against).
+    if (changed) {
+      const dur = view.tokens.motion.durations_ms['overlay-draw-in'];
+      modeLabel
+        .text(weighting === 'dollars' ? 'now weighted by: dollars traded' : 'weighted by: count of markets, equally')
+        .style('opacity', 0)
+        .transition().duration(dur).style('opacity', 1);
+    }
     // Re-light which dots carry emphasis (data request #3): overlay()
     // cannot reach the engine directly per CONTRACT §4; this calls an
     // optional driver-supplied hook and degrades gracefully if absent.
@@ -384,15 +608,28 @@ function overlay(container, data, view, scalesObj) {
   function step(beatId) {
     if (beatId === 'b1') {
       drawMarkers('markets', true);
+      drawInset('markets');
     } else if (beatId === 'b2') {
       const attr = sceneJson.ladder_attribution || {};
-      ladderLine1.text(`${attr.pct_in_ten_plus_leg_ladders ?? '—'}% of the underpriced tickets sit in prop ladders of ten bets or more.`);
-      ladderLine2.text(`${attr.pct_at_tick_floor ?? '—'}% sit at the one-to-two-cent tick floor.`);
+      // Critical #2: this annotation previously read "underpriced," which
+      // contradicts both the on-screen key ("amber = the overpriced penny
+      // tickets") and the prose -- a dot below the promise line means
+      // buyers paid MORE than the outcome was worth, i.e. overpriced.
+      // Rounded to match the prose's "72%"/"55%" (same numbers, one fewer
+      // decimal place, so chart and prose never look like they disagree).
+      const pctLadder = attr.pct_in_ten_plus_leg_ladders;
+      const pctFloor = attr.pct_at_tick_floor;
+      ladderLine1.text(`${pctLadder != null ? Math.round(pctLadder) : '—'}% of the overpriced tickets sit in prop ladders of ten bets or more.`);
+      ladderLine2.text(`${pctFloor != null ? Math.round(pctFloor) : '—'}% sit at the one-to-two-cent tick floor.`);
       ladderCaption.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
       tickBracket.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
     } else if (beatId === 'b3') {
       setWeighting('dollars', true);
     } else if (beatId === 'b4') {
+      // Major #4: the amber "worst bucket" singleton is this beat's own
+      // punchline -- it must be the one perceivable change here, not a
+      // repeat of something that already fired during b3's reweighting.
+      calloutUnlocked = true;
       drawCallout(currentWeighting);
     }
   }

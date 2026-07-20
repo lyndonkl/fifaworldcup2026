@@ -8,9 +8,13 @@
  * fly to center and unpack into tick-grain trades. Emission-rate animation:
  * trades arrive as a stream whose rate the reader feels ramp through the
  * pre-match hour and step at the whistle. Color: taker side. Size: uniform
- * -- per-trade size never scales the glyphs; the ~15% in-play size growth
- * lives only in the D3 sparkline (design-system.md FIX C7 / §0 "dot size is
- * never a magnitude channel").
+ * -- per-trade size never scales the glyphs (design-system.md FIX C7 / §0
+ * "dot size is never a magnitude channel"). REVISION (design review, bounded
+ * fix pass): the size_sparkline strip that used to carry the ~15% in-play
+ * size claim was dropped -- it rendered clipped by the viewport and its
+ * "+15% in play" chip read as contradicting "trade sizes were typical"
+ * (major finding). size_growth_pct/size_sparkline stay in the DATA_REQUEST
+ * shape below for provenance but are no longer read by this file.
  *
  * DATA_REQUEST (flagged to the tile builder; not in CONTRACT §5's generic
  * shape): docs/data/scenes/s06.json, built from
@@ -29,12 +33,12 @@
  *     "size_growth_pct": 15.0
  *   }
  * Until this lands, the scene degrades gracefully: reveal collapses to a
- * plain start->full sweep (no kickoff dwell subdivision) and the rate/size
- * strips render empty with their axes only -- it never fabricates a number.
+ * plain start->full sweep (no kickoff dwell subdivision) and the rate strip
+ * renders empty with its axes only -- it never fabricates a number.
  */
 
 import {
-  registry, colorOf, particleState, indicesWithFlag, makeState, setColor,
+  registry, colorOf, indicesWithFlag, makeState, setColor,
 } from '../shared.js';
 
 /* ---- local helpers (duplicated per scene file by design: shared.js is
@@ -57,7 +61,7 @@ function restFieldXY(i, view) {
   ];
 }
 
-function drawSingleton(g, x, y, tokens, label) {
+function drawSingleton(g, x, y, tokens, label, mirror) {
   const core = tokens.dot['radius-annotated-core-px'];
   const halo = tokens.dot['radius-annotated-halo-px'];
   const stroke = tokens.dot['halo-stroke-px'];
@@ -66,7 +70,9 @@ function drawSingleton(g, x, y, tokens, label) {
     .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', stroke);
   sel.append('circle').attr('r', core).attr('fill', 'var(--ink-hero)');
   if (label) {
-    sel.append('text').attr('x', halo + 6).attr('y', 4)
+    sel.append('text')
+      .attr('x', mirror ? -(halo + 6) : halo + 6).attr('y', 4)
+      .attr('text-anchor', mirror ? 'end' : 'start')
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-annotation-size)')
       .attr('fill', 'var(--accent-annotation)')
@@ -118,27 +124,65 @@ export default {
     const spec = data.manifest.zoom.mexeng;
     const winStart = spec ? new Date(spec.window[0]).getTime() : Date.now() - 86400000;
     const winEnd = spec ? new Date(spec.window[1]).getTime() : Date.now();
-    const x = d3.scaleUtc().domain([winStart, winEnd])
-      .range([view.region.x, view.region.x + view.region.w]);
+    // Chart-first fix (design-review P1/P2): the market's full life spans
+    // about 4.3 days, but the scene's own prose and axis title only ever
+    // discuss "the last 24 hours." Plotting the full window crushed the
+    // kickoff step into the rightmost ~2% of the x-axis and left the pace
+    // lane and every trade dot piled into a near-invisible sliver. Domain
+    // narrows to the window's own trailing 24 hours -- data-derived
+    // (winEnd minus 24h, not invented) -- so the caption is literally true
+    // and the pre-kickoff build-up finally has room on screen.
+    const domainStart = Math.max(winStart, winEnd - 24 * 3600 * 1000);
+    // KEY RECT (design-revision-spec G5, precedent: s12.js): the fixed
+    // top-right color key sits over this scene's own top-right corner,
+    // exactly where the pace lane's kickoff climax lands (design review
+    // M5 -- "KEY panel occludes the arrivals line where the kickoff
+    // climax should appear"). Cap the drawable range short of the key's
+    // exclusion box on desktop instead of asking the key to move.
+    const keyMarginPx = view.mobile ? 0
+      : (view.tokens.layout['key-exclusion-w-px'] || 280) + view.tokens.spacing_px[3];
+    const xRangeMax = Math.min(view.region.x + view.region.w, view.W - keyMarginPx - view.safe);
+    const x = d3.scaleUtc().domain([domainStart, winEnd])
+      .range([view.region.x, xRangeMax]);
+    // Two bands share the stage, top to bottom: the arrival-rate pace lane
+    // (this scene's chart-first figure) on top, the tick-price stream
+    // below it -- both inside view.region, never clipped off-canvas above
+    // it (the prior bug: the rate lane's own range went negative).
+    const paceH = view.region.h * 0.22;
+    const paceTop = view.region.y;
+    const paceBottom = view.region.y + paceH;
+    const stageTop = paceBottom + 28;
+    const stageBottom = view.region.y + view.region.h;
     const y = d3.scaleLinear().domain([0, 100])
-      .range([view.region.y + view.region.h, view.region.y]);
-    // Arrival-rate strip: its own bounded band above the main stage (never
-    // painted over the price field -- design-system §"channel sequencing").
-    const rateBandH = view.region.h * 0.14;
+      .range([stageBottom, stageTop]);
     const rate = d3.scaleLinear().domain([0, 6]) // trades/second, headroom above the ~5.4x step
-      .range([view.region.y - 12, view.region.y - 12 - rateBandH]);
+      .range([paceBottom, paceTop]);
     registry.register('s06.x', x);
     registry.register('s06.y', y);
     registry.register('s06.rate', rate);
-    return { x, y, rate };
+    return {
+      x, y, rate, paceTop, paceBottom, stageTop, stageBottom,
+    };
   },
 
   layout(data, view) {
-    const { pop, manifest } = data;
+    const { pop } = data;
     const N = pop.count;
     const state = makeState(N);
-    const restRgba = particleState(view.tokens, 'dimmed-field-min');
+    // Figure-ground fix (design review C2): the tournament-wide rest field
+    // covers this entire stage (restFieldXY scatters across the full
+    // region), directly behind the one match's own tape. dimmed-field-min
+    // (alpha 0.25) still reads as a dominant static texture at this
+    // density -- drop further, matching the precedent already set in
+    // s01.js (0.40 -> 0.10 for the same reason), so the resting tournament
+    // money recedes and the active tape is the only thing that pops.
+    const restRgba = view.color('field-rest', 0.08);
     const baseSize = view.tokens.dot['radius-base-px'];
+    // Active trade dots get a size bump on top of the color/alpha contrast
+    // already available (side.yes/side.no ship at full alpha, i.e.
+    // engine.js's active tier) -- a uniform bump, not a magnitude channel
+    // (every active dot gets the same radius regardless of trade size).
+    const activeSize = baseSize * 1.5;
 
     for (let i = 0; i < N; i++) {
       const [rx, ry] = restFieldXY(i, view);
@@ -149,6 +193,7 @@ export default {
 
     const x = registry.get('s06.x');
     const y = registry.get('s06.y');
+    const [domainStartMs, domainEndMs] = x.domain().map((d) => d.getTime());
 
     const bit = data.flagBit('ZOOM_MEXENG');
     const tagged = indicesWithFlag(pop.flags, bit);
@@ -158,12 +203,16 @@ export default {
     const runtimeStride = (T && D) ? Math.max(1, Math.ceil(T / D)) : 1;
 
     // Fixed per-dot tick assignment (identity: tagged[i] <- tile row i*stride).
+    // Ticks earlier than the chart's own trailing-24h domain (most of a
+    // 4+ day market's early life) are left unassigned: they stay part of
+    // the ambient resting field instead of being placed off-canvas.
     const tickTs = new Float64Array(D);
     if (tile && D) {
       for (let i = 0; i < D; i++) {
         const row = Math.min(i * runtimeStride, T - 1);
         const di = tagged[i];
         const ts = tile.t0 + tile.ts_ms[row];
+        if (ts < domainStartMs || ts > domainEndMs) continue;
         tickTs[i] = ts;
         state.x[di] = x(ts);
         state.y[di] = y(tile.price_c[row]);
@@ -172,25 +221,24 @@ export default {
       }
     }
 
-    // Keyframe cut times: compressed 24h with a dwell on the last pre-kick
-    // hour, per storyboard S6 §Scroll. Degrades to a 2-point sweep if the
-    // kickoff instant isn't in the scene JSON yet (DATA_REQUEST above).
+    // Keyframe cut times: the chart's own trailing-24h domain, with a dwell
+    // on the last pre-kick hour, per storyboard S6 §Scroll. Degrades to a
+    // 2-point sweep if the kickoff instant isn't in the scene JSON yet
+    // (DATA_REQUEST above).
     const kickoffTs = data.scene && data.scene.window && data.scene.window.kickoff_ts
       ? new Date(data.scene.window.kickoff_ts).getTime()
       : null;
-    const winStartMs = manifest.zoom.mexeng ? new Date(manifest.zoom.mexeng.window[0]).getTime() : null;
-    const winEndMs = manifest.zoom.mexeng ? new Date(manifest.zoom.mexeng.window[1]).getTime() : null;
 
     const cuts = kickoffTs
       ? [
-        { at: 0.0, cutoff: winStartMs },
+        { at: 0.0, cutoff: domainStartMs },
         { at: 0.55, cutoff: kickoffTs - 3600000 },   // T-1h: dwell begins
         { at: 0.80, cutoff: kickoffTs },              // whistle: the ~5.4x step
-        { at: 1.0, cutoff: winEndMs },
+        { at: 1.0, cutoff: domainEndMs },
       ]
       : [
-        { at: 0.0, cutoff: winStartMs },
-        { at: 1.0, cutoff: winEndMs },
+        { at: 0.0, cutoff: domainStartMs },
+        { at: 1.0, cutoff: domainEndMs },
       ];
 
     const states = {};
@@ -200,7 +248,7 @@ export default {
       const s = { x: state.x, y: state.y, color: state.color, size: new Float32Array(N) };
       s.size.set(state.size);
       for (let i = 0; i < D; i++) {
-        if (tickTs[i] <= c.cutoff) s.size[tagged[i]] = baseSize;
+        if (tickTs[i] && tickTs[i] <= c.cutoff) s.size[tagged[i]] = activeSize;
       }
       states[key] = s;
       keyframes.push({ at: c.at, state: key });
@@ -210,8 +258,11 @@ export default {
   },
 
   overlay(container, data, view, scales) {
-    const { x, rate } = scales;
+    const {
+      x, y, rate, paceTop, paceBottom, stageTop,
+    } = scales;
     const g = container.svg;
+    const [rangeMin, rangeMax] = x.range();
 
     // ET tick format: the tape is stored in UTC; the reader is told
     // "Eastern Time" (G3), so ticks apply a fixed UTC-4 (EDT, July) shift
@@ -230,80 +281,189 @@ export default {
       .attr('font-size', 'var(--type-micro-size)')
       .attr('color', 'var(--ink-mid)')
       .call(d3.axisBottom(x).ticks(6).tickFormat(etHourLabel));
+    // Title dropped further below the tick row (design review m6: it
+    // printed straight through the 8am/11am/2pm labels at +24). D3's own
+    // tick text sits ~9-12px under the axis line at this font size, so the
+    // title needs a clearer gap than a bare +24 to actually clear it.
     axisG.append('text')
       .attr('x', view.region.x + view.region.w / 2)
-      .attr('y', view.region.y + view.region.h + 8 + 24)
+      .attr('y', view.region.y + view.region.h + 8 + 34)
       .attr('text-anchor', 'middle')
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-caption-size)')
       .attr('fill', 'var(--ink-mid)')
       .text('the market’s last 24 hours (Eastern Time)');
 
+    // Price lane axis (design review M4: the tape rendered as an unlabeled
+    // step-line with no stated vertical meaning). y is the same registered
+    // scale the tape's own dots are plotted against, so the axis is an
+    // honest read of what the dots already encode.
+    g.append('g').attr('class', 's06-price-axis')
+      .attr('transform', `translate(${view.region.x},0)`)
+      .attr('font-family', 'var(--font-apparatus)')
+      .attr('font-size', 'var(--type-micro-size)')
+      .attr('color', 'var(--ink-mid)')
+      .call(d3.axisLeft(y).ticks(4).tickFormat((v) => `${v}¢`));
+    g.append('text')
+      .attr('x', view.region.x)
+      .attr('y', stageTop - 10)
+      .attr('font-family', 'var(--font-apparatus)')
+      .attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-mid)')
+      .text('price the tape traded at (¢) — each dot, one trade');
+
+    // Headline-message anchor (design review M3: "biggest single market of
+    // the tournament" had no visual carrier and the composition argued the
+    // opposite). A direct label pinned beside the tape itself, not just in
+    // the prose column, so the claim has a findable on-screen referent.
+    g.append('text')
+      .attr('x', view.region.x)
+      .attr('y', stageTop + 16)
+      .attr('font-family', 'var(--font-apparatus)')
+      .attr('font-size', 'var(--type-caption-size)')
+      .attr('fill', 'var(--ink-hi)')
+      .text('every dot below: the tournament’s single biggest market');
+
+    const zoomSpec = data.manifest.zoom.mexeng;
+    const rateT0 = zoomSpec ? new Date(zoomSpec.window[0]).getTime() : null;
+    const rateCurve = (data.scene && Array.isArray(data.scene.rate_curve)) ? data.scene.rate_curve : null;
+    // One nearest-sample lookup shared by the desktop playhead marker and
+    // the mobile metronome (previously duplicated inline in scrub()).
+    function rateNear(tsMs) {
+      if (!rateCurve || !rateCurve.length || rateT0 === null) return null;
+      const tS = (tsMs - rateT0) / 1000;
+      let nearest = rateCurve[0];
+      for (const d of rateCurve) if (Math.abs(d.t_s - tS) < Math.abs(nearest.t_s - tS)) nearest = d;
+      return nearest.rate_per_s;
+    }
+
     const rateG = g.append('g').attr('class', 's06-rate-strip');
-    if (data.scene && Array.isArray(data.scene.rate_curve) && data.scene.rate_curve.length) {
-      const spec = data.manifest.zoom.mexeng;
-      const t0 = new Date(spec.window[0]).getTime();
+    let rateClipRect = null;
+    let ratePlayhead = null;
+    if (rateCurve && rateCurve.length && rateT0 !== null) {
+      // Clamped to the axis's own [0,6] headroom: the tape's tail carries
+      // a settlement-flurry outlier far above the "~5.4x step" the axis
+      // was sized for, which otherwise draws a near-vertical shoot off
+      // the top of the pace lane right where the kickoff climax should
+      // read cleanly (part of design review M5's "line behaves oddly
+      // near kickoff"). Capping keeps the curve inside its own lane.
       const line = d3.line()
-        .x((d) => x(t0 + d.t_s * 1000))
-        .y((d) => rate(d.rate_per_s));
+        .x((d) => x(rateT0 + d.t_s * 1000))
+        .y((d) => rate(Math.min(d.rate_per_s, 6)));
+      // Progressive reveal (design review C1): the line was previously
+      // fully drawn the instant the beat activated, so scrub25/50/90
+      // captured the identical fully-drawn curve. A clip-rect whose width
+      // tracks scrub progress turns "trades arriving" into an event the
+      // reader watches happen, not a fact pre-printed on entry.
+      // Clip the CURVE PATH ONLY -- the axis and title below are appended
+      // outside this clip so they render immediately (they are static
+      // chrome, not the narrated event) instead of being clipped away
+      // themselves (they sit left of rangeMin, at region.x - 8).
+      const clipId = 's06-reveal-clip';
+      rateClipRect = g.append('defs').append('clipPath').attr('id', clipId)
+        .append('rect')
+        .attr('x', rangeMin).attr('y', paceTop - 4)
+        .attr('width', 0).attr('height', paceBottom - paceTop + 8);
       rateG.append('path')
-        .datum(data.scene.rate_curve)
+        .datum(rateCurve)
         .attr('fill', 'none')
         .attr('stroke', 'var(--neutral-data)')
         .attr('stroke-width', 1.5)
+        .attr('clip-path', `url(#${clipId})`)
         .attr('d', line);
       rateG.append('g')
         .attr('transform', `translate(${view.region.x - 8},0)`)
         .attr('font-family', 'var(--font-apparatus)')
         .attr('font-size', 'var(--type-micro-size)')
-        .call(d3.axisLeft(rate).ticks(3))
-        .append('text')
+        .call(d3.axisLeft(rate).ticks(3));
+      // Title sits INSIDE the pace band (not above the topmost tick, G3's
+      // usual placement) so it never collides with the Zone K caption slot
+      // just above view.region.y once the scrub reaches its final caption.
+      rateG.append('text')
         .attr('fill', 'var(--ink-mid)')
+        .attr('font-family', 'var(--font-apparatus)')
         .attr('font-size', 'var(--type-caption-size)')
-        .attr('x', 0).attr('y', rate(6) - 12)
+        .attr('x', view.region.x)
+        .attr('y', paceTop + 12)
         .text('trades arriving (per second)');
+      // Playhead: a small luminance marker riding the curve's current
+      // value, outside the clip so it stays visible at the reveal's
+      // leading edge -- the "abrupt onset / moving mark" the change-
+      // blindness literature says a static screenshot series can actually
+      // register (perception-brief §7).
+      ratePlayhead = g.append('circle').attr('class', 's06-playhead')
+        .attr('r', 3.5).attr('fill', 'var(--ink-hero)')
+        .attr('cx', rangeMin).attr('cy', rate(rateCurve[0].rate_per_s));
     }
 
     let kickoffX = null;
+    let kickoffTs = null;
     if (data.scene && data.scene.window && data.scene.window.kickoff_ts) {
-      kickoffX = x(new Date(data.scene.window.kickoff_ts).getTime());
+      kickoffTs = new Date(data.scene.window.kickoff_ts).getTime();
+      kickoffX = x(kickoffTs);
     }
 
     const kickoffG = g.append('g').attr('class', 's06-kickoff').style('display', 'none');
+    let kickoffCallout = null;
     if (kickoffX !== null) {
       kickoffG.append('line')
         .attr('x1', kickoffX).attr('x2', kickoffX)
-        .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
+        .attr('y1', paceTop).attr('y2', view.region.y + view.region.h)
         .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', 1.5)
-        .attr('stroke-dasharray', '2,3');
+        .attr('stroke-dasharray', '2,3')
+        .attr('stroke-opacity', 0.15);
       const mult = data.scene.kickoff_step_multiplier;
       const label = mult
-        ? `kickoff: 1 trade a second becomes ${mult}`
+        ? `kickoff: 1 trade a second becomes ${mult}x`
         : 'kickoff: the pace steps up';
-      drawSingleton(kickoffG, kickoffX, view.region.y - 4, view.tokens, label);
+      // Anchored to the rate curve's own value at kickoff (design review
+      // M5: the marker previously sat fixed near the pace lane's zero
+      // baseline, detached from the step it claimed to describe). Falls
+      // back to the old bottom-edge anchor only if the curve is missing.
+      // Clamped for the same reason as the curve/playhead: the tail
+      // outlier can otherwise fling this callout thousands of px above
+      // the visible frame, making the whole singleton invisible even
+      // though the crossing logic fires correctly.
+      const kickoffRate = rateNear(kickoffTs);
+      const calloutY = kickoffRate !== null
+        ? rate(Math.min(kickoffRate, 6)) - 14 : paceBottom - 10;
+      // Kickoff lands late in the trailing-24h window (near the capped
+      // right edge, short of the KEY exclusion zone per scales()), so the
+      // label mirrors left once past 70% of the *drawable* width -- not
+      // the old view.region.w, which over-ran into the key margin.
+      const mirrorLabel = kickoffX > rangeMin + (rangeMax - rangeMin) * 0.7;
+      kickoffCallout = drawSingleton(kickoffG, kickoffX, calloutY, view.tokens, label, mirrorLabel)
+        .style('opacity', 0)
+        .style('transition', 'opacity 240ms ease');
     }
 
-    const sparkG = g.append('g').attr('class', 's06-sparkline').style('display', 'none');
-    let sparkCaption = null;
-    if (data.scene && Array.isArray(data.scene.size_sparkline) && data.scene.size_sparkline.length) {
-      const spec = data.manifest.zoom.mexeng;
-      const t0 = new Date(spec.window[0]).getTime();
-      const vals = data.scene.size_sparkline.map((d) => d.avg_notional_usd);
-      const sy = d3.scaleLinear().domain([Math.min(...vals), Math.max(...vals)])
-        .range([view.region.y + view.region.h + 40, view.region.y + view.region.h + 16]);
-      const line = d3.line().x((d) => x(t0 + d.t_s * 1000)).y((d) => sy(d.avg_notional_usd));
-      sparkG.append('path')
-        .datum(data.scene.size_sparkline)
-        .attr('fill', 'none')
-        .attr('stroke', 'var(--neutral-data)')
-        .attr('stroke-width', 1.5)
-        .attr('d', line);
-      const pct = data.scene.size_growth_pct;
-      if (pct !== undefined) {
-        sparkCaption = pinnedCaption(container, `per-trade size, +${pct}% in play`, 's06-spark-caption')
-          .style('left', `${view.region.x}px`)
-          .style('top', `${view.region.y + view.region.h + 38}px`);
-      }
+    // Scroll-t -> timestamp mapping for the playhead/reveal, matching
+    // layout()'s own keyframe cuts EXACTLY (not a naive linear t -> pixel
+    // map). Kickoff sits ~90%+ across the raw time domain, so a linear
+    // reveal would cram the whistle and everything after it into the
+    // final few percent of scroll -- the same "climax squeezed to the
+    // right edge" failure the domain-narrowing fix (scales()) already
+    // solved once for the particle population. Reusing the identical
+    // dwell breakpoints (T-1h at 55%, whistle at 80%) means the reveal
+    // reaches kickoff at the same scroll position the dot population
+    // does, comfortably inside the 25/50/90 capture range instead of
+    // hiding past it.
+    const [domainStartMs, domainEndMs] = x.domain().map((d) => d.getTime());
+    const revealCuts = kickoffTs
+      ? [
+        { at: 0.0, ts: domainStartMs },
+        { at: 0.55, ts: kickoffTs - 3600000 },
+        { at: 0.80, ts: kickoffTs },
+        { at: 1.0, ts: domainEndMs },
+      ]
+      : [{ at: 0.0, ts: domainStartMs }, { at: 1.0, ts: domainEndMs }];
+    function tToTs(t) {
+      let i = 0;
+      while (i < revealCuts.length - 2 && t > revealCuts[i + 1].at) i++;
+      const a = revealCuts[i]; const b = revealCuts[i + 1];
+      const span = Math.max(b.at - a.at, 1e-6);
+      const frac = Math.min(Math.max((t - a.at) / span, 0), 1);
+      return a.ts + frac * (b.ts - a.ts);
     }
 
     // Zone K occupant: the scene's one honest-limit line. It is withheld
@@ -338,24 +498,32 @@ export default {
     function step(beatId) {
       if (beatId === 'b1') {
         kickoffG.style('display', null);
-        sparkG.style('display', null);
       }
     }
 
     function scrub(t) {
       captionEl.style('display', t >= 0.92 ? null : 'none');
-      if (kickoffX === null) return;
-      const cx = view.region.x + t * view.region.w;
-      const active = Math.abs(cx - kickoffX) < view.region.w * 0.02;
-      kickoffG.select('line').attr('stroke-opacity', active ? 1 : 0.5);
-      if (metronome && data.scene && data.scene.rate_curve && data.scene.rate_curve.length) {
-        const curve = data.scene.rate_curve;
-        const spec = data.manifest.zoom.mexeng;
-        const winMs = new Date(spec.window[1]).getTime() - new Date(spec.window[0]).getTime();
-        const tS = t * (winMs / 1000);
-        let nearest = curve[0];
-        for (const d of curve) if (Math.abs(d.t_s - tS) < Math.abs(nearest.t_s - tS)) nearest = d;
-        const alpha = Math.min(1, 0.25 + nearest.rate_per_s / 6);
+      const cxTs = tToTs(t);
+      const cx = x(cxTs);
+      if (rateClipRect) {
+        rateClipRect.attr('width', Math.max(0, cx - rangeMin));
+      }
+      const curRate = rateNear(cxTs);
+      if (ratePlayhead && curRate !== null) {
+        // Clamp before mapping through `rate` (domain [0,6]): the tape's
+        // own tail carries a settlement-flurry outlier well above the
+        // "~5.4x step" headroom the axis was sized for, which would
+        // otherwise fling this marker thousands of px off-canvas instead
+        // of just riding the top of the pace lane.
+        ratePlayhead.attr('cx', cx).attr('cy', rate(Math.min(curRate, 6)));
+      }
+      if (kickoffX !== null) {
+        const reached = cx >= kickoffX;
+        kickoffG.select('line').attr('stroke-opacity', reached ? 0.9 : 0.15);
+        if (kickoffCallout) kickoffCallout.style('opacity', reached ? 1 : 0);
+      }
+      if (metronome && curRate !== null) {
+        const alpha = Math.min(1, 0.25 + curRate / 6);
         metronome.style('opacity', alpha);
       }
     }
@@ -366,7 +534,6 @@ export default {
       exit() {
         g.selectAll('*').remove();
         captionEl.remove();
-        if (sparkCaption) sparkCaption.remove();
         if (metronome) metronome.remove();
       },
     };

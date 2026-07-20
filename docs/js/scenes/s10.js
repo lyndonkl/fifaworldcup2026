@@ -2,22 +2,93 @@
  *
  * Storyboard: research/storyboard.md §3 S10 (layoutName 'braid'). Contract:
  * docs/CONTRACT.md §4.2 (act 3, 3 steps, no zoom tile). Finding: dossier R2.
- * Design: research/design-system.md §9 S10 ("population rests at 25%;
- * braid = cyan + lavender lines; fusion quantified live by the mono
- * gap-meter (0.74 pts); Pinnacle grey line dies into dashed #6B7480
- * terminations").
  *
- * GATE-4 ROUND 2 (research/revision/structure-spec.md §5 S10;
- * research/revision/design-revision-spec.md §2 S10): retitled "Two crowds,
- * one price"; the course spine now runs on screen via `kicker` ("Skill 4 of
- * 5"). Prose rewritten to eighth-grade register — the three-way, "a point
- * is a cent," and the arbitrage-closes-gaps mechanism are taught in plain
- * words in beat 1. The standalone floating venue-legend panel is retired
- * (its job now belongs to the persistent global color key, `beat.chip`
- * rows) and replaced by two direct at-line labels drawn once. The gap meter
- * and count chip move into the placement-zone map (Zone F / Zone S
- * top-right) and are reworded in plain words. No data binding, layout, or
- * engine change; every edit below is text, color, or position only.
+ * GATE-4 ROUND 2 (research/revision/design-revision-spec.md §2 S10):
+ * retitled "Two crowds, one price"; the course spine runs on screen via
+ * `kicker`. Prose in eighth-grade register. The floating venue-legend panel
+ * retired in favor of the persistent global color key.
+ *
+ * GATE-4 ROUND 3, RESHAPE (research/design-review/visual-story-review.md
+ * §5 S10 doctrine): the blind screenshot audit read the old two-line
+ * overlay (Kalshi's absolute price plotted next to Polymarket's absolute
+ * price) as "two markets spiked like crazy in violent DISAGREEMENT" — the
+ * exact opposite of the beat's claim ("the two never sat five points
+ * apart"). Two absolute price traces can only ever show where they
+ * diverge; they cannot show HOW CLOSE they stayed, because "close" is a
+ * property of the difference between them, not of either line on its own.
+ * The fix is the one this scene's whole prose argument is already about:
+ * plot the gap, not the two prices.
+ *
+ * Deriving that gap client-side surfaced a second, more basic problem with
+ * the old chart, worth recording: `braid.t` is not one row per minute. It
+ * is 4,080 distinct minutes times the three legs the beat's own first
+ * paragraph names (home win / draw / away win), each row carrying that
+ * leg's own `kalshi_pts`/`polymarket_pts` at the SAME timestamp — verified
+ * at build time (every timestamp in the loaded file appears exactly 3
+ * times). A single line connecting these rows in array order — which is
+ * exactly what the old two-line overlay did, and what this file's first
+ * reshape pass also did before this fix — draws a false "spike" through
+ * every single minute, because it is really drawing a straight segment
+ * between three different tickets' prices (typically nowhere near each
+ * other: a heavy favorite's leg and its draw leg do not trade at similar
+ * prices) as if they were consecutive points in time. No axis change fixes
+ * that; it is a join, not a scale, problem. The fix: group the loaded rows
+ * by their shared timestamp and take ONE value per minute — the mean
+ * absolute gap across whichever legs traded that minute — before a single
+ * point ever reaches the line generator. That is also the more honest
+ * chart for what the beat's prose claims ("the average gap stayed under
+ * one cent"): an unsigned distance, resting on a zero floor, is what
+ * "how far apart" means when three different tickets are being averaged
+ * together; a signed Kalshi-minus-Polymarket value would cancel across
+ * legs trading at unrelated price levels and mean nothing summed.
+ *
+ * The result: one line, the average distance between the two prices each
+ * live minute, resting near a shaded five-point reference band it rarely
+ * leaves, with the rare exceptions (goal-second reactions) reaching well
+ * above it. Both series still come from this scene's own loaded braid
+ * arrays (nothing invented); the gap is computed client-side from
+ * `braid.kalshi_pts` and `braid.polymarket_pts`. The sixteen Pinnacle
+ * suspensions (dossier's "professionals left the room" story) no longer
+ * share an axis with a now-retired continuous Pinnacle line; they land as
+ * sixteen sequenced vertical marks — the "Pinnacle lane" — crossing the
+ * gap chart at the moment each one happens, exactly the visible, sequenced
+ * event the review's doctrine section names.
+ *
+ * GATE-4 ROUND 4, BOUNDED FIX (research/design-review/visual-story-review.md
+ * S10 critical/major findings; blind re-score 4/10 on the RESHAPE above).
+ * The RESHAPE swapped in a real gap line, but the line's own rare
+ * excursions (~30 places it leaves the band) drew at the same full ink-hi
+ * weight as the near-zero baseline that IS the scene's message, so ~30
+ * spikes tied for the frame's luminance peak while "the gap almost never
+ * opens" sat in the dimmest ink on screen — figure-ground exactly
+ * backwards. Four changes, all inside this file:
+ *   (1) the gap line now draws TWICE from the same honest data — a dim,
+ *       thin "ground" pass carrying the full shape (nothing hidden) and a
+ *       bright, thick "figure" pass of the IDENTICAL path clipped to the
+ *       within-band zone, so the near-zero baseline is the one bright
+ *       shape on screen, not the spikes; the "within 5 cents" band and
+ *       "same price" label are raised to match;
+ *   (2) b2 now draws the sixteen grey Pinnacle-suspension lines its own
+ *       pre-cue caption always promised. Previously that caption announced
+ *       grey dashed lines while b2 actually flashed an un-keyed amber dot
+ *       swarm from a DIFFERENT dataset (`goal_spikes`) and held the real
+ *       lines back for b3 — an announce/deliver mismatch;
+ *   (3) the amber budget is spent exactly once now, on b3's verdict text.
+ *       That text no longer claims a Kalshi-vs-Pinnacle relationship this
+ *       chart never plots (it plots Kalshi-vs-Polymarket and Pinnacle
+ *       quote-termination timestamps, nothing else); it says only what
+ *       those two plotted things say — Pinnacle stopped quoting, sixteen
+ *       times — and a simultaneous highlight of the sixteen lines (plus a
+ *       brief brighten of the ground pass) stands in for a leader line
+ *       pointing at one mark among sixteen;
+ *   (4) b1 gets a real onset (band and line fade in together) instead of
+ *       three byte-identical frames, and the mean-gap readout stays hidden
+ *       instead of sitting on screen as a dead "—" for two beats, then
+ *       resolves once, in b3, at a size that matches its message.
+ * `goal_spikes` stays in the data contract (other consumers read it — see
+ * pipeline/export/check_scene_field_parity.py) but this scene no longer
+ * renders it as its own mark set; those moments are already honest in the
+ * gap line's own dim ground pass.
  *
  * ---------------------------------------------------------------------
  * DATA CONTRACT ASSUMPTIONS (flagged in this build's data_requests — the
@@ -90,7 +161,9 @@ function hash01(i) {
  * s11.js reconstructs this exact formula (duplicated, not imported — the
  * module import rules in CONTRACT §2 reserve sibling-scene imports for
  * S16's anchors only) so the two scenes' resting dots are pixel-identical
- * and "the dots stay at rest" going into S11 holds without a tween. */
+ * and "the dots stay at rest" going into S11 holds without a tween. This
+ * scene's RESHAPE only touches the D3 overlay (the chart); the population
+ * layout is untouched by design, so that hand-off still holds. */
 function restField(data, view) {
   const n = data.pop.count;
   const timeScale = registry.get('global.time');
@@ -154,12 +227,44 @@ function zoneTopRight(sel, view) {
     .style('top', `${sp[4] + (L['key-exclusion-h-px'] || 132) + sp[3]}px`);
 }
 
+/* One value per live minute from this scene's own loaded braid arrays — no
+ * new data, just an honest read of what is actually there. `braid.t` packs
+ * three rows per minute (one per three-way leg: home win, draw, away win —
+ * see the header note), so this groups by timestamp first and takes the
+ * MEAN ABSOLUTE gap across whichever legs traded that minute, producing
+ * one {t, v} pair per unique minute rather than three same-instant rows a
+ * naive line would zigzag through. Unsigned (a "how far apart" distance,
+ * matching "the two never sat five points apart"), not signed
+ * Kalshi-minus-Polymarket — a signed average across three tickets trading
+ * at unrelated price levels would cancel and mean nothing. Skips any row
+ * missing either venue's price (irregular data, per the header note). */
+function toGapSeries(braid) {
+  const tArr = braid.t || [];
+  const k = braid.kalshi_pts || [];
+  const p = braid.polymarket_pts || [];
+  const byMinute = new Map(); // epoch seconds -> { sum, n }
+  for (let i = 0; i < tArr.length; i++) {
+    const kv = k[i];
+    const pv = p[i];
+    if (kv === null || kv === undefined || Number.isNaN(kv)) continue;
+    if (pv === null || pv === undefined || Number.isNaN(pv)) continue;
+    const gap = Math.abs(kv - pv);
+    const t = tArr[i];
+    const cur = byMinute.get(t);
+    if (cur) { cur.sum += gap; cur.n += 1; } else { byMinute.set(t, { sum: gap, n: 1 }); }
+  }
+  const out = [];
+  for (const [t, { sum, n }] of byMinute) out.push({ t: t * 1000, v: sum / n });
+  out.sort((a, b) => a.t - b.t);
+  return out;
+}
+
 export default {
   id: 's10',
   act: 3,
   title: 'Two crowds, one price',
   kicker: 'Skill 4 of 5: who is behind the number',
-  layoutName: 'braid',
+  layoutName: 'gap-line',
 
   needs: {
     scene: true,
@@ -168,28 +273,47 @@ export default {
   },
 
   scales(data, view) {
-    const win = (data.scene && data.scene.knockout_window)
-      ? [new Date(data.scene.knockout_window.start), new Date(data.scene.knockout_window.end)]
+    const scene = data.scene || {};
+    const win = scene.knockout_window
+      ? [new Date(scene.knockout_window.start), new Date(scene.knockout_window.end)]
       : [new Date(data.manifest.epoch), new Date(data.manifest.frozen_at || data.manifest.generated)];
     const time = d3.scaleUtc().domain(win).range([view.region.x, view.region.x + view.region.w]);
-    // Raw exchange quotes: points, not probability (R23-adjacent minor fix;
-    // CONTRACT §10.5 acceptance check greps for this exact label text).
-    const price = d3.scaleLinear().domain([0, 100])
+
+    // The story is the GAP, not two overlaid absolute prices (visual-story-
+    // review §5 S10 RESHAPE): derive one point per live minute from the
+    // same braid arrays the old two-line overlay read (toGapSeries() above
+    // — mean absolute gap across that minute's three-way legs). The values
+    // are real; the WINDOW is a deliberate, fixed 0-20-point axis — the
+    // same kind of fixed-domain choice the old absolute-price axis
+    // ([0,100]) already made — so the labeled 0-5 band this beat's prose is
+    // about (97.4% of live minutes never leave it) stays a full quarter of
+    // the visible height instead of shrinking to a sliver next to the rare
+    // goal-second spike that reaches the 50s. `.clamp(true)` pins any such
+    // spike to the plot's top edge rather than letting the path escape the
+    // chart box; a spike flattening against the ceiling still reads as
+    // "this one blew past normal," the honest shape of a same-magnitude
+    // but off-the-chart event.
+    const braid = scene.braid || {};
+    const gapPts = toGapSeries(braid);
+    const domainMax = 20;
+    const gap = d3.scaleLinear().domain([0, domainMax]).clamp(true)
       .range([view.region.y + view.region.h, view.region.y]);
+
     registry.register('s10.time', time);
-    registry.register('s10.price', price);
-    return { time, price };
+    registry.register('s10.gap', gap);
+    return { time, gap, gapPts };
   },
 
   layout(data, view) {
     // Figure/ground per research/revision/perception-brief.md §4, §9b: this
-    // scene has NO active PARTICLE subset — by unit discipline the movers are
-    // D3 marks (the braid), not dots. So the whole population is the dimmed
-    // GROUND, assigned 'dimmed-field-min' (alpha 0.25 <= opacity-rest-classify-max
-    // 0.42), which the engine's emphasis-rest-dim recedes further every frame.
-    // The FIGURE that pops is the D3 braid in bright venue hues (venue-kalshi /
-    // venue-polymarket / venue-pinnacle, all AAA vs canvas), direct-labeled
-    // once at the line's end plus named in the persistent color key.
+    // scene has NO active PARTICLE subset — by unit discipline the mover is
+    // a D3 mark (the gap line), not dots. So the whole population is the
+    // dimmed GROUND, assigned 'dimmed-field-min' (alpha 0.25 <= opacity-
+    // rest-classify-max 0.42), which the engine's density-aware rest-tier
+    // cap (tokens.density_tone_mapping.rest-luminance-cap) recedes further
+    // still, so the field can never bloom past the chart's own ink. The
+    // FIGURE that pops is the single gap line in ink-hi, direct-labeled by
+    // its own axis title plus named in the persistent color key.
     return { states: { rest: restField(data, view) } };
   },
 
@@ -200,6 +324,7 @@ export default {
     const T = view.tokens.motion.durations_ms;
     const M = view.tokens.motion.misc;
     const drawIn = T['overlay-draw-in'];
+    const recolorMs = T['recolor-min'];
     const stagger = T['overlay-stagger'];
     const maxSeq = M['overlay-max-sequenced-elements'];
     const countUpMax = T['counter-count-up-max'];
@@ -207,12 +332,11 @@ export default {
     const leaderStandoff = view.tokens.layout['annotation-leader-standoff-px'];
     const spacing = view.tokens.spacing_px; // [4,8,12,16,24,32,48,64,96,128]
 
-    const g = svg.append('g').attr('class', 's10-braid');
+    const g = svg.append('g').attr('class', 's10-gap');
+    const bandLayer = g.append('g').attr('class', 's10-band');
     const axisLayer = g.append('g').attr('class', 's10-axes');
-    const lineLayer = g.append('g').attr('class', 's10-lines');
-    const spikeLayer = g.append('g').attr('class', 's10-spikes');
+    const lineLayer = g.append('g').attr('class', 's10-line');
     const termLayer = g.append('g').attr('class', 's10-terms');
-    const directLabelLayer = g.append('g').attr('class', 's10-direct-labels');
 
     const captionDiv = zoneK(
       html.append('div').attr('class', 's10-caption')
@@ -222,64 +346,60 @@ export default {
         .style('pointer-events', 'none'),
       view,
     );
+    // The scene's single most message-bearing number ("under one cent")
+    // now gets a readout worth reading (visual-story-review M4): larger,
+    // ink-hi, on the shared scrim card so it survives sitting near the
+    // chart. Stays empty (no dead "—") until b3 resolves it.
     const gapMeter = zoneF(
-      html.append('div').attr('class', 's10-gap-meter')
+      html.append('div').attr('class', 's10-gap-meter scrim-card')
         .style('position', 'absolute')
-        .style('font', '13px var(--font-tape)')
-        .style('color', view.css('ink-mid'))
+        .style('font', '600 16px var(--font-tape)')
+        .style('color', view.css('ink-hi'))
         .style('pointer-events', 'none'),
       view,
     );
+    // Right-anchored (zoneTopRight) with a narrow max-width: the horizontal
+    // gap between the chart's right edge and the KEY panel's left edge is
+    // only ~180px, too narrow for the full verdict sentence on one line
+    // (visual-story-review M1: the un-widthed div overflowed left, running
+    // its tail UNDER the KEY panel). Wrapping downward instead keeps it on
+    // clear canvas, on its own scrim.
     const countChip = zoneTopRight(
-      html.append('div').attr('class', 's10-count-chip')
+      html.append('div').attr('class', 's10-count-chip scrim-card')
         .style('position', 'absolute')
+        .style('max-width', '168px')
+        .style('text-align', 'right')
         .style('font', '13px var(--font-tape)')
         .style('color', view.css('accent-annotation'))
         .style('pointer-events', 'none'),
       view,
     );
+    if (!view.mobile) {
+      // Extra clearance below the shared key-exclusion budget (design
+      // tokens' key-exclusion-h-px assumes the KEY's typical height; this
+      // scene's three-row key with a two-line first entry runs slightly
+      // taller, and the amber verdict must never sit under it).
+      countChip.style('top', `${parseFloat(countChip.style('top')) + spacing[4]}px`);
+    }
 
     const scene = data.scene || {};
-    const braid = scene.braid || { t: [], kalshi_pts: [], polymarket_pts: [], pinnacle_pts: [] };
-    const spikes = scene.goal_spikes || [];
     const terms = scene.pinnacle_terminations || [];
     const meanGap = scene.gap_summary ? scene.gap_summary.mean_1min_gap_pts : null;
-
-    function toPoints(tArr, vArr) {
-      // Defensive against a braid object present but shaped differently
-      // than expected (§scene.braid's `|| {...}` fallback above only
-      // catches a wholly-absent braid, not one missing these sub-arrays):
-      // an uncaught TypeError here would throw out of enterScene() mid-
-      // mount, leaving the scene half-initialized for every reader who
-      // scrolls this far, so this degrades to an empty line same as the
-      // rest of this file's own "until this lands, axis only" pattern.
-      const out = [];
-      const n = tArr ? tArr.length : 0;
-      for (let i = 0; i < n; i++) out.push({ t: tArr[i] * 1000, v: vArr ? vArr[i] : undefined });
-      return out;
-    }
-    const kalshiPts = toPoints(braid.t, braid.kalshi_pts);
-    const polyPts = toPoints(braid.t, braid.polymarket_pts);
-    const pinnPts = toPoints(braid.t, braid.pinnacle_pts);
-
-    function lastDefined(arr) {
-      for (let i = arr.length - 1; i >= 0; i--) {
-        const v = arr[i].v;
-        if (v !== null && v !== undefined && !Number.isNaN(v)) return arr[i];
-      }
-      return null;
-    }
+    const gapPts = scales.gapPts || [];
+    const domainMax = scales.gap.domain()[1];
+    const BAND = Math.min(5, domainMax);
+    const yTop = scales.gap(BAND);
+    const y0 = scales.gap(0);
 
     const lineGen = d3.line()
-      .defined((d) => d.v !== null && d.v !== undefined && !Number.isNaN(d.v))
       .x((d) => scales.time(d.t))
-      .y((d) => scales.price(d.v));
+      .y((d) => scales.gap(d.v));
 
-    // Axes: time across the knockout window, price in points. Domain is
-    // already 0-100 (a true zero baseline), so no break marker is needed.
-    // Mobile flip (design-revision-spec G3): a bottom axis on mobile
-    // renders as axisTop translated to the same line, so tick labels sit
-    // above it, inside the stage, instead of spilling into the card sheet.
+    // Axes: time across the knockout window, gap in points from a zero
+    // floor. Mobile flip (design-revision-spec G3): a bottom axis on
+    // mobile renders as axisTop translated to the same line, so tick
+    // labels sit above it, inside the stage, instead of spilling into the
+    // card sheet.
     const timeAxisGen = view.mobile
       ? d3.axisTop(scales.time).ticks(6)
       : d3.axisBottom(scales.time).ticks(6);
@@ -292,14 +412,14 @@ export default {
     styleAxis(
       axisLayer.append('g')
         .attr('transform', `translate(${view.region.x},0)`)
-        .call(d3.axisLeft(scales.price).ticks(5)),
+        .call(d3.axisLeft(scales.gap).ticks(5)),
       view.css('ink-mid'),
     );
     axisLayer.append('text')
       .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff)
       .attr('fill', view.css('ink-mid'))
       .style('font', '12px var(--font-apparatus)')
-      .text('contract price (points; 1 point = 1 cent)');
+      .text('gap between Kalshi and Polymarket (points)');
     axisLayer.append('text')
       .attr('x', view.region.x + view.region.w / 2)
       .attr('y', view.mobile
@@ -310,125 +430,181 @@ export default {
       .style('font', '12px var(--font-apparatus)')
       .text('the knockout stage (date)');
 
-    // Direct-labeled venues, drawn once at the line's end (design-revision-
-    // spec G1/CR-2): the standalone floating legend panel is retired — the
-    // persistent global key already names every color meaning — but a
-    // reader looking straight at the braid still deserves an at-mark
-    // answer to "which line is which," so Kalshi and Polymarket keep one
-    // small label each, planted at the last point either line actually
-    // reaches. Pinnacle needs no line label of its own: its color and its
-    // "stopped quoting" meaning are taught by the key and by the
-    // termination caption when its dashes land.
-    function drawDirectLabels() {
-      directLabelLayer.selectAll('*').remove();
-      const kLast = lastDefined(kalshiPts);
-      const pLast = lastDefined(polyPts);
-      if (kLast) {
-        directLabelLayer.append('text')
-          .attr('x', scales.time(kLast.t) + spacing[1])
-          .attr('y', scales.price(kLast.v) - spacing[1])
-          .attr('fill', view.css('venue-kalshi'))
+    // Clip path for the "within band" zone (y between the zero floor and
+    // the BAND line). Anything the gap line draws inside this rect is the
+    // scene's one bright figure; anything outside it (a spike) only ever
+    // reaches the dim ground pass below (visual-story-review C1: ~30
+    // bright spikes were tying for the frame's luminance peak against a
+    // near-invisible near-zero baseline — this inverts that).
+    const clipId = 's10-band-clip';
+    g.append('defs').append('clipPath').attr('id', clipId).append('rect')
+      .attr('x', view.region.x).attr('width', view.region.w)
+      .attr('y', yTop).attr('height', Math.max(0, y0 - yTop));
+
+    // The shaded 0-5-point reference band and the zero-floor label —
+    // drawn once, persistent through every beat, and now b1's one
+    // announced onset (visual-story-review M3: b1 previously had no
+    // perceivable change across its three frames). Band and labels fade
+    // in together; "same price" is promoted to ink-hi — the scene's
+    // headline claim, no longer its faintest ink. Reduced motion renders
+    // the settled state immediately.
+    function drawBandAndZero() {
+      bandLayer.selectAll('*').remove();
+      const bandRect = bandLayer.append('rect')
+        .attr('x', view.region.x).attr('width', view.region.w)
+        .attr('y', yTop).attr('height', Math.max(0, y0 - yTop))
+        .attr('fill', view.css('ink-low')).attr('stroke', 'none')
+        .attr('fill-opacity', 0);
+      // Both labels get a small scrim (the s04.js getBBox() pattern): the
+      // gap line's own spikes can land anywhere along the timeline, this
+      // scene's whole point, so no fixed x position for these two context
+      // labels is guaranteed clear of one. A scrim makes the guarantee
+      // instead of a guess at placement.
+      function scrimmedLabel(x, y, anchor, color, text) {
+        const t = bandLayer.append('text')
+          .attr('x', x).attr('y', y).attr('text-anchor', anchor)
+          .attr('fill', color).attr('opacity', 0)
           .style('font', '12px var(--font-apparatus)')
-          .text('Kalshi');
+          .text(text);
+        const bb = t.node().getBBox();
+        const scrim = bandLayer.insert('rect', () => t.node())
+          .attr('x', bb.x - spacing[0]).attr('y', bb.y - spacing[0] / 2)
+          .attr('width', bb.width + spacing[0] * 2).attr('height', bb.height + spacing[0])
+          .attr('rx', 2)
+          .attr('fill', view.css('bg-card-composite-cap')).attr('opacity', 0);
+        return [t, scrim];
       }
-      if (pLast) {
-        directLabelLayer.append('text')
-          .attr('x', scales.time(pLast.t) + spacing[1])
-          .attr('y', scales.price(pLast.v) + spacing[1] + 10)
-          .attr('fill', view.css('venue-polymarket'))
-          .style('font', '12px var(--font-apparatus)')
-          .text('Polymarket');
-      }
-    }
-
-    function drawLines() {
-      lineLayer.selectAll('path.venue-line').remove();
-      lineLayer.append('path').datum(kalshiPts).attr('class', 'venue-line kalshi')
-        .attr('fill', 'none').attr('stroke', view.css('venue-kalshi'))
-        .attr('stroke-width', leaderWeight).attr('d', lineGen);
-      lineLayer.append('path').datum(polyPts).attr('class', 'venue-line polymarket')
-        .attr('fill', 'none').attr('stroke', view.css('venue-polymarket'))
-        .attr('stroke-width', leaderWeight).attr('d', lineGen);
-    }
-
-    function drawPinnacleLive() {
-      lineLayer.selectAll('path.pinnacle-live').remove();
-      lineLayer.append('path').datum(pinnPts).attr('class', 'pinnacle-live')
-        .attr('fill', 'none').attr('stroke', view.css('venue-pinnacle'))
-        .attr('stroke-width', leaderWeight).attr('d', lineGen);
-    }
-
-    function flashSpikes() {
-      const sel = spikeLayer.selectAll('circle.spike')
-        .data(spikes, (d, i) => (d.match_id || '') + (d.leg || '') + i);
-      const enter = sel.enter().append('circle').attr('class', 'spike')
-        .attr('r', 3)
-        .attr('cx', (d) => scales.time(new Date(d.t)))
-        .attr('cy', (d) => scales.price(Math.min(100, d.gap_pts)))
-        .attr('fill', view.css('accent-annotation'))
-        .attr('opacity', 0);
-      const merged = enter.merge(sel);
+      const [zeroLabel, zeroScrim] = scrimmedLabel(
+        view.region.x + view.region.w - spacing[1], y0 - spacing[0], 'end',
+        view.css('ink-hi'), 'same price',
+      );
+      const [bandLabel, bandScrim] = scrimmedLabel(
+        view.region.x + spacing[1], yTop - spacing[0], 'start',
+        view.css('ink-mid'), `within ${BAND} cents`,
+      );
       if (!view.reducedMotion) {
-        merged.transition()
-          .delay((d, i) => Math.min(i, maxSeq - 1) * stagger)
-          .duration(drawIn).attr('opacity', 0.9)
-          .transition().duration(drawIn).attr('opacity', 0.25);
+        bandRect.transition().duration(drawIn).attr('fill-opacity', 0.22);
+        zeroScrim.transition().duration(drawIn).attr('opacity', 0.8);
+        zeroLabel.transition().duration(drawIn).attr('opacity', 1);
+        bandScrim.transition().delay(stagger).duration(drawIn).attr('opacity', 0.8);
+        bandLabel.transition().delay(stagger).duration(drawIn).attr('opacity', 1);
       } else {
-        merged.attr('opacity', 0.35);
+        bandRect.attr('fill-opacity', 0.22);
+        zeroScrim.attr('opacity', 0.8);
+        zeroLabel.attr('opacity', 1);
+        bandScrim.attr('opacity', 0.8);
+        bandLabel.attr('opacity', 1);
       }
-      // Pre-cue (design-revision-spec CR-10/G6): this IS the caption for
-      // this step, and it primes the termination event two steps ahead.
-      captionDiv.text('Next, watch the grey line. It stops quoting sixteen times.');
+    }
+
+    // The one figure: how close Kalshi and Polymarket traded, minute by
+    // minute — rendered as TWO passes of the same honest data (nothing
+    // invented, nothing hidden). A dim, thin "ground" pass carries the
+    // full shape, spikes included, so a reader can still see they happen.
+    // A bright, thick "figure" pass draws the IDENTICAL line but clipped
+    // to the within-band zone, so the near-zero baseline — where the line
+    // sits ~97% of the time — is the one bright shape on screen, not the
+    // rare excursions above it (visual-story-review C1). ink-hi, not
+    // ink-hero (design-system.md §2 reserves pure white for S17 alone).
+    function drawGapLine() {
+      lineLayer.selectAll('*').remove();
+      const groundWidth = Math.max(1, leaderWeight - 0.5);
+      const figureWidth = leaderWeight + 1.5;
+      const ground = lineLayer.append('path').datum(gapPts).attr('class', 'gap-line-ground')
+        .attr('fill', 'none').attr('stroke', view.css('field-rest'))
+        .attr('stroke-width', groundWidth).attr('stroke-opacity', 0).attr('d', lineGen);
+      const figure = lineLayer.append('path').datum(gapPts).attr('class', 'gap-line-figure')
+        .attr('fill', 'none').attr('stroke', view.css('ink-hi'))
+        .attr('stroke-width', figureWidth).attr('clip-path', `url(#${clipId})`)
+        .attr('stroke-opacity', 0).attr('d', lineGen);
+      if (!view.reducedMotion) {
+        ground.transition().duration(drawIn).attr('stroke-opacity', 0.35);
+        figure.transition().delay(drawIn * 0.2).duration(drawIn).attr('stroke-opacity', 1);
+      } else {
+        ground.attr('stroke-opacity', 0.35);
+        figure.attr('stroke-opacity', 1);
+      }
     }
 
     function resolveGapMeter() {
       if (!alive || meanGap === null || meanGap === undefined) return;
+      const label = (v) => `mean gap: ${v.toFixed(2)} points${v < 1 ? ' — under one cent' : ''}`;
       if (view.reducedMotion) {
-        gapMeter.text(`mean gap: ${meanGap.toFixed(2)} points`);
+        gapMeter.text(label(meanGap));
         return;
       }
       const t0 = performance.now();
       const tick = (now) => {
         if (!alive) return;
         const p = Math.min(1, (now - t0) / countUpMax);
-        gapMeter.text(`mean gap: ${(meanGap * p).toFixed(2)} points`);
+        gapMeter.text(label(meanGap * p));
         if (p < 1) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
     }
 
+    // The "Pinnacle lane": sixteen sequenced vertical marks, one per
+    // suspension, landing with an onset (change-blindness countermeasure,
+    // perception brief §7). This is b2's entire job and its ONLY job — it
+    // is exactly what the beat's own caption announces, drawn the moment
+    // it announces it (visual-story-review C3: the prior build promised
+    // these lines in b2 but delivered an un-keyed amber dot swarm instead,
+    // from a different dataset, and held the real lines back for b3).
+    // Idempotent — safe to call again from b3 if a reader scrubs straight
+    // there without passing through b2 first.
     function landTerminations() {
-      const sel = termLayer.selectAll('g.term')
+      const sel = termLayer.selectAll('line.term')
         .data(terms, (d, i) => (d.match_id || '') + (d.leg || '') + i);
-      const enter = sel.enter().append('g').attr('class', 'term')
-        .attr('transform', (d) => `translate(${scales.time(new Date(d.t))},${scales.price(d.last_quote_pts)})`)
-        .style('opacity', 0);
-      enter.append('circle').attr('r', 3).attr('fill', view.css('venue-pinnacle-terminated'));
-      enter.append('line')
-        .attr('x1', 0).attr('x2', spacing[4]).attr('y1', 0).attr('y2', 0)
+      const enter = sel.enter().append('line').attr('class', 'term')
+        .attr('x1', (d) => scales.time(new Date(d.t)))
+        .attr('x2', (d) => scales.time(new Date(d.t)))
+        .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
         .attr('stroke', view.css('venue-pinnacle-terminated'))
         .attr('stroke-width', leaderWeight)
-        .attr('stroke-dasharray', '2,2');
+        .attr('stroke-dasharray', '2,3')
+        .style('opacity', 0);
       const merged = enter.merge(sel);
-      const n = terms.length || 16;
-
       if (!view.reducedMotion) {
         merged.transition()
           .delay((d, i) => Math.min(i, maxSeq - 1) * stagger)
-          .duration(drawIn).style('opacity', 1)
-          .end().catch(() => {})
-          .then(() => { if (alive) runCountUp(n); });
+          .duration(drawIn).style('opacity', 0.9);
       } else {
-        merged.style('opacity', 1);
-        runCountUp(n);
+        merged.style('opacity', 0.9);
       }
-      captionDiv.text('no longer quoting');
+      captionDiv.text('Grey lines: Pinnacle stops quoting, one at a time.');
+    }
+
+    // b3's payoff: count the sixteen lines already on screen, then land
+    // the scene's one amber statement (visual-story-review C4: the amber
+    // budget is spent exactly once, here — no key-border spotlight, no
+    // dot swarm, just this). `highlightEvidence` brightens the sixteen
+    // lines together, plus the dim spike-ground they sit on, the instant
+    // the verdict lands — a simultaneous highlight standing in for a
+    // leader line that would otherwise have to pick one mark of sixteen
+    // (visual-story-review M1).
+    function revealVerdict() {
+      if (termLayer.selectAll('line.term').empty()) landTerminations();
+      captionDiv.text('Counting every stoppage.');
+      runCountUp(terms.length || 16);
+    }
+
+    function highlightEvidence() {
+      if (view.reducedMotion) {
+        termLayer.selectAll('line.term').style('opacity', 1).attr('stroke-width', leaderWeight + 0.5);
+        lineLayer.select('path.gap-line-ground').attr('stroke-opacity', 0.6);
+        return;
+      }
+      termLayer.selectAll('line.term').transition().duration(recolorMs)
+        .style('opacity', 1).attr('stroke-width', leaderWeight + 0.5);
+      lineLayer.select('path.gap-line-ground').transition().duration(recolorMs)
+        .attr('stroke-opacity', 0.6);
     }
 
     function runCountUp(n) {
       if (!alive) return;
       if (view.reducedMotion) {
-        countChip.text(`${n} of ${n} start at Pinnacle's last quote.`);
+        countChip.text(`${n} of ${n} times, Pinnacle simply stopped quoting.`);
+        highlightEvidence();
         resolveGapMeter();
         return;
       }
@@ -439,7 +615,8 @@ export default {
         i += 1;
         countChip.text(`${i} of ${n}`);
         if (i >= n) {
-          countChip.text(`${n} of ${n} start at Pinnacle's last quote.`);
+          countChip.text(`${n} of ${n} times, Pinnacle simply stopped quoting.`);
+          highlightEvidence();
           setTimeout(() => { if (alive) resolveGapMeter(); }, drawIn);
           return;
         }
@@ -451,16 +628,15 @@ export default {
     return {
       step(beatId) {
         if (beatId === 'b1') {
-          drawLines();
-          drawPinnacleLive();
-          drawDirectLabels();
+          drawBandAndZero();
+          drawGapLine();
           captionDiv.text('The dots rest here. One mark is one minute of matched price.');
-          gapMeter.text('mean gap: —');
+          gapMeter.text('');
           countChip.text('');
         } else if (beatId === 'b2') {
-          flashSpikes();
-        } else if (beatId === 'b3') {
           landTerminations();
+        } else if (beatId === 'b3') {
+          revealVerdict();
         }
       },
       exit() {
@@ -476,14 +652,13 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>Every match in the knockout stage has three tickets: one pays out on a home win, one on a draw, one on an away win. Traders call this the three-way. A point on this chart is one cent of price, so a five-point gap is five cents, about five chances out of a hundred.</p><p>Two rival markets priced every one of those tickets, all month: Kalshi, built in the United States, and Polymarket, built offshore. The two never sat five points apart for even thirty minutes. Minute by minute, the average gap stayed under one cent.${FN(15)}</p><p>Here is why the gap almost never opens. When one market prices a ticket a little rich and the other prices it a little cheap, traders buy the cheap ticket and sell the rich one until the two prices meet. That trade is close to free money, so the gap closes fast.</p>`,
+      html: `<p>Every match in the knockout stage has three tickets: one pays out on a home win, one on a draw, one on an away win. Traders call this the three-way. A point on this chart is one cent of price, so a five-point gap is five cents, about five chances out of a hundred.</p><p>Two rival markets priced every one of those tickets, all month: Kalshi, built in the United States, and Polymarket, built offshore. The chart below tracks how far apart the two ran, minute by minute, averaged across all three tickets. The two never sat five points apart for even thirty minutes. Minute by minute, the average gap stayed under one cent.${FN(15)}</p><p>Here is why the gap almost never opens. When one market prices a ticket a little rich and the other prices it a little cheap, traders buy the cheap ticket and sell the rich one until the two prices meet. That trade is close to free money, so the gap closes fast.</p>`,
       trigger: 'step',
       state: 'rest',
       kind: 'resort',
       chip: [
-        { token: 'venue-kalshi', glyph: 'line', label: 'cyan = Kalshi price' },
-        { token: 'venue-polymarket', glyph: 'line', label: 'lavender = Polymarket price' },
-        { token: 'venue-pinnacle', glyph: 'dash', label: "grey = the pros' price, dashed when they stop quoting" },
+        { token: 'ink-hi', glyph: 'line', label: 'bright = how close Kalshi and Polymarket traded' },
+        { token: 'venue-pinnacle-terminated', glyph: 'dash', label: 'grey = Pinnacle stops quoting' },
         { token: 'field-rest', glyph: 'dim', label: 'grey dots = money at rest, the whole tournament' },
       ],
       grain: {
@@ -494,34 +669,34 @@ export default {
     },
     {
       id: 'b2',
-      // Pure-visual step: the fact this beat performs (goal-second gaps
-      // close within a minute) is already stated by the braid holding
-      // together in b1's prose; this step shows it, not narrates it again.
-      // The caption it drives is the pre-cue for b3 (see flashSpikes()).
-      html: '<!-- visual-only step: goal-second flashes -->',
+      // Pure-visual step: this is where the beat's own chip key ("grey
+      // dashed = Pinnacle stops quoting") actually lands. The sixteen
+      // suspension lines draw here, sequenced, with an onset (visual-
+      // story-review C3: the prior build promised this line-landing in
+      // b2's caption but delivered an un-keyed amber dot swarm from a
+      // different dataset instead, holding the real lines back for b3 —
+      // a broken announce/deliver contract).
+      html: '<!-- visual-only step: the sixteen Pinnacle-suspension lines land -->',
       trigger: 'step',
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>Sixteen times, Kalshi seemed to split from the professional book. That book is Pinnacle, the professional sportsbook from the goal scene. Every split began within about two minutes of Pinnacle's last posted price. Not one held a single fresh Pinnacle quote after that.${FN(15)}</p><p>Sixteen episodes, one cause: the professionals had left the room.</p>`,
+      html: `<p>Sixteen times during the knockout stage, Pinnacle — the professional sportsbook from the goal scene — simply stopped quoting a live three-way. Each grey line marks the moment: not one shows a fresh Pinnacle quote arriving afterward.${FN(15)}</p><p>Sixteen episodes, one cause: the professionals had left the room.</p>`,
       trigger: 'step',
       overlayStep: 'b3',
     },
   ],
 
   anchors: {
-    /* L1 recap for S16's lens carousel (CONTRACT §4 `anchors?`): S10's braid
-     * frame with the population at rest. S10 never re-sorts its own dots.
-     * The braid is a pair of D3 per-minute price traces above a resting
-     * field (storyboard S10 Units), and those traces live in this scene's
-     * JSON, which S16 does not load. The honest recap is therefore the
-     * resting population under the braid's time frame plus the two-venue
-     * caption, never a fabricated price line. Self-sufficient: reads only
-     * data.pop and data.manifest, builds a fresh local time scale (the
-     * registry key this scene owned is cleared on exit, CONTRACT §6.1). S16
-     * applies no dot spotlight to L1, matching "the braid is D3-only, the
-     * population rests." */
+    /* L1 recap for S16's lens carousel (CONTRACT §4 `anchors?`): the
+     * population at rest under the scene's own time frame. S10 never
+     * re-sorts its own dots, and the recap does not fabricate a price (or
+     * gap) line — this scene's D3 data lives in s10.json, which S16 does
+     * not load. Self-sufficient: reads only data.pop and data.manifest,
+     * builds a fresh local time scale (the registry key this scene owned
+     * is cleared on exit, CONTRACT §6.1). S16 applies no dot spotlight to
+     * L1, matching "the chart is D3-only, the population rests." */
     braid(data, view, rect) {
       const { pop, manifest } = data;
       const N = pop.count;
@@ -533,9 +708,10 @@ export default {
       const time = d3.scaleUtc().domain([epochMs, endMs]).range([rect.x + 8, rect.x + rect.w - 8]);
       const birth = pop.birth_ts;
       for (let i = 0; i < N; i++) {
-        // Tight central band: the two venues braided into one line. No price
-        // axis is drawn for L1, so the band's vertical position carries no
-        // price claim; it reads as the single braided line at rest.
+        // Tight central band: the two venues braided into one line. No axis
+        // is drawn for L1 beyond the time ticks, so the band's vertical
+        // position carries no price/gap claim; it reads as the resting
+        // population under the scene's own timeline.
         state.x[i] = time(epochMs + birth[i] * 1000);
         state.y[i] = rect.y + rect.h * (0.42 + 0.16 * hash01(i));
         setColor(state.color, i, rest);
@@ -554,13 +730,9 @@ export default {
               s.selectAll('path,line').attr('stroke', view.css('ink-low'));
             });
           ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
-            .attr('fill', view.css('venue-kalshi'))
+            .attr('fill', view.css('ink-hi'))
             .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-annotation-size'))
-            .text('Kalshi');
-          ax.append('text').attr('x', rect.x + 64).attr('y', rect.y - 6)
-            .attr('fill', view.css('venue-polymarket'))
-            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-annotation-size'))
-            .text('Polymarket');
+            .text('Kalshi vs Polymarket, gap');
           ax.append('text').attr('x', rect.x + 168).attr('y', rect.y - 6)
             .attr('fill', view.css('ink-mid'))
             .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))

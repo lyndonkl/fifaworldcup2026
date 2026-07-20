@@ -191,12 +191,15 @@ export default {
       .attr('fill', 'var(--ink-mid)')
       .text('seconds after the goal');
 
-    // Left-gutter lane labels (CR-7), vertically centered per lane, mono
-    // apparatus, ink-low/ink-mid only -- venue hue is licensed for the
-    // marks themselves, not decorative for the labels (S7 note: every
-    // label here is ink-mid or ink-low, zero decorative amber).
+    // Left-gutter lane labels (CR-7), top-anchored per lane (NOT vertically
+    // centered -- centering put this text at the exact same y as the
+    // Pinnacle darkness block's "no longer quoting" label, which sits
+    // mid-lane, garbling both; perception-brief P4), mono apparatus,
+    // ink-low/ink-mid only -- venue hue is licensed for the marks
+    // themselves, not decorative for the labels (S7 note: every label here
+    // is ink-mid or ink-low, zero decorative amber).
     const laneLabel = (text, top) => g.append('text')
-      .attr('x', view.region.x).attr('y', top + laneH / 2 + 4)
+      .attr('x', view.region.x).attr('y', top + 14)
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-micro-size)')
       .attr('fill', 'var(--ink-low)')
@@ -214,7 +217,12 @@ export default {
     // b1's amber unit: halo + ink-hero core. At b2 the halo recolors to
     // ink-mid (the core stays as the at-mark anchor) so amber stays a true
     // singleton once the darkness block claims the beat's amber unit.
-    const goalMarkSel = drawSingleton(goalMark, x(0), laneTop.K, tokens, goalLabel);
+    // Nudged 42px below laneTop.K (not flush with it) so the halo and its
+    // label clear both the Zone K race caption above the stage AND the
+    // "KALSHI · every trade" lane label, which sits at laneTop.K+14
+    // (perception-brief P4: all three were overlapping at the stage's top
+    // edge).
+    const goalMarkSel = drawSingleton(goalMark, x(0), laneTop.K + 42, tokens, goalLabel);
 
     // Pinnacle: requote dashes (a visibly different glyph from Kalshi's
     // circles) + the darkness block.

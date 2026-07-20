@@ -58,6 +58,24 @@ function findFamilyIndex(manifest, name) {
   return i;
 }
 
+// Plain-words stage names (Gate-4 visual-story review, s15 Tier-2: raw
+// snake_case tick labels like "post_group_pre_r32" reached the reader
+// verbatim). data/scenes/s15.json's own `stage.id`s are stable strings, not
+// display copy, so this is the one place the mapping belongs: an unmapped
+// id still degrades to an underscore-free string rather than throwing or
+// printing the raw id.
+const STAGE_LABELS = {
+  pre_tournament: 'before the tournament',
+  post_group_pre_r32: 'after the groups',
+  post_r32_pre_r16: 'after the round of 32',
+  post_r16_pre_qf: 'after the round of 16',
+  post_qf_pre_sf: 'after the quarterfinals',
+};
+function humanizeStageLabel(label) {
+  if (!label) return '';
+  return STAGE_LABELS[label] || String(label).replace(/_/g, ' ');
+}
+
 /* ---------------------------------------------------------------- */
 /* Core placement, shared by layout() and anchors.strip().           */
 /* region = { x, y, w, h } in CSS px (view.region for the live scene, */
@@ -121,6 +139,16 @@ function computeStripState(data, view, region, { drained }) {
   const blue = view.color('identity-blue');   // France's money — active-tier (alpha 1.0)
   const crimson = view.color('identity-crimson'); // Spain's money — active-tier (alpha 1.0)
   const dead = view.state('dead');
+  // A real luminance gap (Gate-4 visual-story review, s15 SIMPLIFY): the
+  // engine's per-tier alpha classification already separates active from
+  // rest, but every dot piece-wide shares one radius, so France/Spain's
+  // active cohort contributes no more area than the dimmed field behind
+  // it. Bumping the story cohort's own size is the scene-level half of
+  // figure-ground (perception-brief §4: "increase figure size ... relative
+  // to ground elements"); the rest field and the settling France dots
+  // below keep the base size so only the LIVE cohort gets the boost.
+  const baseSize = view.tokens.dot['radius-base-px'];
+  const activeSize = baseSize * 1.6;
 
   const birth = pop.birth_ts, team = pop.team, family = pop.family, priceBand = pop.price_band, flags = pop.flags;
 
@@ -147,15 +175,26 @@ function computeStripState(data, view, region, { drained }) {
         const c = isFRA ? blue : crimson;
         state.color[i * 4] = c[0]; state.color[i * 4 + 1] = c[1];
         state.color[i * 4 + 2] = c[2]; state.color[i * 4 + 3] = c[3];
-        state.size[i] = view.tokens.dot['radius-base-px'];
+        state.size[i] = activeSize;
       } else if (isFRA) {
         // France: pour downward and desaturate — the conviction settling
-        // to zero at the July 14 mark (storyboard S15 Units).
+        // to zero at the July 14 mark (storyboard S15 Units). Spread into a
+        // real 2-D puddle (not a single-pixel-thick line): collapsing
+        // thousands of dots onto one y value packs them so densely that
+        // additive blending pushes the pour back toward white, recreating
+        // the un-keyed "brightest object in the frame" bug this pass is
+        // fixing, since state.dead's alpha sits in the engine's
+        // unclassified band and is not protected by the rest-tier density
+        // cap (tokens.json density_tone_mapping note). Spreading the same
+        // dot count over a taller band lowers local overlap density enough
+        // that the tile's own luminance cap has room to actually dim it,
+        // which is the visual the doctrine calls "deaths rendered as
+        // dimming" rather than a bright bar.
         state.x[i] = x(stageIds[stageIds.length - 1]) + jitterX;
-        state.y[i] = region.y + region.h - 2;
+        state.y[i] = region.y + region.h - 4 - hash01(i * 17 + 9) * (region.h * 0.22);
         state.color[i * 4] = dead[0]; state.color[i * 4 + 1] = dead[1];
         state.color[i * 4 + 2] = dead[2]; state.color[i * 4 + 3] = dead[3];
-        state.size[i] = view.tokens.dot['radius-base-px'];
+        state.size[i] = baseSize;
       } else {
         // Spain: brighten and drift to the right edge, where S16 receives
         // them (storyboard S15 Units; S16 L5 anchor).
@@ -163,14 +202,22 @@ function computeStripState(data, view, region, { drained }) {
         state.y[i] = y(pb) + jitterY * 0.4;
         state.color[i * 4] = crimson[0]; state.color[i * 4 + 1] = crimson[1];
         state.color[i * 4 + 2] = crimson[2]; state.color[i * 4 + 3] = crimson[3];
-        state.size[i] = view.tokens.dot['radius-base-px'];
+        state.size[i] = activeSize;
       }
     } else {
       state.x[i] = timeX(new Date(epochMs + birth[i] * 1000));
-      state.y[i] = region.y + region.h * (0.15 + 0.7 * hash01(i * 13 + 1));
+      // Wider vertical spread (0.06-0.94 of stage height, matching s14.js's
+      // own rest-scatter convention) than the previous 0.15-0.85 band: this
+      // field's real trade volume skews hard toward the tournament's final
+      // weeks, so a large share of it lands in the same few x-pixels
+      // regardless of how the y-jitter is set. Y carries no claim (the
+      // comment above this loop already says so), so widening it is a
+      // legitimate scene-level lever to lower local overlap density ahead
+      // of the engine's own rest-tier cap, not a data change.
+      state.y[i] = region.y + region.h * (0.06 + 0.88 * hash01(i * 13 + 1));
       state.color[i * 4] = restRgba[0]; state.color[i * 4 + 1] = restRgba[1];
       state.color[i * 4 + 2] = restRgba[2]; state.color[i * 4 + 3] = restRgba[3];
-      state.size[i] = view.tokens.dot['radius-base-px'];
+      state.size[i] = baseSize;
     }
   }
   return { state, x, y, stageIds, stages };
@@ -218,7 +265,7 @@ export default {
       .attr('transform', `translate(0, ${view.region.y + view.region.h + 8})`)
       .call(d3.axisBottom(scales.x).tickFormat((id) => {
         const s = stages.find((st) => st.id === id);
-        return s ? s.label : id;
+        return humanizeStageLabel(s ? s.label : id);
       }));
     axisG.selectAll('text')
       .attr('fill', view.css('ink-mid'))
@@ -265,13 +312,17 @@ export default {
 
     // Direct label at the model line's right end (design-revision-spec
     // S15 item 4): names the grey line so its meaning never depends on
-    // recall alone.
+    // recall alone. Wording plainly contrasts the line against the two
+    // money cohorts it sits beside (Gate-4 visual-story review, s15
+    // SIMPLIFY: "label the model line vs price cohorts plainly") — this is
+    // a computer's estimate, not a trade, where "France's money" and
+    // "Spain's money" are each a real dot for a real trade.
     const modelLineLabel = g.append('text').attr('class', 's15-model-label')
       .attr('fill', view.css('neutral-data'))
       .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-caption-size'))
       .attr('text-anchor', 'end')
       .attr('opacity', 0)
-      .text('the model’s odds (devigged)');
+      .text('the model’s guess, devigged, not money traded');
     if (stages.length) {
       const lastStage = stages[stages.length - 1];
       modelLineLabel.attr('x', scales.x(lastStage.id)).attr('y', scales.y(lastStage.opta_pct) - 8);
@@ -410,6 +461,34 @@ export default {
         state: built.state,
         drawAxes(g) {
           const stages = built.stages;
+          // Axis ticks always render (Gate-4 visual-story review, s16
+          // Tier-1 C4/C5: L5 recap showed "no axes" when this scene's own
+          // JSON was not on hand). built.x's domain is always five stage
+          // ids, real or the deterministic fallback bucketing
+          // computeStripState already falls back to, so a labeled
+          // coordinate frame never depends on data.scene being present.
+          // Only the model line below is real per-stage data and is
+          // skipped when it is not.
+          const ax = g.append('g').attr('class', 's15-anchor-axes');
+          ax.append('g')
+            .attr('transform', `translate(0,${rect.y + rect.h})`)
+            .call(d3.axisBottom(built.x).tickFormat((id) => {
+              const s = stages.find((st) => st.id === id);
+              return humanizeStageLabel(s ? s.label : id);
+            }))
+            .call((s) => {
+              s.selectAll('text').attr('fill', view.css('ink-low'))
+                .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+              s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+            });
+          ax.append('g')
+            .attr('transform', `translate(${rect.x},0)`)
+            .call(d3.axisLeft(built.y).ticks(4).tickFormat((d) => `${d}c`))
+            .call((s) => {
+              s.selectAll('text').attr('fill', view.css('ink-low'))
+                .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+              s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+            });
           if (!stages.length) return;
           g.append('path').attr('fill', 'none')
             .attr('stroke', view.css('neutral-data')).attr('stroke-width', 1)

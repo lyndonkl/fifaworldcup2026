@@ -145,9 +145,21 @@ export default {
     const region = view.region;
     // Mini race-curve chart occupies a bounded inset at the top of the
     // stage rect so it never collides with the dot columns beneath.
+    // Gate-4 visual-story review (s03 C3): nearly all of the tournament's
+    // money trades in the domain's final ~5% (kickoff through freeze), so
+    // the one pixel range that actually matters sat directly under the
+    // fixed KEY RECT (top-right no-fly zone, design-revision-spec G5) and
+    // was never visible in any captured frame. Stop the chart before that
+    // reserved band -- the same pattern s10/s12 already use -- so the
+    // curve's climb has somewhere on screen to be seen.
+    const keyMarginPx = view.mobile ? 0
+      : (view.tokens.layout['key-exclusion-w-px'] || 280) + view.tokens.spacing_px[3];
+    const chartRight = view.mobile
+      ? region.x + region.w
+      : Math.min(region.x + region.w, view.W - keyMarginPx - view.safe);
     const chartRect = {
       x: region.x, y: region.y,
-      w: region.w, h: region.h * 0.16,
+      w: chartRight - region.x, h: region.h * 0.16,
     };
     const x = registry.register('s03.time',
       d3.scaleUtc()
@@ -179,7 +191,15 @@ export default {
     const mobile = view.mobile;
     const gutter = mobile ? region.h * 0.10 : region.w * 0.10;
     const colSpanW = mobile ? region.w * 0.86 : (region.w - gutter) / 2 * 0.72;
-    const colSpanH = mobile ? region.h * 0.16 : region.h * 0.78;
+    // Gate-4 visual-story review (s03 M2/M3): at full population (b3) the
+    // column was tall enough to run up behind the counter and the KEY
+    // RECT. Reserve that chrome band explicitly -- 0.62 (recalibrated
+    // against the counter's own measured on-screen box: top offset
+    // key-exclusion-h + 3 stacked space tokens + a ~58px 48px-font line
+    // box) leaves the column's tallest possible top comfortably below the
+    // counter's footprint instead of relying on the mini-chart's height
+    // alone.
+    const colSpanH = mobile ? region.h * 0.16 : region.h * 0.62;
 
     // Adaptive pitch: choose a packing pitch so the larger (match) family's
     // FINAL dot count just fills the available colSpanW x colSpanH box —
@@ -263,6 +283,16 @@ export default {
 
     return {
       states: {
+        // Gate-4 visual-story review (s03 C1): the population arrives at
+        // this scene however the PREVIOUS scene left it (object constancy
+        // — the engine never cuts and redraws), so the very first captured
+        // frame of b1 is mostly that prior scene's colors and shape, not
+        // this scene's key. `entryRest` is every dot at the resting-band
+        // position/tint (buildState with an unreachable cutoff arrives
+        // nobody), snapped to instantly in overlay() below, so the b1
+        // resort always animates FROM a clean, key-matching rest field,
+        // never from another scene's residue.
+        entryRest: buildState(-Infinity),
         day1: buildState(day1CutMs),
         crossover: buildState(crossoverCutMs),
         snapshot: buildState(Infinity),
@@ -275,11 +305,18 @@ export default {
   },
 
   overlay(container, data, view, scales) {
-    const { svg, html } = container;
+    const { svg, html, activate } = container;
     const sj = data.scene || {};
     const an = analyzePopulation(data.pop, data.manifest);
     const points = buildCumulativeSeries(an);
     const { x, y, chartRect } = scales;
+
+    // Gate-4 visual-story review (s03 C1, "settle residue to rest before
+    // entry"): an instant (duration 0) tween is a hard snap, not a visible
+    // frame — it runs before activateBeat()'s own b1 tween call in the
+    // same synchronous pass, so the reader never sees it. It only changes
+    // what the b1 resort animates FROM.
+    if (typeof activate === 'function') activate('entryRest', { kind: 'instant' });
 
     const g = svg.append('g').attr('class', 's03-chart');
     const axisX = d3.axisBottom(x).ticks(6).tickSizeOuter(0);
@@ -318,21 +355,39 @@ export default {
 
     const lineFut = d3.line().x((d) => x(an.epochMs + d.day * 86400000)).y((d) => y(d.futUsd)).curve(d3.curveStepAfter);
     const lineMatch = d3.line().x((d) => x(an.epochMs + d.day * 86400000)).y((d) => y(d.matchUsd)).curve(d3.curveStepAfter);
+    const lineTotal = d3.line().x((d) => x(an.epochMs + d.day * 86400000))
+      .y((d) => y(d.futUsd + d.matchUsd)).curve(d3.curveStepAfter);
 
+    // Gate-4 visual-story review (s03 C3): neither per-family line ever
+    // reaches anywhere near the press-floor line on its own, so they step
+    // back to dim context and a single combined line -- the SAME
+    // quantity the counter shows and the press line marks -- becomes the
+    // chart's one figure, the encoding the crossing is actually about.
     const pathFut = g.append('path').datum(points).attr('fill', 'none')
-      .attr('stroke', view.css(FAMILY_COLOR.futures)).attr('stroke-width', 2).attr('d', lineFut);
+      .attr('stroke', view.css(FAMILY_COLOR.futures)).attr('stroke-width', 1.5)
+      .attr('stroke-opacity', 0.4).attr('d', lineFut);
     const pathMatch = g.append('path').datum(points).attr('fill', 'none')
-      .attr('stroke', view.css(FAMILY_COLOR.match)).attr('stroke-width', 2).attr('d', lineMatch);
+      .attr('stroke', view.css(FAMILY_COLOR.match)).attr('stroke-width', 1.5)
+      .attr('stroke-opacity', 0.4).attr('d', lineMatch);
+    const pathTotal = g.append('path').datum(points).attr('fill', 'none')
+      .attr('stroke', view.css('ink-hero')).attr('stroke-width', 2.5).attr('d', lineTotal);
 
     // Press-floor dashed reference line, per storyboard: "a horizontal
     // marker labeled 'press floor, ~one week stale' at $7.4B."
+    // Gate-4 visual-story review (s03 C2, "stage the $7.4B crossing on the
+    // counter"): the line and its label start invisible (opacity 0, not
+    // display:none, so a d3 transition can fade them) and are revealed
+    // exactly when the counter's own animated number passes pf.usd — see
+    // setCounter()'s onCross hook below. That is the scene's one staged
+    // event on step 3: the counter is the figure, the line is its proof.
     const pf = sj.press_floor || null;
-    let pfLine = null, pfLabel = null;
+    let pfLine = null, pfLabel = null, crossDot = null;
     if (pf) {
       pfLine = g.append('line')
         .attr('x1', chartRect.x).attr('x2', chartRect.x + chartRect.w)
         .attr('y1', y(pf.usd)).attr('y2', y(pf.usd))
-        .attr('stroke', view.css('ink-mid')).attr('stroke-dasharray', '4,4').attr('stroke-width', 1);
+        .attr('stroke', view.css('ink-mid')).attr('stroke-dasharray', '4,4').attr('stroke-width', 1)
+        .style('opacity', 0);
       // Gate-4 visual-story review (s03 critical, "$7.4B crossing is
       // mute"): the reference line now carries its dollar figure and its
       // meaning in the label, anchored at the LEFT end of the line where
@@ -342,7 +397,20 @@ export default {
         .attr('text-anchor', 'start')
         .attr('fill', view.css('ink-mid'))
         .style('font', `${view.tokens.typography.scale.find((s) => s.name === 'caption').size} var(--font-apparatus)`)
-        .text(`${fmt.usd(pf.usd)}: the press number, about one week stale`);
+        .text(`${fmt.usd(pf.usd)}: the press number, about one week stale`)
+        .style('opacity', 0);
+
+      // Gate-4 visual-story review (s03 C3, "the strongest encoding
+      // available -- position on a common scale -- is unused"): mark the
+      // exact point where the total line passes the press floor, so the
+      // crossing the beat narrates is a point the reader can see, not two
+      // printed numbers ($X.XXB vs $7.40B) they have to compare by hand.
+      const crossPt = points.find((p) => (p.futUsd + p.matchUsd) >= pf.usd) || points[points.length - 1];
+      crossDot = g.append('circle')
+        .attr('cx', x(an.epochMs + crossPt.day * 86400000))
+        .attr('cy', y(crossPt.futUsd + crossPt.matchUsd))
+        .attr('r', 4).attr('fill', view.css('ink-hero'))
+        .style('opacity', 0);
     }
 
     // Crossover annotation. The scene's one amber unit, step 2 only
@@ -352,13 +420,20 @@ export default {
     const crossMs = tsMs(sj.crossover_end, null);
     let crossMark = null, crossLine = null, crossLabel = null;
     if (crossMs) {
+      const crossX = x(crossMs);
+      // Gate-4 visual-story review (s03 M5): the label used to open
+      // rightward off a line that sits close to the domain's right edge,
+      // clipping the piece's one amber singleton at the viewport border.
+      // Flip it to open leftward whenever there is not enough room.
+      const opensLeft = crossX > chartRect.x + chartRect.w - 150;
       crossMark = g.append('g').attr('class', 's03-crossover');
       crossLine = crossMark.append('line')
-        .attr('x1', x(crossMs)).attr('x2', x(crossMs))
+        .attr('x1', crossX).attr('x2', crossX)
         .attr('y1', chartRect.y).attr('y2', chartRect.y + chartRect.h)
         .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
       crossLabel = crossMark.append('text')
-        .attr('x', x(crossMs) + 6).attr('y', chartRect.y + 12)
+        .attr('x', crossX + (opensLeft ? -6 : 6)).attr('y', chartRect.y + 12)
+        .attr('text-anchor', opensLeft ? 'end' : 'start')
         .attr('fill', view.css('accent-annotation'))
         .style('font', `${view.tokens.typography.scale.find((s) => s.name === 'annotation').size} var(--font-apparatus)`)
         .text('day two: match markets catch up');
@@ -376,37 +451,138 @@ export default {
       .text('98.6% of everything on this tape traded after kickoff.')
       .style('display', 'none');
 
-    // The running dollar counter — the scene's protagonist number.
-    // Moved to the stage's top-right (design-revision-spec S3 §1), clear
-    // of the KEY RECT (G5): ink-hi, not amber, so motion (not the
-    // reserved annotation hue) carries the attention.
+    // Gate-4 visual-story review (s03 C1/M4, "the floor bars are an
+    // unexplained encoding" / "the resting state itself must carry the
+    // comparison"): a direct, always-legible label at each column's base
+    // states its category and running total, so the settled frame reads
+    // correctly even where the dot-count delta between beats is only a
+    // few pixels tall. Desktop only (the reviewed layout); geometry
+    // mirrors layout()'s desktop branch -- overlay() cannot read layout()'s
+    // locals under the pure-fn contract (see file header), the same
+    // constraint analyzePopulation() already works around above.
+    const mobile = view.mobile;
+    const region = view.region;
+    let futLabelVal = null, matchLabelVal = null;
+    if (!mobile) {
+      const futCenterX = region.x + region.w * 0.27;
+      const matchCenterX = region.x + region.w * 0.73;
+      const baseY = region.y + region.h * 0.94;
+      const microFont = `${view.tokens.typography.scale.find((s) => s.name === 'micro').size} var(--font-apparatus)`;
+      const valFont = `600 ${view.tokens.typography.scale.find((s) => s.name === 'annotation').size} var(--font-apparatus)`;
+
+      const futG = g.append('g').attr('class', 's03-col-label').attr('transform', `translate(${futCenterX},${baseY + 22})`);
+      futG.append('text').attr('text-anchor', 'middle').attr('y', 0)
+        .attr('fill', view.css('ink-low')).style('font', microFont)
+        .style('letter-spacing', '0.02em').style('text-transform', 'uppercase')
+        .text('winner bets');
+      futLabelVal = futG.append('text').attr('text-anchor', 'middle').attr('y', 18)
+        .attr('fill', view.css(FAMILY_COLOR.futures)).style('font', valFont).text(fmt.usd(0));
+
+      const matchG = g.append('g').attr('class', 's03-col-label').attr('transform', `translate(${matchCenterX},${baseY + 22})`);
+      matchG.append('text').attr('text-anchor', 'middle').attr('y', 0)
+        .attr('fill', view.css('ink-low')).style('font', microFont)
+        .style('letter-spacing', '0.02em').style('text-transform', 'uppercase')
+        .text('match bets');
+      matchLabelVal = matchG.append('text').attr('text-anchor', 'middle').attr('y', 18)
+        .attr('fill', view.css(FAMILY_COLOR.match)).style('font', valFont).text(fmt.usd(0));
+    }
+
+    // Gate-4 visual-story review (s03 M3): a persistent micro-label binds
+    // the counter to its referent (Gestalt proximity for label-referent
+    // binding) so it never reads as an ambient, unexplained UI clock.
+    // Extra clearance beyond the KEY-EXCLUSION-H token: the token (132px)
+    // reserves less than the panel's actual rendered height once its
+    // three two-line rows are laid out (observed ~180px), so the fixed
+    // offset undershoots and the label ends up drawn behind the panel.
+    const counterLabelEl = html.append('div').attr('class', 's03-counter-label')
+      .style('position', 'absolute')
+      .style('right', 'var(--space-24)')
+      .style('top', 'calc(var(--layout-key-exclusion-h-px) + var(--space-24) + var(--space-48))')
+      .style('font-family', 'var(--font-apparatus)')
+      .style('font-size', 'var(--type-micro-size)')
+      .style('font-weight', '500')
+      .style('letter-spacing', '0.02em')
+      .style('text-transform', 'uppercase')
+      .style('color', 'var(--ink-low)')
+      .style('text-align', 'right')
+      .style('pointer-events', 'none')
+      .text('the tape’s running total');
+
+    // The running dollar counter — the scene's protagonist number, but
+    // only in b3 (its own beat). Moved to the stage's top-right
+    // (design-revision-spec S3 §1), clear of the KEY RECT (G5): ink-hi,
+    // not amber, so motion (not the reserved annotation hue) carries the
+    // attention.
+    // Gate-4 visual-story review (s03 M3, "the counter owns the
+    // luminance peak in nearly every frame even when the beat's figure is
+    // elsewhere"): it now starts at a demoted size/weight (b1's figure is
+    // the two piles, b2's is the reversal) and is promoted to the large,
+    // bright reading only inside setCounterProminence(true) at b3.
     const counterEl = html.append('div').attr('class', 'interactive s03-counter')
       .style('position', 'absolute')
       .style('right', 'var(--space-24)')
-      .style('top', 'calc(var(--layout-key-exclusion-h-px) + var(--space-24) + var(--space-16))')
+      .style('top', 'calc(var(--layout-key-exclusion-h-px) + var(--space-24) + var(--space-48) + var(--space-16))')
       .style('font-family', 'var(--font-apparatus)')
-      .style('font-weight', '600')
-      .style('font-size', 'clamp(28px, 4vw, 48px)')
-      .style('color', 'var(--ink-hi)')
+      .style('font-weight', '500')
+      .style('font-size', 'clamp(20px, 2.6vw, 30px)')
+      .style('color', 'var(--ink-mid)')
       .style('font-variant-numeric', 'tabular-nums lining-nums')
       .style('text-align', 'right')
       .style('pointer-events', 'none');
 
+    // Gate-4 visual-story review (s03 M3): promote the counter's own
+    // weight only in b3 -- its own beat -- so it stops out-competing b1's
+    // flood and b2's reversal for the frame's one luminance peak.
+    function setCounterProminence(active) {
+      counterEl
+        .style('font-size', active ? 'clamp(28px, 4vw, 48px)' : 'clamp(20px, 2.6vw, 30px)')
+        .style('font-weight', active ? '600' : '500')
+        .style('color', active ? 'var(--ink-hi)' : 'var(--ink-mid)');
+    }
+
+    // Gate-4 visual-story review (s03 C2): a brief white flash on the
+    // numerals themselves — the counter is ink-hi, never amber (motion,
+    // not the reserved annotation hue, carries this scene's attention),
+    // so the onset borrows the one brighter rung available, ink-hero.
+    function flashCounter() {
+      counterEl.interrupt().style('color', 'var(--ink-hero)');
+      counterEl.transition().delay(120).duration(400).style('color', 'var(--ink-hi)');
+    }
+
     let raf = null;
     let shown = 0;
-    function setCounter(target, animate) {
+    // `opts.crossValue`/`opts.onCross` (s03 C2): fires once, the instant
+    // the animated numeral passes a threshold — used to stage the $7.40B
+    // press-floor line's reveal exactly on the counter's own crossing,
+    // instead of showing the line statically from the beat's first frame.
+    function setCounter(target, animate, opts = {}) {
+      const { crossValue = null, onCross = null } = opts;
       if (raf) cancelAnimationFrame(raf);
       if (!animate || view.reducedMotion) {
         shown = target;
         counterEl.text(fmt.usd(shown)).classed('fade-in', true);
+        if (crossValue != null && shown >= crossValue && onCross) onCross(true);
         return;
       }
       const start = shown, t0 = performance.now();
-      const dur = Math.min(view.tokens.motion.durations_ms['counter-count-up-max'], 1200);
+      // Gate-4 visual-story review (s03 C2): the counter used to finish
+      // its count-up (1200ms) well before the population's own resort
+      // tween (1700ms + stagger) had moved the dots that number
+      // represents, so the numeral raced ahead of a field that had not
+      // visibly changed yet -- "money appears in no visible form." Match
+      // the counter's nominal duration to the resort tween's instead.
+      const dur = view.tokens.motion.durations_ms['resort-total-target']
+        || view.tokens.motion.durations_ms['counter-count-up-max'] || 1200;
+      let crossed = crossValue == null || start >= crossValue;
+      if (crossed && crossValue != null && onCross) onCross(true);
       function tick(now) {
         const p = Math.min(1, (now - t0) / dur);
         shown = start + (target - start) * p;
         counterEl.text(fmt.usd(shown));
+        if (!crossed && shown >= crossValue) {
+          crossed = true;
+          if (onCross) onCross(false);
+        }
         if (p < 1) raf = requestAnimationFrame(tick);
       }
       raf = requestAnimationFrame(tick);
@@ -418,21 +594,73 @@ export default {
       return s;
     }
 
+    // Feeds the column-base labels (s03 C1/M4): the same per-dot arrival
+    // test as sumUpTo(), split by family, so each column's own label
+    // matches exactly what that column's dots represent.
+    function sumFamilyUpTo(cutoffMs, wantFutures) {
+      let s = 0;
+      for (let i = 0; i < an.N; i++) {
+        if (an.birthMs[i] <= cutoffMs && (an.isFutures[i] === 1) === wantFutures) s += data.pop.dollars[i];
+      }
+      return s;
+    }
+
     return {
       step(beatId) {
         if (beatId === 'b1') {
-          setCounter(sumUpTo(tsMs(sj.day1_end, an.epochMs)), true);
-          if (pfLine) { pfLine.style('display', 'none'); pfLabel.style('display', 'none'); }
+          setCounterProminence(false);
+          const cut = tsMs(sj.day1_end, an.epochMs);
+          setCounter(sumUpTo(cut), true);
+          if (pfLine) {
+            pfLine.interrupt().style('display', 'none').style('opacity', 0).attr('stroke', view.css('ink-mid'));
+            pfLabel.interrupt().style('display', 'none').style('opacity', 0).attr('fill', view.css('ink-mid'));
+          }
           if (crossMark) crossMark.style('display', 'none');
+          if (crossDot) crossDot.interrupt().style('opacity', 0).attr('r', 4);
           shareCaption.style('display', 'none');
+          if (futLabelVal) {
+            futLabelVal.text(fmt.usd(sumFamilyUpTo(cut, true)));
+            matchLabelVal.text(fmt.usd(sumFamilyUpTo(cut, false)));
+          }
         } else if (beatId === 'b2') {
-          setCounter(sumUpTo(tsMs(sj.crossover_end, an.epochMs)), true);
+          setCounterProminence(false);
+          const cut = tsMs(sj.crossover_end, an.epochMs);
+          setCounter(sumUpTo(cut), true);
           if (crossMark) crossMark.style('display', null);
+          // Gate-4 visual-story review (s03 M1, "pre-announced element
+          // arrives late and doubled-up"): the beat's own prose says
+          // "watch the counter pass the grey dashed line," so the line
+          // now appears here, quietly (dim, ink-mid, no flash) -- context
+          // set before any climb happens. b3 only brightens it, at the
+          // crossing, as that beat's sole change.
+          if (pfLine) {
+            pfLine.interrupt().style('display', null).attr('stroke', view.css('ink-mid'))
+              .transition().duration(300).style('opacity', 0.55);
+            pfLabel.interrupt().style('display', null).attr('fill', view.css('ink-mid'))
+              .transition().duration(300).style('opacity', 0.55);
+          }
+          if (crossDot) crossDot.interrupt().style('opacity', 0).attr('r', 4);
           shareCaption.style('display', 'none');
+          if (futLabelVal) {
+            futLabelVal.text(fmt.usd(sumFamilyUpTo(cut, true)));
+            matchLabelVal.text(fmt.usd(sumFamilyUpTo(cut, false)));
+          }
         } else if (beatId === 'b3') {
+          setCounterProminence(true);
           const finalTotal = (data.manifest.census && data.manifest.census.total_usd) || sumUpTo(Infinity);
-          setCounter(finalTotal, true);
-          if (pfLine) { pfLine.style('display', null); pfLabel.style('display', null); }
+          setCounter(finalTotal, true, pf ? {
+            crossValue: pf.usd,
+            onCross(instant) {
+              const dur = (instant || view.reducedMotion) ? 0 : 400;
+              pfLine.transition().duration(dur).style('opacity', 1).attr('stroke', view.css('ink-hi'));
+              pfLabel.transition().duration(dur).style('opacity', 1).attr('fill', view.css('ink-hi'));
+              if (crossDot) {
+                crossDot.interrupt().style('opacity', 1).attr('r', 7)
+                  .transition().delay(dur).duration(350).attr('r', 4);
+              }
+              if (!instant && !view.reducedMotion) flashCounter();
+            },
+          } : {});
           // Emphasis decay (G4): the one amber unit this scene ever shows
           // demotes to ink-mid here; no new amber replaces it.
           if (crossLine && crossLabel) {
@@ -441,12 +669,17 @@ export default {
             crossLabel.transition().duration(dim).attr('fill', view.css('ink-mid'));
           }
           shareCaption.style('display', null);
+          if (futLabelVal) {
+            futLabelVal.text(fmt.usd(sumFamilyUpTo(Infinity, true)));
+            matchLabelVal.text(fmt.usd(sumFamilyUpTo(Infinity, false)));
+          }
         }
       },
       exit() {
         if (raf) cancelAnimationFrame(raf);
         g.remove();
         counterEl.remove();
+        counterLabelEl.remove();
       },
     };
   },

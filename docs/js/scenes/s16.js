@@ -50,6 +50,64 @@ function findIndex(list, candidates) {
   return -1;
 }
 
+/* Gate-4 visual-story review fix (s16 Tier-1 C1 / major l1,l4-t0,l5): the
+ * persistent color KEY (`#chip`, CSS `position: fixed; right/top`, z above
+ * the WebGL canvas per tokens.css --z-chip-and-grain-plate) is already a
+ * reserved, opaque-ish, no-other-content exclusion zone sized by
+ * `layout.key-exclusion-w-px` / `-h-px` (design-revision-spec G5/CR-2).
+ * Every sibling anchor's own "rest" branch scatters its non-story dots
+ * across a chunk of the OWNING scene's full-stage rect -- proportionate
+ * there, but this recap panel is ~40% that area (see layout() below), so
+ * the same dot count lands far denser and blooms past the story mark
+ * regardless of per-dot alpha (perception-brief P1: "no flat per-dot alpha
+ * can fix this" without a density-aware engine cap, out of scope here).
+ * Parking the resting population behind the KEY removes it from the axis
+ * rectangle entirely instead of merely dimming it in place -- the
+ * review's own suggested fix ("route and park in-transit population
+ * outside the axis rectangle, gutter or behind a scrim"). Desktop-only:
+ * mobile's key sits bottom-right in vh units this module has no clean px
+ * handle on, so mobile keeps the previously-shipped in-rect bottom-strip
+ * compaction instead (see layout() below). */
+function keyGutterRect(view) {
+  const L = view.tokens.layout;
+  const sp = view.tokens.spacing_px;
+  const w = L['key-exclusion-w-px'] || 280;
+  const h = L['key-exclusion-h-px'] || 132;
+  const margin = sp[4] || 24;
+  return {
+    x0: view.W - margin - w, x1: view.W - margin,
+    y0: margin, y1: margin + h,
+  };
+}
+
+/* Gate-4 visual-story review fix (s16 major: "the key panel occludes the
+ * right-axis definitions... cannot be decoded"). Standard D3 tick-wrap
+ * recipe (Bostock): break a text run into tspans that each measure under
+ * `maxWidth`, so the unit ribbon never runs a single unbroken line under
+ * the KEY panel regardless of viewport width. */
+function wrapText(sel, text, maxWidth, lineHeightEm) {
+  sel.text(null);
+  const words = String(text).split(/\s+/).reverse();
+  const x = sel.attr('x');
+  const y = sel.attr('y');
+  let word;
+  let line = [];
+  let lineNumber = 0;
+  let tspan = sel.append('tspan').attr('x', x).attr('y', y);
+  while ((word = words.pop())) {
+    line.push(word);
+    tspan.text(line.join(' '));
+    if (tspan.node().getComputedTextLength() > maxWidth && line.length > 1) {
+      line.pop();
+      tspan.text(line.join(' '));
+      line = [word];
+      lineNumber += 1;
+      tspan = sel.append('tspan').attr('x', x).attr('y', y)
+        .attr('dy', `${lineNumber * lineHeightEm}em`).text(word);
+    }
+  }
+}
+
 function siblingNeeds(mod, name) {
   try { return (mod && mod.needs && mod.needs.series) || []; }
   catch (e) { console.warn(`[rt/s16] ${name}.needs unreadable`, e); return []; }
@@ -115,6 +173,36 @@ function callAnchor(mod, name, data, view, rect) {
   }
 }
 
+/* Gate-4 visual-story review (RESHAPE directive): four of the five recap
+ * charts need geometry that lives only in the OWNING scene's own JSON — the
+ * braid's two price traces (L1), the shock timestamp (L3), the poll
+ * percentage (L4), and the checkpoint dates + model line (L5). S16 itself
+ * requests no new analysis table (storyboard S16 Data note: "no new
+ * analysis tables"), but that note is about not inventing a SIXTH table;
+ * reading a sibling scene's own already-published, already-verified JSON
+ * is not inventing anything, and main.js already exposes every scene's
+ * file at `manifest.scenes[id]` (the same URL its OWNING scene fetches via
+ * `needs.scene: true`). This mirrors s18.js's own precedent of a scene
+ * doing its own direct fetch when CONTRACT's sceneData() doesn't expose
+ * what a build needs (s18's `loadMarketsRows`/`loadReplayIndex`). Fetched
+ * once per page load, cached, and patched in without ever re-tweening a
+ * dot position: every anchor below already places its dots truthfully
+ * without this data; only the missing chart/axis/line geometry is being
+ * completed once it arrives. */
+let siblingJsonPromise = null;
+function loadSiblingScenes(manifest) {
+  if (siblingJsonPromise) return siblingJsonPromise;
+  const get = (id) => {
+    const url = manifest.scenes && manifest.scenes[id];
+    if (!url) return Promise.resolve(null);
+    return fetch(url).then((r) => (r.ok ? r.json() : null))
+      .catch((e) => { console.warn(`[rt/s16] ${id}.json unavailable`, e); return null; });
+  };
+  siblingJsonPromise = Promise.all([get('s09'), get('s10'), get('s13'), get('s15')])
+    .then(([s09json, s10json, s13json, s15json]) => ({ s09json, s10json, s13json, s15json }));
+  return siblingJsonPromise;
+}
+
 /* Per-lens spotlight: which population indices are exempt from S16's own
  * progressive desaturation ramp (design-system.md §9 S16: "Global
  * desaturation ramps until only Spain and the opponent hold color").
@@ -126,22 +214,64 @@ function computeSpotlight(lensIndex, data) {
   const spot = new Uint8Array(N);
   const winnerFuturesIdx = (manifest.enums.family || []).indexOf('winner_futures');
   if (lensIndex === 1) {
+    // Gate-4 visual-story review fix (s16 critical: amber spans BOTH
+    // diagonals at every price level, destroying the exactly-1-amber-
+    // singleton budget). LORENZ_TAIL flags a MARKET by its own thin
+    // lifetime dollar volume (pipeline/export/build_tiles.py), not a
+    // price level, so on its own it scatters amber across the whole
+    // curve. The beat's own claim is specifically about "cheap longshot
+    // tickets" -- s14.js's own live scene already draws the line at
+    // price_band <= 10c ("penny tickets," s14.js's cheapBuckets filter)
+    // -- so amber here is gated on a thin-tail market AND a sub-10c
+    // price. ALSO gated on settled (fate === yes/no), matching the exact
+    // condition curve()'s own anchor (s14.js) uses to decide whether a
+    // dot earns a real x(c)/y(realized) calibration position at all --
+    // without this, an unsettled tail+cheap dot (open markets exist
+    // today, match day) still lands in curve()'s OTHER branch, a
+    // hash01-scattered position uncorrelated with price, which a
+    // spotlight exemption then held at that scattered position instead
+    // of relocating it, producing an unexplained amber diagonal streak.
     const bit = data.flagBit('LORENZ_TAIL');
-    for (let i = 0; i < N; i++) if (pop.flags[i] & bit) spot[i] = 1;
+    const PENNY_C = 10;
+    const yesIdx = manifest.enums.fate.indexOf('settled_yes');
+    const noIdx = manifest.enums.fate.indexOf('settled_no');
+    for (let i = 0; i < N; i++) {
+      if (!(pop.flags[i] & bit)) continue;
+      if (pop.price_band[i] === 255 || pop.price_band[i] > PENNY_C) continue;
+      if (pop.fate[i] !== yesIdx && pop.fate[i] !== noIdx) continue;
+      spot[i] = 1;
+    }
   } else if (lensIndex === 2) {
+    // Family-gated to match what mirror()'s own anchor actually plots
+    // (s09.js: `isNor = team===NOR && family===winner_futures`) -- a
+    // NOR/ARG dot from any other family was previously spotlighted
+    // (exempted from dimming/relocation below) while still sitting at
+    // mirror()'s generic "rest" position and color, leaving unexplained
+    // grey noise inside the axis rectangle.
     const nor = findIndex(manifest.teams, ['NOR']);
     const arg = findIndex(manifest.teams, ['ARG']);
-    for (let i = 0; i < N; i++) if (pop.team[i] === nor || pop.team[i] === arg) spot[i] = 1;
+    for (let i = 0; i < N; i++) {
+      if (pop.family[i] !== winnerFuturesIdx) continue;
+      if (pop.team[i] === nor || pop.team[i] === arg) spot[i] = 1;
+    }
   } else if (lensIndex === 3) {
     const arg = findIndex(manifest.teams, ['ARG']);
     for (let i = 0; i < N; i++) if (pop.team[i] === arg && pop.family[i] === winnerFuturesIdx) spot[i] = 1;
   } else if (lensIndex === 4) {
-    const fra = findIndex(manifest.teams, ['FRA']);
+    // Gate-4 visual-story review fix (s16 critical: "the dead element
+    // owns the scene" -- France's settled money was exempt from dimming
+    // and became the frame's luminance peak; a second, un-keyed teal
+    // mass from `tintOpponent` below competed with Spain's own keyed red).
+    // France is context now, not the figure ("Spain is the team still
+    // playing tonight"): it no longer earns a spotlight exemption, so the
+    // dim/relocate pass below treats it like any other resting money.
+    // The opponent is dropped from the spotlight for the same reason
+    // (see the now-unused `tintOpponent` below); only Spain, this beat's
+    // one figure, stays lit.
     const esp = findIndex(manifest.teams, ['ESP', 'SPA']);
-    const opp = findIndex(manifest.teams, [opponentCode(manifest) || '\0']);
     for (let i = 0; i < N; i++) {
       if (pop.family[i] !== winnerFuturesIdx) continue;
-      if (pop.team[i] === fra || pop.team[i] === esp || pop.team[i] === opp) spot[i] = 1;
+      if (pop.team[i] === esp) spot[i] = 1;
     }
   }
   // lensIndex === 0 (braid): no dot-level spotlight; braid is D3-only
@@ -149,13 +279,30 @@ function computeSpotlight(lensIndex, data) {
   return spot;
 }
 
-const RAMP = [1.0, 0.75, 0.55, 0.35, 0.18]; // alpha multiplier for non-spotlighted dots, per lens
+// Alpha multiplier for non-spotlighted dots, per lens. L5's 0.18 (down
+// from the shipped 1.0/0.75/0.55/0.35/0.18 progression) combined with
+// France's own 0.55 base alpha (state-dead token) rendered functionally
+// invisible once France stopped being spotlight-exempt (see layout()
+// below) — the key row "grey = France, settled to zero" needs SOME
+// findable mark, not zero. 0.4 keeps France well below Spain's full-alpha
+// figure (Spain stays the one luminance peak) while staying findable.
+const RAMP = [1.0, 0.75, 0.55, 0.35, 0.4];
 
 /* identity-teal is unused as a team color elsewhere in the piece by this
  * point (venue.polymarket/identity.lavender is retired from the "venue"
  * meaning after Act III; chip re-narrates per design-system.md §2). Used
  * here, once, to give the final's opponent a body at L5 — flagged in
- * this build's notes for design-authority confirmation. */
+ * this build's notes for design-authority confirmation.
+ *
+ * NO LONGER CALLED (Gate-4 visual-story review fix, s16 major: "a small
+ * teal Spain cluster despite the key saying red = Spain's money" — this
+ * function was painting the OPPONENT teal with no key row of its own,
+ * competing with Spain's actual keyed red mass and never resolved by the
+ * design-authority flag above). computeSpotlight(4, ...) no longer
+ * spotlights the opponent either, so its dots fall through to the
+ * ordinary dim/relocate pass in layout() like any other resting money.
+ * Left defined, unused, rather than deleted, so the design-authority
+ * question stays visible in the diff. */
 function tintOpponent(state, data, view) {
   const { manifest, pop } = data;
   const winnerFuturesIdx = (manifest.enums.family || []).indexOf('winner_futures');
@@ -212,6 +359,8 @@ export default {
       w: view.region.w * 0.9,
       h: view.region.h * 0.9,
     };
+    this._rect = rect; // reused by overlay() to place the recap-chart geometry below
+    loadSiblingScenes(data.manifest); // fire-and-forget: give the fetch a head start; consumed in overlay()
     // ENCODING (perception-brief §9b/§10.1,4): each lens must read as one
     // active subset popping against a dimmed resting field. The pop is
     // luminance, resolved engine-side by per-dot alpha tier — so the
@@ -222,7 +371,18 @@ export default {
     // anchor handed back, the resting field never floats up into the
     // unclassified 0.42-0.90 band and stops receding. Spotlighted dots are
     // exempt and keep their anchor alpha (~1.0 -> active-tier, boosted).
-    const dimCeil = view.tokens.dot['opacity-dimmed-field-max']; // 0.40, safely below classify-max
+    // Gate-4 visual-story review re-capture (this pass): a recap panel is
+    // ~40% the area of its parent scene's own stage, so the same dot count
+    // lands at higher local density here than in the scene it echoes. The
+    // parent scenes' own dimmed-field-max (0.40) still let several recap
+    // panels' non-spotlighted texture compete with the one story line/bar
+    // this scene exists to show. Recap panels drop the ceiling one notch
+    // further, to dimmed-field-min (0.25) — still a token this piece
+    // already sanctions for a resting population, just the dimmer of the
+    // two, and appropriate here because every recap's chart-first line/bar
+    // is now the sole carrier (rule: "particles support as texture ...
+    // never carry sole meaning").
+    const dimCeil = view.tokens.dot['opacity-dimmed-field-min']; // 0.25, safely below classify-max
     const calls = [
       () => callAnchor(s10, 'braid', data, view, rect),
       () => callAnchor(s14, 'curve', data, view, rect),
@@ -230,15 +390,60 @@ export default {
       () => callAnchor(s13, 'pair', data, view, rect),
       () => callAnchor(s15, 'strip', data, view, rect),
     ];
+    const gutter = keyGutterRect(view);
     const results = calls.map((fn, idx) => {
       const r = fn();
       const spot = computeSpotlight(idx, data);
       const ramp = RAMP[idx];
       const N = data.pop.count;
+      // L3 (mirror, idx===2) only: the two identity hues (identity-blue /
+      // identity-lavender) are near-isoluminant once bloomed (perception-
+      // brief §9b: both land at ~1.0-1.15:1 contrast against field.rest —
+      // functionally isoluminant), a token-level Tier-0 issue out of this
+      // file's reach. The one lever this file owns is a deliberate
+      // luminance/size split between the two spotlighted paths so they
+      // stay tellable apart under bloom (Gate-4 visual-story review s16
+      // critical: "give the two identity hues distinct lightness values").
+      const norIdx = idx === 2 ? findIndex(data.manifest.teams, ['NOR']) : -1;
+      // L5 (strip, idx===4) only: France keeps its own key row ("grey =
+      // France, settled to zero") — de-spotlighting it (above) must dim
+      // it, not disappear it, or the key row loses its mark and trades
+      // one P3 key-hygiene violation for another. So France is the one
+      // non-spotlighted population that keeps s15's own authored "pour"
+      // position below and only loses brightness; every OTHER
+      // non-spotlighted L5 dot (the un-keyed opponent tint this pass
+      // removes, plus ordinary rest money) still relocates to the gutter.
+      const winnerFuturesIdx = idx === 4 ? (data.manifest.enums.family || []).indexOf('winner_futures') : -1;
+      const fraIdx = idx === 4 ? findIndex(data.manifest.teams, ['FRA']) : -1;
       for (let i = 0; i < N; i++) {
-        if (!spot[i]) state_dim(r.state, i, ramp);
+        if (!spot[i]) {
+          state_dim(r.state, i, ramp);
+          const isFranceInL5 = idx === 4 && data.pop.team[i] === fraIdx && data.pop.family[i] === winnerFuturesIdx;
+          if (isFranceInL5) continue; // dimmed in place, position untouched
+          // Gate-4 visual-story review fix (s16 Tier-1 C1 / major
+          // l1,l4-t0,l5): park the resting population behind the KEY
+          // instead of leaving it scattered across this rect (see
+          // keyGutterRect() above for the full rationale). Mobile keeps
+          // the previously-shipped in-rect bottom-strip compaction (no
+          // clean px handle on the mobile key's vh-based position).
+          if (view.mobile) {
+            r.state.x[i] = rect.x + rect.w * hash01(i * 31 + 3);
+            r.state.y[i] = rect.y + rect.h * (0.94 + 0.05 * hash01(i * 37 + 7));
+          } else {
+            r.state.x[i] = gutter.x0 + (gutter.x1 - gutter.x0) * hash01(i * 31 + 3);
+            r.state.y[i] = gutter.y0 + (gutter.y1 - gutter.y0) * hash01(i * 37 + 7);
+          }
+          r.state.size[i] *= 0.5; // smaller footprint behind the translucent key card
+        } else if (idx === 2) {
+          if (data.pop.team[i] === norIdx) {
+            r.state.color[i * 4 + 3] = Math.min(1, r.state.color[i * 4 + 3] * 1.15);
+            r.state.size[i] *= 1.3;
+          } else {
+            r.state.color[i * 4 + 3] *= 0.55;
+            r.state.size[i] *= 0.85;
+          }
+        }
       }
-      if (idx === 4) tintOpponent(r.state, data, view);
       return r;
     });
     this._anchors = results; // cached for overlay(); layout() runs before
@@ -262,6 +467,8 @@ export default {
   overlay(container, data, view, scales) {
     const g = container.svg.append('g').attr('class', 's16-overlay');
     const anchors = this._anchors || [];
+    const rect = this._rect
+      || { x: view.region.x, y: view.region.y, w: view.region.w, h: view.region.h };
 
     const lockupOrd = g.append('text').attr('class', 's16-ord')
       .attr('x', view.region.x).attr('y', view.region.y - 28)
@@ -286,13 +493,222 @@ export default {
       .attr('letter-spacing', view.css('type-tape-tracking'))
       .attr('opacity', 0);
     const RIBBONS = [
-      'left axis: date of the knockout stage · right axis: price (1 point = 1 cent)',
+      'x axis: Kalshi’s price (cents) · y axis: Polymarket’s price (cents)',
       'left axis: what the price implied (cents) · right axis: how often it happened (%)',
-      'left axis: hours since the shock · right axis: price (times its price before the shock)',
+      // Gate-4 visual-story review fix (s16 critical: header claimed
+      // "hours since the shock" while the rendered x-axis is a calendar
+      // timeline — s09.js's mirror() anchor builds `d3.scaleUtc()` over
+      // the full 14-month span, ticks(4), no y-axis is drawn at all).
+      // Rewritten to match what a reader can actually decode on screen.
+      'x axis: match date (dashed line marks the shock) · y axis: this team’s ticket price (cents)',
       'left axis: fans who said win (%) · right axis: market price (cents)',
       'left axis: five checkpoints · right axis: ticket price (cents), grey line is the model, devigged (bookmaker’s cut removed)',
     ];
     const axesG = g.append('g').attr('class', 's16-axes');
+
+    /* -------------------------------------------------------------- */
+    /* Supplementary chart geometry (RESHAPE): each function below adds
+     * the ONE piece of real, data-derived geometry its lens's anchor
+     * cannot supply on its own — never a second story mark, always the
+     * thing the doctrine named as missing for that lens. All read from
+     * data already fetched (either s16's own `data.pop`/`data.manifest`,
+     * already loaded per `needs.series`, or a sibling scene's own JSON
+     * once `loadSiblingScenes()` resolves it). Nothing here is invented:
+     * every number plotted comes from a loaded array or object field. */
+
+    // L1: the braid's own anchor has no price axis (its dot population
+    // never carries a price — see s10.js's `braid()` comment), so the
+    // "two crowds, one price" claim is otherwise untestable by eye. This
+    // draws it as an agreement plot: one point per matched minute, Kalshi's
+    // price on x, Polymarket's price on y. Tight to the diagonal = the two
+    // crowds agreed. Subsampled to keep the mark count small for a recap
+    // panel; every point plotted is a real matched-minute pair, never
+    // interpolated.
+    function drawAgreementScatter(target, s10json) {
+      const b = s10json && s10json.braid;
+      if (!b || !Array.isArray(b.kalshi_pts) || !Array.isArray(b.polymarket_pts)) return false;
+      const n = b.kalshi_pts.length;
+      const stride = Math.max(1, Math.floor(n / 400));
+      const px = d3.scaleLinear().domain([0, 100]).range([rect.x + 8, rect.x + rect.w - 8]);
+      const py = d3.scaleLinear().domain([0, 100]).range([rect.y + rect.h - 8, rect.y + 8]);
+      const pts = [];
+      for (let i = 0; i < n; i += stride) {
+        const k = b.kalshi_pts[i], p = b.polymarket_pts[i];
+        if (typeof k === 'number' && typeof p === 'number') pts.push([k, p]);
+      }
+      if (!pts.length) return false;
+      const ax = target.append('g').attr('class', 's16-l1-chart');
+      ax.append('g')
+        .attr('transform', `translate(0,${rect.y + rect.h})`)
+        .call(d3.axisBottom(px).ticks(4).tickFormat((d) => `${d}c`))
+        .call((s) => {
+          s.selectAll('text').attr('fill', view.css('ink-low'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+          s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+        });
+      ax.append('g')
+        .attr('transform', `translate(${rect.x},0)`)
+        .call(d3.axisLeft(py).ticks(4).tickFormat((d) => `${d}c`))
+        .call((s) => {
+          s.selectAll('text').attr('fill', view.css('ink-low'))
+            .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
+          s.selectAll('path,line').attr('stroke', view.css('ink-low'));
+        });
+      ax.append('path').attr('fill', 'none').attr('stroke', view.css('ink-hi')).attr('opacity', 0.5)
+        .attr('stroke-width', 1)
+        .attr('d', d3.line().x((d) => px(d)).y((d) => py(d))([0, 100]));
+      ax.selectAll('circle.s16-agree').data(pts).enter().append('circle').attr('class', 's16-agree')
+        .attr('cx', (d) => px(d[0])).attr('cy', (d) => py(d[1])).attr('r', 1.6)
+        .attr('fill', view.css('venue-kalshi')).attr('opacity', 0.55);
+      ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
+        .attr('fill', view.css('ink-mid'))
+        .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))
+        .text('each dot: one minute, Kalshi price vs Polymarket price');
+      return true;
+    }
+
+    // L2: s14's own anchor plots the scatter and the plain y=x reference,
+    // but draws no line through the realized rates themselves, so the
+    // "calibrated" claim is left for the reader to eyeball from noise. This
+    // recomputes the same dollar-weighted bucket average s14.js's anchor
+    // already computes (duplicated in-file, matching this piece's existing
+    // per-scene helper-duplication convention) and draws it as one
+    // connected line. Buckets run low price to high price on x by
+    // construction, and y is scaled 0 (bottom) to 100 (top) exactly like
+    // every other axis in this piece, so a well-calibrated market draws a
+    // line that climbs left-to-right — verified here, not assumed (Gate-4
+    // visual-story review, s16 critical: "l2 slope-inversion").
+    function drawCalibrationTrace(target) {
+      const { pop, manifest } = data;
+      const N = pop.count;
+      const yesIdx = manifest.enums.fate.indexOf('settled_yes');
+      const noIdx = manifest.enums.fate.indexOf('settled_no');
+      const NB = 20;
+      const bucketOf = (c) => Math.max(0, Math.min(NB - 1, Math.floor(c / (100 / NB))));
+      const yesCt = new Float64Array(NB), totCt = new Float64Array(NB);
+      for (let i = 0; i < N; i++) {
+        const c = pop.price_band[i];
+        if (c === 255) continue;
+        if (pop.fate[i] === yesIdx) { const b = bucketOf(c); yesCt[b] += 1; totCt[b] += 1; }
+        else if (pop.fate[i] === noIdx) { totCt[bucketOf(c)] += 1; }
+      }
+      const pts = [];
+      for (let b = 0; b < NB; b++) {
+        if (totCt[b] > 0) pts.push([(b + 0.5) * (100 / NB), 100 * yesCt[b] / totCt[b]]);
+      }
+      if (pts.length < 2) return;
+      const px = d3.scaleLinear().domain([0, 100]).range([rect.x + 8, rect.x + rect.w - 8]);
+      const py = d3.scaleLinear().domain([0, 100]).range([rect.y + rect.h - 8, rect.y + 8]);
+      target.append('path').attr('class', 's16-cal-line')
+        .attr('fill', 'none').attr('stroke', view.css('ink-hi')).attr('stroke-width', 2)
+        .attr('d', d3.line().x((p) => px(p[0])).y((p) => py(p[1]))(pts));
+      const last = pts[pts.length - 1];
+      target.append('text')
+        .attr('x', px(last[0])).attr('y', py(last[1]) - 8)
+        .attr('text-anchor', 'end')
+        .attr('fill', view.css('ink-hi'))
+        .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
+        .text('the market’s own line, bucket by bucket');
+    }
+
+    // L2 direct callout (Gate-4 visual-story review fix, s16 critical:
+    // amber needs "a direct callout" once it is restricted to the
+    // low-cent region by computeSpotlight above — a reader should not
+    // have to infer the claim from an unlabeled color alone). Fixed
+    // position at the low-price corner of the curve, where the now-
+    // restricted amber cluster actually sits.
+    function drawAmberCallout(target) {
+      target.append('text')
+        .attr('x', rect.x + 10).attr('y', rect.y + rect.h - 14)
+        .attr('fill', view.css('accent-annotation'))
+        .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
+        .text('penny tickets (under 10c): pay off less often than they cost');
+    }
+
+    // L3 label collision fix (Gate-4 visual-story review follow-up: the
+    // KEY word-wrap above can grow the unit ribbon to 2 lines, and s09.js's
+    // own "Norway"/"Argentina" in-chart labels are hardcoded to a fixed
+    // `rect.y - 6`, sized for the OLD one-line ribbon). Measures the
+    // ribbon's own real rendered bbox (already final by the time this
+    // runs — wrapText() executes before redrawAxes() in showLens() below)
+    // rather than guessing a line count, and only pushes the labels down
+    // as far as that measurement requires. The KEY chip already carries
+    // the same "blue = Norway / lavender = Argentina" pairing as a
+    // decode fallback either way.
+    function fixMirrorLabelOverlap(target) {
+      const node = unitRibbon.node();
+      if (!node) return;
+      const bbox = node.getBBox();
+      const safeY = Math.max(rect.y - 6, bbox.y + bbox.height + 12);
+      target.select('.s09-anchor-axes').selectAll(':scope > text').attr('y', safeY);
+    }
+
+    // L5 tick-label collision fix (Gate-4 visual-story review fix, s16
+    // major: "after the round of 16after the quarterfinals" — the five
+    // checkpoint labels s15.js's strip() anchor draws collide edge-to-edge
+    // at THIS panel's ~40%-area width; s15's own full-stage axis has room
+    // for them horizontal). Standard D3 rotated-tick recipe, applied here
+    // rather than in s15.js since the collision is a product of this
+    // panel's width, not a defect in s15's own axis.
+    function fixStripTickCollision(target) {
+      target.selectAll('.s15-anchor-axes .tick text')
+        .attr('text-anchor', 'end')
+        .attr('transform', 'rotate(-28)')
+        .attr('dx', '-0.4em').attr('dy', '0.5em');
+    }
+
+    // L3: the mirror's own anchor spreads Norway/Argentina across the
+    // whole 14-month timeline, so the shock itself (a ~43-hour move) is a
+    // few pixels wide against that span. A full re-zoom would mean
+    // re-tweening the population outside this scene's normal scroll-driven
+    // flow, which this build does not attempt; a labeled marker at the real
+    // shock timestamp at least tells the reader where to look.
+    function drawShockMarker(target, s09json) {
+      const shocks = (s09json && s09json.shocks) || [];
+      const nor = shocks.find((s) => s.team === 'NOR');
+      if (!nor || !nor.shock_ts) return;
+      const epochMs = new Date(data.manifest.epoch).getTime();
+      const endMs = new Date(data.manifest.frozen_at || data.manifest.generated).getTime();
+      const x = d3.scaleUtc().domain([epochMs, endMs]).range([rect.x + 8, rect.x + rect.w - 8]);
+      const shockX = x(new Date(nor.shock_ts).getTime());
+      target.append('line').attr('class', 's16-shock')
+        .attr('x1', shockX).attr('x2', shockX)
+        .attr('y1', rect.y).attr('y2', rect.y + rect.h)
+        .attr('stroke', view.css('ink-low')).attr('stroke-dasharray', '2 3').attr('stroke-width', 1);
+      target.append('text').attr('x', shockX + 4).attr('y', rect.y + 12)
+        .attr('fill', view.css('ink-mid'))
+        .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
+        .text('the shock');
+    }
+
+    // L4: s13's own `pair()` anchor draws the outline poll bar and the
+    // filled money column once `data.scene.pairs` is on hand (patched in
+    // below), but neither carries its own number — a reader has to already
+    // know "87%" and "11 cents" from the prose. Direct labels on the two
+    // bars themselves are the doctrine's own rule ("labeled axes with
+    // units, direct labels on lines/bars, no legend-hunting"). Both
+    // numbers are read straight from the same s13.json fetch, never
+    // recomputed or invented.
+    function drawPairLabels(target, s13json) {
+      const pairs = (s13json && s13json.pairs) || [];
+      const argPair = pairs.find((p) => p.key === 'argentina' || p.team === 'ARG');
+      if (!argPair) return;
+      const py = d3.scaleLinear().domain([0, 100]).range([rect.y + rect.h - 8, rect.y + 8]);
+      const pollX = rect.x + rect.w * 0.30;
+      const colX = rect.x + rect.w * 0.60;
+      if (typeof argPair.poll_pct === 'number') {
+        target.append('text').attr('x', pollX).attr('y', py(argPair.poll_pct) - 10)
+          .attr('text-anchor', 'middle').attr('fill', view.css('ink-mid'))
+          .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
+          .text(`${Math.round(argPair.poll_pct)}% said win (poll)`);
+      }
+      if (typeof argPair.kalshi_price_pct === 'number') {
+        target.append('text').attr('x', colX).attr('y', rect.y + rect.h + 20)
+          .attr('text-anchor', 'middle').attr('fill', view.css('identity-teal'))
+          .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
+          .text(`${argPair.kalshi_price_pct}c: the market`);
+      }
+    }
 
     // L4's Argentina callback (storyboard S16 Data note; see file-footer
     // NOTE): beats[].html is a static string consumed once by main.js's
@@ -312,21 +728,70 @@ export default {
       .style('opacity', 0)
       .text('That same 87% belongs to tonight’s crowd too. The price will not treat them any differently.');
 
+    let siblingData = {};
     let currentAxes = null;
+
+    // The one-time chart-geometry redraw, split out from showLens() so the
+    // async sibling-JSON patch (below) can refresh a lens's chart without
+    // re-firing the lockup/ribbon fade-in — a network response landing
+    // while the reader sits still must not read as unexplained motion
+    // (design-revision-spec G6: "stillness is the default").
+    function redrawAxes(idx) {
+      axesG.selectAll('*').remove();
+      let handled = false;
+      if (idx === 0) handled = drawAgreementScatter(axesG, siblingData.s10json);
+      if (!handled) {
+        const a = anchors[idx];
+        if (a && typeof a.drawAxes === 'function') {
+          try { a.drawAxes(axesG); } catch (e) { console.warn('[rt/s16] drawAxes failed', e); }
+        }
+      }
+      if (idx === 1) { drawCalibrationTrace(axesG); drawAmberCallout(axesG); }
+      if (idx === 2) { drawShockMarker(axesG, siblingData.s09json); fixMirrorLabelOverlap(axesG); }
+      if (idx === 3) drawPairLabels(axesG, siblingData.s13json);
+      if (idx === 4) fixStripTickCollision(axesG);
+    }
+
     function showLens(idx) {
       const l = LOCKUPS[idx];
       lockupOrd.text(l.ordinal.toUpperCase()).transition().duration(400).attr('opacity', 1);
       lockupTitle.text(l.title).transition().duration(400).attr('opacity', 1);
-      unitRibbon.text(RIBBONS[idx]).transition().duration(400).attr('opacity', 1);
-      axesG.selectAll('*').remove();
-      const a = anchors[idx];
-      if (a && typeof a.drawAxes === 'function') {
-        try { a.drawAxes(axesG); } catch (e) { console.warn('[rt/s16] drawAxes failed', e); }
-      }
+      // Gate-4 visual-story review fix (s16 major: the KEY panel occludes
+      // the right-axis definitions in three of five beats — "how often it
+      // happe...", "price (times its price before...", "grey line..." all
+      // truncated). Wrap to the safe width left of the KEY's reserved
+      // exclusion zone instead of one unbroken line that runs under it.
+      const g = keyGutterRect(view);
+      const maxRibbonWidth = Math.max(160, g.x0 - view.region.x - 16);
+      wrapText(unitRibbon, RIBBONS[idx], maxRibbonWidth, 1.15);
+      unitRibbon.transition().duration(400).attr('opacity', 1);
+      redrawAxes(idx);
       currentAxes = idx;
       const showArg = idx === 3 && isArgentinaOpponent(data.manifest);
       argCallout.transition().duration(400).style('opacity', showArg ? 1 : 0);
     }
+
+    // Hydrate L1/L3's supplementary geometry and L4/L5's real bar/line once
+    // each sibling's own scene JSON resolves, then patch L4/L5's anchors in
+    // place by re-invoking them (unmodified) with that JSON attached as
+    // `data.scene` — exactly what s13.js's `pair()` and s15.js's `strip()`
+    // already expect and already know how to draw; s16 was simply never
+    // handing it to them (Gate-4 visual-story review Tier-1 C4/C5). Dot
+    // positions are not re-tweened: every anchor already places its dots
+    // truthfully without this data, so only the chart's axis/bar/line
+    // geometry is being completed. A currently-visible L4/L5 lens gets a
+    // silent redraw (no lockup re-fade, see redrawAxes() above); an
+    // off-screen lens simply has its cached anchor updated for next time.
+    loadSiblingScenes(data.manifest).then((sib) => {
+      siblingData = sib;
+      if (sib.s13json) {
+        anchors[3] = callAnchor(s13, 'pair', Object.assign({}, data, { scene: sib.s13json }), view, rect);
+      }
+      if (sib.s15json) {
+        anchors[4] = callAnchor(s15, 'strip', Object.assign({}, data, { scene: sib.s15json }), view, rect);
+      }
+      if (currentAxes !== null) redrawAxes(currentAxes);
+    });
 
     return {
       step(beatId) {
@@ -343,8 +808,8 @@ export default {
       html: '<p>Here are your five skills again. They come back in a new order now: the order you will need them tonight, not the order you learned them. First tonight: take the number at face value. Once you take out the bookmaker&rsquo;s fee, the price is the price. All tournament, the everyday crowd and the professional bookmakers scored the same, a day out from every match.<sup class="fn"><a href="#fn-16">16</a></sup> And the two crowd markets never drifted five cents apart for even half an hour.<sup class="fn"><a href="#fn-15">15</a></sup> No one sharper is hiding behind this number. Use it tonight: believe Spain&rsquo;s price.</p>',
       trigger: 'step', state: 'lens0', kind: 'resort',
       chip: [
-        { token: 'side-yes', glyph: 'line', label: 'cyan = Kalshi’s price' },
-        { token: 'identity-lavender', glyph: 'line', label: 'lavender = Polymarket’s price' },
+        { token: 'venue-kalshi', glyph: 'dot', label: 'cyan dot = one minute, both venues' },
+        { token: 'ink-low', glyph: 'dash', label: 'dashed = perfect agreement' },
       ],
       grain: { text: '1 dot = $75,000 of real money traded' },
       overlayStep: 'l1',
@@ -355,6 +820,7 @@ export default {
       trigger: 'step', state: 'lens1', kind: 'resort',
       chip: [
         { token: 'field-rest', glyph: 'dim', label: 'pale = money at each price level' },
+        { token: 'ink-hi', glyph: 'line', label: 'white line = the market’s own calibration' },
         { token: 'accent-annotation', glyph: 'dot', label: 'amber = the overpriced penny longshots' },
       ],
       overlayStep: 'l2',
@@ -375,7 +841,10 @@ export default {
       trigger: 'step', state: 'lens3', kind: 'resort',
       chip: [
         { token: 'ink-mid', glyph: 'box', label: 'outline = what fans said (poll %)' },
-        { token: 'ink-mid', glyph: 'dot', label: 'filled = what the money said (cents)' },
+        // Gate-4 visual-story review fix (s16 major: key swatch said grey,
+        // the money renders teal — s13.js's pair() anchor colors
+        // Argentina's money `identity-teal`). Swatch now matches the mark.
+        { token: 'identity-teal', glyph: 'dot', label: 'filled = what the money said (cents)' },
       ],
       overlayStep: 'l4',
     },
@@ -386,6 +855,7 @@ export default {
       chip: [
         { token: 'state-dead', glyph: 'dead', label: 'grey = France, settled to zero' },
         { token: 'identity-crimson', glyph: 'dot', label: 'red = Spain’s money' },
+        { token: 'neutral-data', glyph: 'line', label: 'dashed grey = the model’s guess' },
       ],
       overlayStep: 'l5',
     },

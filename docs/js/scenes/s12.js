@@ -92,6 +92,81 @@ function fieldPosition(i, view) {
   return [fx, fy];
 }
 
+/* RESHAPE (chart-first pass): the naive/resolved dot cloud is real but
+ * sparse (2-13 dots per player at population grain, see the file banner),
+ * so the actual 61c-vs-31c comparison this scene exists to show needs a
+ * chart-first carrier: a connected price path per contender, drawn from
+ * these SAME real trades (never a separate or invented series). Both
+ * layout() (dot placement) and overlay() (the D3 line) need the same
+ * per-player, time-sorted trade list, so it is collected once here instead
+ * of twice: one full pass over the population per scene mount, keyed off
+ * the identical market_indices -> player mapping layout() already used.
+ *
+ * Cutoff: this scene's beats quote specific prices (Mbappe 61c, Messi
+ * 31-32c, Kane 4c) tied to a real moment shortly after its own last
+ * narrated event (the Kane-halving annotation). The population tile is a
+ * LIVE, continuously-growing trade tape -- by the time this piece is
+ * rebuilt, dots keep arriving past that moment (the market kept trading
+ * through the rest of the tournament). Plotting every dot up to "now"
+ * would run the connected line past the story's own ending and print a
+ * different, later price than the beat text names, which would make the
+ * chart contradict the prose next to it. So the window this scene draws
+ * from is capped a couple of days after its own last annotated event --
+ * derived from data already loaded in this scene's JSON, never a
+ * hardcoded date -- matching the moment the prose is actually about. */
+function narrativeCutoffS(sceneJson) {
+  const anno = (sceneJson && sceneJson.annotations) || {};
+  const k = anno.kane_halving && anno.kane_halving.after_day_s;
+  const j = anno.july7_8_level && anno.july7_8_level.day_s_start;
+  const latest = Math.max(k || 0, j || 0);
+  return latest > 0 ? latest + 86400 * 2 : undefined;
+}
+
+function collectPlayerTrades(data) {
+  const pop = data.pop;
+  const manifest = data.manifest;
+  const sceneJson = data.scene || {};
+  const players = sceneJson.players || [];
+  const famIdx = manifest.enums.family.indexOf('golden_boot');
+  const cutoffS = narrativeCutoffS(sceneJson);
+
+  const marketToPlayer = new Map();
+  for (const p of players) {
+    for (const mi of (p.market_indices || [])) marketToPlayer.set(mi, p.key);
+  }
+
+  const byPlayer = new Map(players.map((p) => [p.key, []]));
+  if (famIdx >= 0 && marketToPlayer.size) {
+    for (let i = 0; i < pop.count; i++) {
+      if (pop.family[i] !== famIdx) continue;
+      const key = marketToPlayer.get(pop.market[i]);
+      if (!key) continue;
+      const t = pop.birth_ts[i];
+      if (cutoffS !== undefined && t > cutoffS) continue;
+      const priceC = pop.price_band[i];
+      if (priceC === 255) continue; // mixed-price bucket: not a real single trade price
+      byPlayer.get(key).push({ t, c: priceC });
+    }
+  }
+  for (const arr of byPlayer.values()) arr.sort((a, b) => a.t - b.t);
+  return byPlayer;
+}
+
+/* The real trade closest in time to a target instant — used to anchor the
+ * July 7-8 and Kane-halving annotations to the ACTUAL line, not a
+ * lane-centered guess (the previous version placed both circles at the
+ * lane's vertical midpoint regardless of the real traded price there). */
+function nearestTrade(trades, targetT) {
+  if (!trades || !trades.length) return null;
+  let best = trades[0];
+  let bestDelta = Math.abs(trades[0].t - targetT);
+  for (const tr of trades) {
+    const d = Math.abs(tr.t - targetT);
+    if (d < bestDelta) { best = tr; bestDelta = d; }
+  }
+  return best;
+}
+
 /* ---------------------------------------------------------------- */
 
 function scales(data, view) {
@@ -100,9 +175,43 @@ function scales(data, view) {
   const players = sceneJson.players || [];
   const dr = sceneJson.date_range || { start_s: 0, end_s: 86400 * 240 };
 
+  // Chart-first fix: `date_range` spans the whole pre-tournament listing
+  // window (Golden Boot markets list months before the ball is kicked),
+  // but real trading is almost all in the tournament's last few weeks --
+  // an axis drawn to the full listing window crushes every real price move
+  // into a sliver at the right edge (and, at this stage's zoom level, into
+  // the fixed color-key panel that also lives in that corner). The domain
+  // is instead DERIVED from the real trade timestamps this scene already
+  // loads (the same trades layout()/overlay() draw), padded a few days on
+  // each side, so the connected price paths use the plotted width. Falls
+  // back to the JSON's date_range if no trades have loaded yet (first
+  // paint, before this scene's own JSON has arrived).
+  const trades = collectPlayerTrades(data);
+  let minT = Infinity;
+  let maxT = -Infinity;
+  for (const arr of trades.values()) {
+    for (const tr of arr) {
+      if (tr.t < minT) minT = tr.t;
+      if (tr.t > maxT) maxT = tr.t;
+    }
+  }
+  const padS = 86400 * 3;
+  const startS = Number.isFinite(minT) ? minT - padS : dr.start_s;
+  const endS = Number.isFinite(maxT) ? maxT + padS : dr.end_s;
+
+  // Mbappe's lane sits at the TOP of this chart, directly under the fixed
+  // color KEY (viewport top-right); since the interesting price action is
+  // concentrated at the right edge of any tournament-run-in axis, the line
+  // would otherwise run straight under the key panel and vanish (design-
+  // revision-spec G5: the KEY RECT is a no-fly zone for every scene-placed
+  // mark). Desktop only -- the key moves to the bottom-right on mobile.
+  const keyMarginPx = view.mobile ? 0
+    : (view.tokens.layout['key-exclusion-w-px'] || 280) + view.tokens.spacing_px[3];
+  const xRangeMax = Math.min(view.region.x + view.region.w, view.W - keyMarginPx - view.safe);
+
   const x = d3.scaleUtc()
-    .domain([secToDate(manifest, dr.start_s), secToDate(manifest, dr.end_s)])
-    .range([view.region.x + 96, view.region.x + view.region.w]);
+    .domain([secToDate(manifest, startS), secToDate(manifest, endS > startS ? endS : dr.end_s)])
+    .range([view.region.x + 96, xRangeMax]);
 
   const lane = d3.scaleBand()
     .domain(players.map((p) => p.key))
@@ -167,13 +276,19 @@ function layout(data, view) {
     for (const mi of (p.market_indices || [])) marketToPlayer.set(mi, p);
   }
 
-  const naiveMuted = view.color('neutral-data', 0.7);
+  // Same narrative cutoff overlay()'s connected line respects (see
+  // collectPlayerTrades): dots that traded after the scene's own last
+  // narrated moment stay in the dim rest field rather than joining the
+  // ladder, so the population and the line never disagree about which
+  // trades this scene is telling a story about.
+  const cutoffS = narrativeCutoffS(sceneJson);
 
   if (marketToPlayer.size && famIdx >= 0) {
     for (let i = 0; i < N; i++) {
       if (pop.family[i] !== famIdx) continue;
       const p = marketToPlayer.get(pop.market[i]);
       if (!p) continue;
+      if (cutoffS !== undefined && pop.birth_ts[i] > cutoffS) continue;
       const priceC = pop.price_band[i];
       if (priceC === 255) continue; // mixed-price bucket: stays in the dim field
       const px = x(secToDate(manifest, pop.birth_ts[i]));
@@ -182,7 +297,17 @@ function layout(data, view) {
 
       naive.x[i] = px + jitter; naive.y[i] = py;
       resolved.x[i] = px + jitter; resolved.y[i] = py;
-      setColor(naive.color, i, naiveMuted);
+      // Naive frame (design-revision-spec CR-11 + key-hygiene fix this
+      // pass): b1's prose puzzle is Mbappe vs Messi only, so only those two
+      // identities are visible (muted -- "the same treatment," the reveal
+      // is brightness, not a new hue) while Kane and Haaland stay folded
+      // into the resting tint until their own beat. This keeps the b1 key's
+      // two color rows true to what actually renders (previously the key
+      // claimed blue/teal while every naive dot rendered flat grey).
+      const naiveVisible = p.key === 'mbappe' || p.key === 'messi';
+      setColor(naive.color, i, naiveVisible
+        ? view.color(IDENTITY_TOKEN[p.key], 0.55)
+        : restRgba);
       setColor(resolved.color, i, view.color(IDENTITY_TOKEN[p.key] || 'identity-ref', 1.0));
       naive.size[i] = baseSize;
       resolved.size[i] = baseSize;
@@ -224,7 +349,10 @@ function overlay(container, data, view, scalesObj) {
   const axisG = g.append('g')
     .attr('class', 's12-axis-x')
     .attr('transform', `translate(0, ${view.region.y + view.region.h + 8})`)
-    .call(d3.axisBottom(x).ticks(6).tickFormat(d3.utcFormat('%b %d')))
+    // A fixed weekly-or-coarser interval, not a bare .ticks(n) hint: at this
+    // scene's now-narrow (real-trade-derived) domain, .ticks(6) let d3 pick
+    // 9 tightly-packed labels that ran into the axis title below them.
+    .call(d3.axisBottom(x).ticks(d3.utcWeek.every(2)).tickFormat(d3.utcFormat('%b %d')))
     .call((sel) => sel.selectAll('text')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
@@ -237,13 +365,22 @@ function overlay(container, data, view, scalesObj) {
   g.append('text')
     .attr('class', 's12-axis-x-title')
     .attr('x', view.region.x + view.region.w / 2)
-    .attr('y', view.region.y + view.region.h + 30)
+    // A centered title risks sitting under whichever tick lands near the
+    // axis midpoint (this scene's narrow, real-trade-derived domain packs
+    // ticks closer than a full-year axis would); +48 clears the tick
+    // text's own descent instead of the +30 a wider domain could get away
+    // with. The footer stack below (unit line +74, footnote +98) keeps the
+    // same >= space-24 gaps this pushes down.
+    .attr('y', view.region.y + view.region.h + 48)
     .attr('text-anchor', 'middle')
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('font-weight', 500)
     .style('fill', view.css('ink-mid'))
-    .text('date (July 2026)');
+    // Wording matches the derived domain above (the real trading window,
+    // not the full listing period), so a reader checking the ticks against
+    // the title never finds a mismatch.
+    .text('date, tournament run-in (2026)');
 
   // Per-lane price axis (G3: "s12 has no y-axis" was the named gap). Each
   // player's row is its own 0-100c scale within its band, so the axis is
@@ -269,12 +406,64 @@ function overlay(container, data, view, scalesObj) {
   g.append('text')
     .attr('class', 's12-axis-y-title')
     .attr('x', view.region.x)
-    .attr('y', view.region.y + view.region.h + 44)
+    // Footer stack, top to bottom: x-axis title (region.h+30), this unit
+    // line, then the assist-tiebreak footnote -- each >= space-24 apart so
+    // none of the three overlaps (they previously sat within a 14px band).
+    .attr('y', view.region.y + view.region.h + 74)
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('font-weight', 500)
     .style('fill', view.css('ink-mid'))
     .text('price of winning the Golden Boot (cents)');
+
+  // RESHAPE: connected price paths (design-revision-spec S12: "per-row
+  // price paths with direct labels"). The dot cloud alone is real but too
+  // sparse (2-13 trades per player) to read as a comparison; a line drawn
+  // through those SAME trades, one per lane, makes the 61c-vs-31c gap the
+  // chart's own geometry rather than something the prose has to assert.
+  const trades = collectPlayerTrades(data);
+  const leaderWeight = view.tokens.layout['annotation-leader-weight-px'];
+  const priceLineG = g.append('g').attr('class', 's12-price-lines');
+
+  function drawPlayerLine(key, token, opts = {}) {
+    const arr = trades.get(key) || [];
+    if (!arr.length || lane(key) === undefined) return;
+    const lineGen = d3.line()
+      .x((d) => x(secToDate(manifest, d.t)))
+      .y((d) => scalesObj.laneY(key, d.c))
+      .curve(d3.curveMonotoneX);
+    let path = priceLineG.select(`.s12-line-${key}`);
+    if (path.empty()) {
+      path = priceLineG.append('path').attr('class', `s12-line-${key}`).attr('fill', 'none');
+    }
+    path
+      .style('stroke', view.css(token))
+      .style('stroke-width', opts.dashed ? leaderWeight : leaderWeight * 1.4)
+      .style('stroke-dasharray', opts.dashed ? '4,3' : null)
+      .style('opacity', opts.muted ? 0.55 : 1)
+      .attr('d', lineGen(arr));
+
+    // Direct end label: the line's own last real trade price, never an
+    // interpolated or invented number.
+    const last = arr[arr.length - 1];
+    let label = priceLineG.select(`.s12-label-${key}`);
+    if (label.empty()) label = priceLineG.append('text').attr('class', `s12-label-${key}`);
+    label
+      .attr('x', x(secToDate(manifest, last.t)) + 10)
+      .attr('y', scalesObj.laneY(key, last.c))
+      .attr('dy', '0.32em')
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-annotation-size'))
+      .style('font-weight', 600)
+      .style('fill', view.css(token))
+      .style('opacity', opts.muted ? 0.75 : 1)
+      .text(`${last.c}¢`);
+  }
+
+  function clearPlayerLine(key) {
+    priceLineG.select(`.s12-line-${key}`).remove();
+    priceLineG.select(`.s12-label-${key}`).remove();
+  }
 
   // The pinned caption whose text rewrites itself between steps — this is
   // the scene's signature (storyboard: "the rewrite-on-screen").
@@ -299,49 +488,64 @@ function overlay(container, data, view, scalesObj) {
   // assist tiebreak footnote). Built lazily on b2 so it never shows early.
   const annoG = g.append('g').attr('class', 's12-annotations').style('opacity', 0);
 
-  function findPlayer(key) { return players.find((p) => p.key === key); }
+  // Mirror an annotation leftward (G5) when its right-reading text would
+  // otherwise run past the chart's own right edge (xRight -- already
+  // inset to clear the KEY, see scales()) or the KEY RECT itself.
+  const xRight = x.range()[1];
+  function placeAnnotationText(sel, px, estWidth) {
+    const mirror = px + 12 + estWidth > xRight;
+    sel.attr('x', mirror ? px - 12 : px + 12)
+      .attr('text-anchor', mirror ? 'end' : 'start');
+  }
 
   function drawAnnotations() {
     annoG.selectAll('*').remove();
     const anno = sceneJson.annotations || {};
-    const mbappe = findPlayer('mbappe');
-    const messi = findPlayer('messi');
-    const kane = findPlayer('kane');
 
-    if (anno.july7_8_level && mbappe && messi) {
-      const y0 = lane('mbappe');
-      if (y0 !== undefined) {
-        const px = x(secToDate(manifest, anno.july7_8_level.day_s_start));
+    // Both callouts now anchor to the real trade nearest the named moment
+    // ON THE LINE itself (previously a lane-centered guess that ignored
+    // the actual traded price at that x) — the halo/label sit exactly
+    // where the price path passes, so the annotation reads as pointing at
+    // the chart, not floating near it.
+    if (anno.july7_8_level) {
+      const near = nearestTrade(trades.get('mbappe'), anno.july7_8_level.day_s_start);
+      if (near) {
+        const px = x(secToDate(manifest, near.t));
+        const py = scalesObj.laneY('mbappe', near.c);
         annoG.append('circle')
-          .attr('cx', px).attr('cy', y0 + lane.bandwidth() / 2)
+          .attr('cx', px).attr('cy', py)
           .attr('r', view.tokens.dot['radius-annotated-core-px'])
           .style('fill', 'none')
           .style('stroke', view.css('accent-annotation'))
           .style('stroke-width', view.css('dot-halo-stroke-px'));
-        annoG.append('text')
-          .attr('x', px + 12).attr('y', y0 + lane.bandwidth() / 2)
-          .attr('dy', '0.35em')
+        const july78Label = annoG.append('text')
+          .attr('y', py - 12)
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-annotation-size'))
           .style('fill', view.css('accent-annotation'))
           .text('July 7–8: traded level, Mbappe one goal behind');
+        placeAnnotationText(july78Label, px, 320);
       }
     }
 
     // Kane's callout loses its amber halo (design-revision-spec CR-11,
     // deletion checklist): only the July 7-8 mark keeps amber in this
     // beat, so Kane's annotation demotes to a plain ink-mid at-mark label.
-    if (anno.kane_halving && kane) {
-      const y0 = lane('kane');
-      if (y0 !== undefined) {
-        const px = x(secToDate(manifest, anno.kane_halving.after_day_s));
-        annoG.append('text')
-          .attr('x', px + 12).attr('y', y0 + lane.bandwidth() / 2)
-          .attr('dy', '0.35em')
+    if (anno.kane_halving) {
+      const near = nearestTrade(trades.get('kane'), anno.kane_halving.after_day_s);
+      if (near) {
+        const px = x(secToDate(manifest, near.t));
+        const py = scalesObj.laneY('kane', near.c);
+        // Lifted clear of the line's own end-price label, which sits at
+        // this same y a little further right (the narrated moment and the
+        // line's last plotted point land close together here).
+        const kaneLabel = annoG.append('text')
+          .attr('y', py - 20)
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-annotation-size'))
           .style('fill', view.css('ink-mid'))
           .text('Kane: 120 scoreless minutes, price halved');
+        placeAnnotationText(kaneLabel, px, 285);
       }
     }
 
@@ -349,7 +553,9 @@ function overlay(container, data, view, scalesObj) {
       annoG.append('text')
         .attr('class', 's12-footnote-chip')
         .attr('x', view.region.x)
-        .attr('y', view.region.y + view.region.h + 32)
+        // Bottom of the footer stack (x-axis title +30, unit line +58, this
+        // footnote +82) -- clear of both by >= space-24.
+        .attr('y', view.region.y + view.region.h + 98)
         .style('font-family', view.css('font-tape'))
         .style('font-size', view.css('type-tape-size'))
         .style('fill', view.css('ink-low'))
@@ -370,6 +576,13 @@ function overlay(container, data, view, scalesObj) {
       captionLabel.style('fill', view.css('ink-low')).text('the naive read');
       captionQuestion.style('fill', view.css('ink-hi')).text('Same goals, double the price?');
       annoG.style('opacity', 0);
+      // Only the two contenders b1's prose actually discusses draw a line,
+      // muted, matching the muted dots -- Kane and Haaland wait for b2 so
+      // the key stays honest about what is on screen (see layout()).
+      drawPlayerLine('mbappe', 'identity-blue', { muted: true });
+      drawPlayerLine('messi', 'identity-teal', { muted: true });
+      clearPlayerLine('kane');
+      clearPlayerLine('haaland');
     } else if (beatId === 'b2') {
       // The dot recolor (naive -> resolved) is this beat's one motion
       // event; the caption text trails it as a short crossfade so color
@@ -384,6 +597,13 @@ function overlay(container, data, view, scalesObj) {
         captionLabel.text('the resolved read');
         captionQuestion.text('Different futures, different price.');
       }, recolorMs);
+      // The lines brighten in the same beat as the dots (the "full-color
+      // answer"); Kane joins at full color, Haaland stays a dashed
+      // reference line (he is eliminated, never a story point).
+      drawPlayerLine('mbappe', 'identity-blue');
+      drawPlayerLine('messi', 'identity-teal');
+      drawPlayerLine('kane', 'identity-pink');
+      drawPlayerLine('haaland', 'identity-ref', { dashed: true, muted: true });
       drawAnnotations();
     }
   }

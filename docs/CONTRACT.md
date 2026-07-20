@@ -209,11 +209,31 @@ Uniforms, sourced from `tokens.json.density_tone_mapping` (never literals):
 |---|---|---|
 | `uDensityGamma` | `gamma` | 0.35 |
 | `uLumCap` | `tile-luminance-cap` | 0.92 (fraction of `ink-hero` luminance; no cluster may out-shine the annotated singleton) |
+| `uRestLumCap` | `rest-luminance-cap` | 0.30 (ground-tier composite ceiling; see amendment below) |
+| `uRestKnee` | `rest-knee` | 1.0 (Reinhard soft-knee constant for the ground tier) |
 | `uBloomRadiusPx` | `bloom-radius-px-1x` / `-2x` | 3.0 at dpr ≤ 1.5, 4.5 above. **Fixed** regardless of local dot count. |
 
 Any documented on-screen ratio beyond `text-route-threshold-x` (75x) is
 carried by overlay text, not the visual channel alone; that is a scene
 obligation, noted here because the engine must not be asked to span it.
+
+**Amendment (2026-07-19, Gate-4 visual-story review P1 / Tier 0.1): the
+tone-map is tiered.** The single shared cap let summed rest-dot energy
+climb the same gamma curve as story marks to the same 0.92 ceiling, so
+every dense resting mass rendered near-white and out-shone the story
+marks. The engine now accumulates the ground tier (every dot below
+`dot.opacity-active-classify-min`) into its own half-resolution target,
+tone-maps it with the shared gamma plus a Reinhard soft-knee whose
+asymptote is `rest-luminance-cap` (composited ground luminance can never
+exceed it, while density ordering inside the ground stays monotone), and
+composites ground UNDER the active tier. Bloom feeds on the active tier
+only. Story marks at the tile cap therefore hold ≥ 3:1 luminance over
+the fully-summed ground by construction (0.92 / 0.30). The active tier
+keeps the original gamma + `tile-luminance-cap` chain, with one
+addition: the accumulation target's alpha channel carries an onset-pulse
+map that briefly lifts the cap toward `ink-hero` where a subset's color
+is actually changing, so recolors are perceivable even for subsets
+already at the cap (engine.js header notes #7–#8).
 
 ### 3.5 Reduced-motion mode
 
