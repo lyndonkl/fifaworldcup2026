@@ -108,6 +108,37 @@ function wrapText(sel, text, maxWidth, lineHeightEm) {
   }
 }
 
+/* Gate-6 layout audit (DOM-geometry sweep at 1280x800 / 1440x900 /
+ * 1512x945): measured-standoff helper. Nudges a just-placed SVG text
+ * down until its box clears every box in `obstacleNodes`. All texts this
+ * file measures live in un-transformed groups under the one overlay svg,
+ * so their getBBox() values share one user space. Geometry is re-measured
+ * from the live DOM on every call, so the standoff holds at any viewport
+ * width instead of encoding one audited width's offsets. A label that
+ * already sits fully above an obstacle is left alone (only real
+ * intersections, plus a `pad` grace below the obstacle, trigger a bump). */
+function clearTextBelow(labelSel, obstacleNodes, pad) {
+  const node = labelSel.node();
+  if (!node) return;
+  for (let guard = 0; guard < 6; guard++) {
+    const lb = node.getBBox();
+    let bumped = false;
+    for (const ob of obstacleNodes) {
+      if (!ob || ob === node) continue;
+      let b;
+      try { b = ob.getBBox(); } catch (e) { continue; }
+      const hits = lb.x < b.x + b.width && b.x < lb.x + lb.width
+        && lb.y < b.y + b.height + pad && b.y < lb.y + lb.height;
+      if (hits) {
+        labelSel.attr('y', parseFloat(labelSel.attr('y')) + (b.y + b.height + pad - lb.y));
+        bumped = true;
+        break;
+      }
+    }
+    if (!bumped) return;
+  }
+}
+
 function siblingNeeds(mod, name) {
   try { return (mod && mod.needs && mod.needs.series) || []; }
   catch (e) { console.warn(`[rt/s16] ${name}.needs unreadable`, e); return []; }
@@ -470,8 +501,9 @@ export default {
     const rect = this._rect
       || { x: view.region.x, y: view.region.y, w: view.region.w, h: view.region.h };
 
+    const ordBaseY = view.region.y - 28;
     const lockupOrd = g.append('text').attr('class', 's16-ord')
-      .attr('x', view.region.x).attr('y', view.region.y - 28)
+      .attr('x', view.region.x).attr('y', ordBaseY)
       .attr('fill', view.css('accent-annotation'))
       .attr('font-family', view.css('font-tape')).attr('font-size', view.css('type-tape-size'))
       .attr('letter-spacing', view.css('type-tape-tracking'))
@@ -560,10 +592,15 @@ export default {
       ax.selectAll('circle.s16-agree').data(pts).enter().append('circle').attr('class', 's16-agree')
         .attr('cx', (d) => px(d[0])).attr('cy', (d) => py(d[1])).attr('r', 1.6)
         .attr('fill', view.css('venue-kalshi')).attr('opacity', 0.55);
-      ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
+      const cap = ax.append('text').attr('x', rect.x).attr('y', rect.y - 6)
         .attr('fill', view.css('ink-mid'))
         .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-caption-size'))
         .text('each dot: one minute, Kalshi price vs Polymarket price');
+      // Gate-6 layout audit (1280x800: 349x17px overlap): once the unit
+      // ribbon wraps to two lines at narrower stages, its second line
+      // reaches this caption's fixed rect.y - 6 row. Measured bump, same
+      // treatment fixMirrorLabelOverlap already gives s09's labels.
+      clearTextBelow(cap, [unitRibbon.node()], 8);
       return true;
     }
 
@@ -617,12 +654,21 @@ export default {
       const safeLabelX = (!view.mobile && labelY >= gutter.y0 - 12 && labelY <= gutter.y1)
         ? Math.min(labelX, gutter.x0 - 8)
         : labelX;
-      target.append('text')
+      const traceLabel = target.append('text')
         .attr('x', safeLabelX).attr('y', labelY)
         .attr('text-anchor', 'end')
         .attr('fill', view.css('ink-hi'))
         .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
         .text('the market’s own line, bucket by bucket');
+      // Gate-6 layout audit (1280x800: 70x13px collision): at narrower
+      // stages the leftward KEY clamp above and the ribbon-dodged s14
+      // title (already at its final y — see redrawAxes' idx===1 order)
+      // land in the same band. Measured bump below whichever box it
+      // actually intersects; wider stages measure clean and stay put.
+      clearTextBelow(traceLabel, [
+        unitRibbon.node(),
+        ...target.select('.s14-anchor-axes').selectAll(':scope > text').nodes(),
+      ], 6);
     }
 
     // L2 direct callout (Gate-4 visual-story review fix, s16 critical:
@@ -632,11 +678,27 @@ export default {
     // position at the low-price corner of the curve, where the now-
     // restricted amber cluster actually sits.
     function drawAmberCallout(target) {
-      target.append('text')
+      const CALLOUT = 'penny tickets (under 10c): pay off less often than they cost';
+      const callout = target.append('text')
         .attr('x', rect.x + 10).attr('y', rect.y + rect.h - 14)
         .attr('fill', view.css('accent-annotation'))
         .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
-        .text('penny tickets (under 10c): pay off less often than they cost');
+        .text(CALLOUT);
+      // Mobile DOM-geometry audit (390x844): the single line ran 19px
+      // past the viewport's right edge. Measured, not mobile-gated: when
+      // the line outgrows the panel it wraps to the rect's own width,
+      // then the whole block lifts so its LAST line keeps the shipped
+      // baseline — the callout stays pinned to the low-price corner it
+      // names and never slides below the rect. Desktop measures narrower
+      // than the panel and keeps its one line.
+      const maxW = rect.w - 20; // symmetric to the +10 x inset
+      const node = callout.node();
+      if (node.getComputedTextLength() > maxW) {
+        wrapText(callout, CALLOUT, maxW, 1.15);
+        const lines = callout.selectAll('tspan').size();
+        const lineH = 1.15 * (parseFloat(getComputedStyle(node).fontSize) || 12);
+        callout.attr('transform', `translate(0, ${-(lines - 1) * lineH})`);
+      }
     }
 
     // L3 label collision fix (Gate-4 visual-story review follow-up: the
@@ -672,18 +734,61 @@ export default {
       target.select('.s14-anchor-axes').selectAll(':scope > text').attr('y', safeY);
     }
 
+    // Gate-6 layout audit (1280x800: 254x17px overlap): the same wrapped-
+    // ribbon defect again, this time against s13's own "poll bars are
+    // agreement, not probability" caption, which pair()'s drawAxes
+    // hardcodes to rect.y - 6 sized for a one-line ribbon. Same measured
+    // fix as fixCalibrationLabelOverlap / fixMirrorLabelOverlap.
+    function fixPairLabelOverlap(target) {
+      const node = unitRibbon.node();
+      if (!node) return;
+      const bbox = node.getBBox();
+      const safeY = Math.max(rect.y - 6, bbox.y + bbox.height + 12);
+      target.select('.s13-anchor-axes').selectAll(':scope > text').attr('y', safeY);
+    }
+
     // L5 tick-label collision fix (Gate-4 visual-story review fix, s16
     // major: "after the round of 16after the quarterfinals" — the five
     // checkpoint labels s15.js's strip() anchor draws collide edge-to-edge
     // at THIS panel's ~40%-area width; s15's own full-stage axis has room
-    // for them horizontal). Standard D3 rotated-tick recipe, applied here
-    // rather than in s15.js since the collision is a product of this
-    // panel's width, not a defect in s15's own axis.
+    // for them horizontal). Applied here rather than in s15.js since the
+    // collision is a product of this panel's width, not a defect in s15's
+    // own axis.
+    // Gate-6 layout audit rewrite: the old fixed rotate(-28) recipe still
+    // left the checkpoint labels' boxes grazing each other at 1280x800
+    // (7-12px), pushed the first label's box into the price axis's "0c"
+    // tick, and — selected as '.s15-anchor-axes .tick text' — rotated the
+    // PRICE axis's own ticks too. Replaced with a measured multi-row
+    // stagger scoped to the stage axis alone: labels stay horizontal
+    // (more legible than slanted text), and the row count comes from the
+    // ticks' own rendered step versus the widest label, so one row is
+    // used whenever it genuinely fits and never otherwise.
     function fixStripTickCollision(target) {
-      target.selectAll('.s15-anchor-axes .tick text')
-        .attr('text-anchor', 'end')
-        .attr('transform', 'rotate(-28)')
-        .attr('dx', '-0.4em').attr('dy', '0.5em');
+      // The stage axis is the FIRST g strip()'s drawAxes appends inside
+      // '.s15-anchor-axes' (the price axis is second; d3 select() returns
+      // the first match) — a documented draw-order dependency on s15.js.
+      const stageAxis = target.select('.s15-anchor-axes > g');
+      if (stageAxis.empty()) return;
+      const texts = stageAxis.selectAll('.tick text');
+      const nodes = texts.nodes();
+      if (nodes.length < 2) return;
+      texts.attr('transform', null).attr('text-anchor', 'middle')
+        .attr('dx', null).attr('dy', '0.71em');
+      const rects = nodes.map((n) => n.getBoundingClientRect());
+      const centers = rects.map((r) => r.left + r.width / 2).sort((a, b) => a - b);
+      let step = Infinity;
+      for (let i = 1; i < centers.length; i++) step = Math.min(step, centers[i] - centers[i - 1]);
+      let widest = 0;
+      nodes.forEach((n) => { widest = Math.max(widest, n.getComputedTextLength()); });
+      const pad = view.tokens.spacing_px[1] || 8;
+      let rows = 1;
+      while (rows < 3 && widest + pad > rows * step) rows += 1;
+      if (rows > 1) {
+        // Neighbors alternate rows, so same-row labels sit `rows` ticks
+        // apart; 1.4em row pitch keeps the rows' own boxes clear of each
+        // other vertically (12px ticks measure ~14px tall).
+        texts.attr('dy', (d, i) => `${0.71 + (i % rows) * 1.4}em`);
+      }
     }
 
     // L3: the mirror's own anchor spreads Norway/Argentina across the
@@ -717,10 +822,21 @@ export default {
         && shockLabelYTop >= gutter.y0 - 12 && shockLabelYTop <= gutter.y1)
         ? rect.y + rect.h - 8
         : shockLabelYTop;
-      target.append('text').attr('x', shockX + 4).attr('y', shockLabelY)
+      const shockLabel = target.append('text').attr('x', shockX + 4).attr('y', shockLabelY)
         .attr('fill', view.css('ink-mid'))
         .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
         .text('the shock');
+      // Mobile DOM-geometry audit (390x844): the late shock timestamp
+      // puts shockX near the panel's right edge, and the start-anchored
+      // label ran 4px past the viewport. s08's parked-label recipe,
+      // measured: when the label's real length would cross the region's
+      // right edge, flip it end-anchored to the line's other side — still
+      // directly on the mark it names. Widths where it clears keep the
+      // shipped right-of-line placement.
+      if (shockX + 4 + shockLabel.node().getComputedTextLength()
+          > view.region.x + view.region.w) {
+        shockLabel.attr('text-anchor', 'end').attr('x', shockX - 4);
+      }
     }
 
     // L4: s13's own `pair()` anchor draws the outline poll bar and the
@@ -739,10 +855,23 @@ export default {
       const pollX = rect.x + rect.w * 0.30;
       const colX = rect.x + rect.w * 0.60;
       if (typeof argPair.poll_pct === 'number') {
-        target.append('text').attr('x', pollX).attr('y', py(argPair.poll_pct) - 10)
+        const pollLabel = target.append('text').attr('x', pollX).attr('y', py(argPair.poll_pct) - 10)
           .attr('text-anchor', 'middle').attr('fill', view.css('ink-mid'))
           .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'))
           .text(`${Math.round(argPair.poll_pct)}% said win (poll)`);
+        // Mobile DOM-geometry audit (390x844): on the short mobile panel
+        // py(87) sits high enough that this label's lane collided with
+        // both the wrapped unit ribbon and s13's own "poll bars are
+        // agreement, not probability" caption (a bare text, no scrim —
+        // real collisions, and the caption is already at its final
+        // ribbon-dodged y because fixPairLabelOverlap runs before this,
+        // see redrawAxes' idx===3 order). Same measured bump the L1
+        // caption and L2 trace label use: slides the label just inside
+        // the poll bar's top; desktop, which measures clear, stays put.
+        clearTextBelow(pollLabel, [
+          unitRibbon.node(),
+          ...target.select('.s13-anchor-axes').selectAll(':scope > text').nodes(),
+        ], 6);
       }
       if (typeof argPair.kalshi_price_pct === 'number') {
         target.append('text').attr('x', colX).attr('y', rect.y + rect.h + 20)
@@ -788,9 +917,14 @@ export default {
           try { a.drawAxes(axesG); } catch (e) { console.warn('[rt/s16] drawAxes failed', e); }
         }
       }
-      if (idx === 1) { drawCalibrationTrace(axesG); drawAmberCallout(axesG); fixCalibrationLabelOverlap(axesG); }
+      // Order matters (Gate-6 layout audit, 1280x800: the trace label and
+      // s14's own "implied vs realized" title collided 70x13px once both
+      // dodged the wrapped ribbon independently): settle the s14 title's
+      // final position FIRST, so drawCalibrationTrace can measure it and
+      // place its own label clear of where the title actually ended up.
+      if (idx === 1) { fixCalibrationLabelOverlap(axesG); drawCalibrationTrace(axesG); drawAmberCallout(axesG); }
       if (idx === 2) { drawShockMarker(axesG, siblingData.s09json); fixMirrorLabelOverlap(axesG); }
-      if (idx === 3) drawPairLabels(axesG, siblingData.s13json);
+      if (idx === 3) { fixPairLabelOverlap(axesG); drawPairLabels(axesG, siblingData.s13json); }
       if (idx === 4) fixStripTickCollision(axesG);
     }
 
@@ -798,13 +932,54 @@ export default {
       const l = LOCKUPS[idx];
       lockupOrd.text(l.ordinal.toUpperCase()).transition().duration(400).attr('opacity', 1);
       lockupTitle.text(l.title).transition().duration(400).attr('opacity', 1);
+      // Mobile DOM-geometry audit (390x844): the L2 title is the one
+      // lockup wider than the mobile stage (measured 37px past the
+      // viewport's right edge; region.w is ~319 there). Measured, not
+      // mobile-gated: any title that outgrows the stage wraps into
+      // region-width tspans (s01's pretitle-caption precedent); every
+      // title that fits — all five on desktop — keeps its one line.
+      // (.text() above already cleared any previous lens's tspans.)
+      if (lockupTitle.node().getComputedTextLength() > view.region.w) {
+        wrapText(lockupTitle, l.title, view.region.w, 1.15);
+      }
+      // Gate-6 layout audit: at all three audited desktop widths every
+      // ord box grazed its title box by ~8px — the kicker face's ascent
+      // reaches higher above its baseline than the old fixed 22px
+      // baseline gap allowed for. Reset the ord to its base line, measure
+      // both rendered boxes, and lift the ord only as far as a real
+      // standoff requires (re-derived per lens and per width, since the
+      // kicker size is a viewport clamp and titles change per lens).
+      lockupOrd.attr('y', ordBaseY);
+      const ordStandoff = view.tokens.spacing_px[0] || 4;
+      const tBox = lockupTitle.node().getBBox();
+      const oBox = lockupOrd.node().getBBox();
+      const intrude = (oBox.y + oBox.height) - (tBox.y - ordStandoff);
+      if (intrude > 0) lockupOrd.attr('y', ordBaseY - intrude);
       // Gate-4 visual-story review fix (s16 major: the KEY panel occludes
       // the right-axis definitions in three of five beats — "how often it
       // happe...", "price (times its price before...", "grey line..." all
       // truncated). Wrap to the safe width left of the KEY's reserved
       // exclusion zone instead of one unbroken line that runs under it.
       const g = keyGutterRect(view);
-      const maxRibbonWidth = Math.max(160, g.x0 - view.region.x - 16);
+      // Mobile DOM-geometry audit (390x844) follow-ups, both measured:
+      // (a) the KEY this gutter dodges is a desktop fixture (the mobile
+      // key sits bottom-right above the prose sheet), yet the
+      // desktop-derived g.x0 collapsed the wrap width to its 160px floor
+      // at 390px and spilled the ribbon three-plus lines deep into the
+      // chart, into the L4 poll label's lane — on mobile the ribbon
+      // wraps to the stage's own width instead; (b) a wrapped title
+      // (above) reaches the ribbon's fixed region.y+14 lane, so the
+      // ribbon's baseline re-derives per lens from the title's measured
+      // bottom (the same bbox-bottom+12 recipe the fix*LabelOverlap
+      // helpers use). One-line titles measure the same as before and
+      // keep the shipped lane; every downstream caption dodge
+      // (fixMirror/Pair/CalibrationLabelOverlap, clearTextBelow) already
+      // measures the ribbon's real bbox, so they follow automatically.
+      // The y attr must land BEFORE wrapText: tspans copy it at wrap time.
+      const maxRibbonWidth = view.mobile
+        ? view.region.w
+        : Math.max(160, g.x0 - view.region.x - 16);
+      unitRibbon.attr('y', Math.max(view.region.y + 14, tBox.y + tBox.height + 12));
       wrapText(unitRibbon, RIBBONS[idx], maxRibbonWidth, 1.15);
       unitRibbon.transition().duration(400).attr('opacity', 1);
       redrawAxes(idx);
@@ -858,7 +1033,7 @@ export default {
     },
     {
       id: 'l2',
-      html: '<p>Second tonight: trust the deep pools, and smile at the penny ladders. Tonight&rsquo;s three-way market and the two teams&rsquo; championship tickets are the deepest pools this exchange has ever traded. Weighted by real dollars, those big markets priced almost perfectly all tournament.<sup class="fn"><a href="#fn-20">20</a></sup> The thin side bets, like first scorer or exact score, carried the one real flaw this study confirmed: a small tax on cheap longshot tickets.<sup class="fn"><a href="#fn-20">20</a></sup> Use it tonight: trust the big number, and shrug at the long-shot props.</p>',
+      html: '<p>Second tonight: trust the deep pools, and smile at the penny ladders. Tonight&rsquo;s three-way market and the two teams&rsquo; championship tickets are the deepest pools this exchange has ever traded. Weighted by real dollars, those big markets priced almost perfectly all tournament.<sup class="fn"><a href="#fn-20">20</a></sup> The thin side bets, like first scorer or exact score, carried the one real flaw this study confirmed: a small tax on cheap longshot tickets.<sup class="fn"><a href="#fn-20">20</a></sup> Use it tonight: trust the big number. Shrug at the long-shot props.</p>',
       trigger: 'step', state: 'lens1', kind: 'resort',
       chip: [
         { token: 'field-rest', glyph: 'dim', label: 'pale = money at each price level' },
@@ -869,7 +1044,7 @@ export default {
     },
     {
       id: 'l3',
-      html: '<p>Third tonight: if a goal lands, the jump is the new truth. Every clean goal spike this tournament held steady afterward; none of them snapped back like a panic.<sup class="fn"><a href="#fn-12">12</a></sup> The same math that cut Kane&rsquo;s price in half after 120 scoreless minutes prices any shock: what is left to happen, not what the highlight reel shows.<sup class="fn"><a href="#fn-19">19</a></sup> One rule for tonight, if the score is level near the ninetieth minute: the ninety-minute ticket has to slide toward zero by contract rules, not by belief. Watch the championship tickets instead.<sup class="fn"><a href="#fn-13">13</a></sup></p>',
+      html: '<p>Third tonight: if a goal lands, the jump is the new truth. Every clean goal spike this tournament held steady afterward. None of them snapped back like a panic.<sup class="fn"><a href="#fn-12">12</a></sup> The same math that cut Kane&rsquo;s price in half after 120 scoreless minutes prices any shock: what is left to happen, not what the highlight reel shows.<sup class="fn"><a href="#fn-19">19</a></sup> One rule for tonight, if the score is level near the ninetieth minute: the ninety-minute ticket has to slide toward zero by contract rules, not by belief. Watch the championship tickets instead.<sup class="fn"><a href="#fn-13">13</a></sup></p>',
       trigger: 'step', state: 'lens2', kind: 'resort',
       chip: [
         { token: 'identity-blue', glyph: 'dot', label: 'blue = Norway, rising' },

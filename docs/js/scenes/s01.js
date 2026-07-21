@@ -792,6 +792,7 @@ export default {
         : d3.axisBottom(clockX).tickValues(clockTickValues).tickFormat(formatClockTick);
       clockAxisG.call(axisFn);
       styleAxis(clockAxisG);
+      if (!view.mobile) placeClockTitle();
     }
     function drawPriceAxis() {
       priceAxisG.call(d3.axisLeft(priceY).ticks(5).tickFormat((d) => `${d}¢`));
@@ -807,19 +808,60 @@ export default {
         .style('font-size', view.css('type-caption-size'))
         .style('font-weight', 500);
     }
+    let clockTitleEl = null;
     if (view.mobile) {
-      const cx = view.region.x - 8 - 20;
+      // Mobile-audit fix (390x844 DOM-geometry sweep, s01/b1@0.5): the old
+      // anchor at region.x - 28 sat this rotated title's box straight
+      // across the price axis's mid-height tick labels ("40¢"/"60¢",
+      // 15x15px overlaps) — and no left-gutter position can clear them,
+      // because at the 48px mobile stage floor the widest price label
+      // ("100¢") already reaches within ~6px of the viewport's left edge,
+      // leaving no text-free band beside the ticks. The RIGHT gutter
+      // (view.W minus the region's right edge, W*0.06 in main.js's
+      // computeView) carries no SVG text in this scene — the price axis
+      // and every annotation anchor left of the region's right edge, and
+      // the clock tick labels that reach past it sit in the bottom strip,
+      // vertically clear of a mid-height title — so the title mirrors
+      // there: same rotation, same mid-height centering, baseline 8px
+      // inside the viewport's right edge so the glyph ascent extends
+      // inward (toward the stage), never off-canvas. Derived from view.W
+      // and view.region only; no width-specific constants.
+      const cx = view.W - 8;
       const cy = view.region.y + view.region.h / 2;
       titleStyle(g.append('text').attr('class', 'axis-title axis-title-clock')
         .attr('x', cx).attr('y', cy).attr('text-anchor', 'middle')
         .attr('transform', `rotate(-90, ${cx}, ${cy})`)
         .text('match clock (minutes from kickoff)'));
     } else {
-      titleStyle(g.append('text').attr('class', 'axis-title axis-title-clock')
+      // Layout-audit fix (1280x800 / 1440x900 / 1512x945, all stops that
+      // show this chart): the old fixed `y = axis + 8 + 24` BASELINE put
+      // this title's box 11px into the "40'"/"60'" tick labels' boxes —
+      // the tick labels' rendered rects reach deeper below the axis origin
+      // than the 24px the constant assumed. The title's y is now set by
+      // placeClockTitle() after every axis draw — its TOP edge derived
+      // from the axis group's own rendered bounding box plus the standard
+      // annotation standoff token — so the two boxes cannot intersect at
+      // any viewport width, and no width-specific constant is needed.
+      clockTitleEl = g.append('text').attr('class', 'axis-title axis-title-clock')
         .attr('x', view.region.x + view.region.w / 2)
-        .attr('y', view.region.y + view.region.h + 8 + 24)
         .attr('text-anchor', 'middle')
-        .text('match clock (minutes from kickoff)'));
+        .text('match clock (minutes from kickoff)');
+      titleStyle(clockTitleEl);
+    }
+    function placeClockTitle() {
+      if (!clockTitleEl) return;
+      const axisOriginY = view.region.y + view.region.h + 8;
+      // Fallback = the old constant, only if the svg is detached/hidden and
+      // getBBox cannot measure (not a live path: the overlay svg is always
+      // rendered when drawClockAxis runs).
+      let axisDepth = 24;
+      try {
+        const bb = clockAxisG.node().getBBox();
+        if (bb && bb.height > 0) axisDepth = bb.y + bb.height;
+      } catch (e) { /* keep fallback */ }
+      clockTitleEl
+        .attr('dominant-baseline', 'hanging')
+        .attr('y', axisOriginY + axisDepth + standoff);
     }
     titleStyle(g.append('text').attr('class', 'axis-title axis-title-price')
       .attr('x', view.region.x - 8)
@@ -897,10 +939,22 @@ export default {
       .attr('fill', view.css('ink-mid'))
       .style('font-family', view.css('font-tape'))
       .style('font-size', view.css('type-tape-size'))
-      // Names what the lit/active movers ARE (tonight's match) so the pop has a
-      // referent, and keeps the unit statement at first contact.
-      .text('the lit dots: tonight, France–Spain · one dot is one trade')
       .style('opacity', 0);
+    // Names what the lit/active movers ARE (tonight's match) so the pop has a
+    // referent, and keeps the unit statement at first contact. On the phone
+    // the single line ran 108px past the viewport's right edge (390x844
+    // layout audit), so it wraps at its own interpunct into two tspans;
+    // desktop keeps the one-line lane.
+    if (view.mobile) {
+      caption.append('tspan')
+        .attr('x', view.region.x).attr('dy', '-1.2em')
+        .text('the lit dots: tonight, France–Spain');
+      caption.append('tspan')
+        .attr('x', view.region.x).attr('dy', '1.2em')
+        .text('one dot is one trade');
+    } else {
+      caption.text('the lit dots: tonight, France–Spain · one dot is one trade');
+    }
 
     // Gate-4 s01 major fix (grey/meaning-budget cleanup): the transient
     // "fainter streams" caption named a fourth population that read to a

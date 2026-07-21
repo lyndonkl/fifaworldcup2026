@@ -67,6 +67,11 @@ function restFieldXY(i, view) {
   ];
 }
 
+/* `label` may be a string (one line) or an array of lines. Multi-line
+ * labels render as stacked tspans vertically centered on the dot, with
+ * em-based line height (the s01 pretitle-caption wrap pattern) -- added
+ * for the 390x844 mobile audit, where the kickoff callout's single line
+ * was wider than the whole phone stage. */
 function drawSingleton(g, x, y, tokens, label, mirror) {
   const core = tokens.dot['radius-annotated-core-px'];
   const halo = tokens.dot['radius-annotated-halo-px'];
@@ -76,13 +81,24 @@ function drawSingleton(g, x, y, tokens, label, mirror) {
     .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', stroke);
   sel.append('circle').attr('r', core).attr('fill', 'var(--ink-hero)');
   if (label) {
-    sel.append('text')
-      .attr('x', mirror ? -(halo + 6) : halo + 6).attr('y', 4)
+    const lines = Array.isArray(label) ? label : [label];
+    const tx = mirror ? -(halo + 6) : halo + 6;
+    const text = sel.append('text')
+      .attr('x', tx).attr('y', 4)
       .attr('text-anchor', mirror ? 'end' : 'start')
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-annotation-size)')
-      .attr('fill', 'var(--accent-annotation)')
-      .text(label);
+      .attr('fill', 'var(--accent-annotation)');
+    if (lines.length === 1) {
+      text.text(lines[0]);
+    } else {
+      lines.forEach((ln, li) => {
+        text.append('tspan')
+          .attr('x', tx)
+          .attr('dy', li === 0 ? `${-0.6 * (lines.length - 1)}em` : '1.2em')
+          .text(ln);
+      });
+    }
   }
   return sel;
 }
@@ -347,13 +363,26 @@ export default {
     // the tournament" had no visual carrier and the composition argued the
     // opposite). A direct label pinned beside the tape itself, not just in
     // the prose column, so the claim has a findable on-screen referent.
-    g.append('text')
+    // Mobile (390x844 layout audit): the single line ran 10px past the
+    // viewport's right edge, so it wraps into two tspans stacked downward
+    // into the stage (upward would graze the price-lane title at
+    // stageTop - 10); desktop keeps the one-line lane.
+    const anchorText = g.append('text')
       .attr('x', view.region.x)
       .attr('y', stageTop + 16)
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-caption-size)')
-      .attr('fill', 'var(--ink-hi)')
-      .text('every dot below: the tournament’s single biggest market');
+      .attr('fill', 'var(--ink-hi)');
+    if (view.mobile) {
+      anchorText.append('tspan')
+        .attr('x', view.region.x)
+        .text('every dot below: the tournament’s');
+      anchorText.append('tspan')
+        .attr('x', view.region.x).attr('dy', '1.2em')
+        .text('single biggest market');
+    } else {
+      anchorText.text('every dot below: the tournament’s single biggest market');
+    }
 
     const zoomSpec = data.manifest.zoom.mexeng;
     const rateT0 = zoomSpec ? new Date(zoomSpec.window[0]).getTime() : null;
@@ -464,8 +493,17 @@ export default {
         .attr('stroke-dasharray', '2,3')
         .attr('stroke-opacity', 0.15);
       const mult = data.scene.kickoff_step_multiplier;
+      // Mobile (390x844 layout audit): the one-line "doubles" label,
+      // mirrored end-anchored off a kickoffX near the stage's right edge,
+      // ran 35px past the viewport's LEFT edge. It wraps into two lines on
+      // the phone (drawSingleton's array form, the s01 tspan pattern) --
+      // the wording itself stays intact because the b1 prose points the
+      // reader at it ("the whistle doubled that pace"). Desktop keeps the
+      // one-line lane, which fits there.
       const label = mult
-        ? 'kickoff: the whistle doubles an already-flooding tape'
+        ? (view.mobile
+          ? ['kickoff: the whistle doubles', 'an already-flooding tape']
+          : 'kickoff: the whistle doubles an already-flooding tape')
         : 'kickoff: the pace steps up';
       // Anchored to the rate curve's own value at kickoff (design review
       // M5: the marker previously sat fixed near the pace lane's zero

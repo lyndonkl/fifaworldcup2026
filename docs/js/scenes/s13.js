@@ -15,7 +15,14 @@
  * units caption pins to the top of each." The rail already renders one
  * card per beat sequentially on every surface (CONTRACT §6.3); the units
  * caption element below is repositioned to the top of the stage on
- * view.mobile so it reads before the pair rather than beside it.
+ * view.mobile so it reads before the pair rather than beside it. Three
+ * further view.mobile calls from the 390x844 DOM-geometry audit, each
+ * documented at its own draw site: the pollster credit is dropped (it
+ * shared a baseline with the relocated units caption), the host-panel
+ * ratio suffix shortens to "model price" (the full phrase overran the
+ * ~81px band step), and the zombie chip is dropped (it overran the right
+ * edge and sits in the sheet-occluded footer band; b3's card states the
+ * same figures verbatim).
  *
  * DATA REQUESTS (per-scene JSON field names are not specified beyond shape
  * in CONTRACT §5.5 — proposed here, grounded against the actual pipeline
@@ -437,14 +444,24 @@ function overlay(container, data, view, scalesObj) {
       .style('font-size', view.css('type-kicker-size'))
       .style('fill', view.css('ink-hi'))
       .text(pair.label || pair.team);
-    pairG.append('text')
-      .attr('x', kickerX)
-      .attr('y', view.region.y - 8)
-      .attr('text-anchor', 'end')
-      .style('font-family', view.css('font-apparatus'))
-      .style('font-size', view.css('type-caption-size'))
-      .style('fill', view.css('ink-mid'))
-      .text(pair.poll_source ? `${pair.poll_source.split('(')[0].trim()} poll` : '');
+    // Mobile (390x844 DOM-geometry audit): this right-anchored pollster
+    // credit shares its baseline (region.y - 8) with the standing units
+    // caption's first line once that caption moves to the top on mobile,
+    // and the two met mid-strip with ~20px of bbox overlap. At this width
+    // the credit is the strip's lowest-value occupant -- the sourcing
+    // already lives in footnote 17 in the card, and the kicker above
+    // still names the country -- so it is dropped behind a view.mobile
+    // guard rather than crammed. Desktop keeps the credit.
+    if (!view.mobile) {
+      pairG.append('text')
+        .attr('x', kickerX)
+        .attr('y', view.region.y - 8)
+        .attr('text-anchor', 'end')
+        .style('font-family', view.css('font-apparatus'))
+        .style('font-size', view.css('type-caption-size'))
+        .style('fill', view.css('ink-mid'))
+        .text(pair.poll_source ? `${pair.poll_source.split('(')[0].trim()} poll` : '');
+    }
 
     pairG.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
     hostG.style('opacity', 0);
@@ -530,7 +547,15 @@ function overlay(container, data, view, scalesObj) {
           .text(`${t.price_ratio_x}x`);
         ratioLabel.append('tspan')
           .attr('x', cx + bw / 2).attr('dy', '1.15em')
-          .text("the model's price");
+          // Mobile (390x844 DOM-geometry audit): the USA and Mexico
+          // columns sit one band step apart (~81px at 390px wide), and
+          // "the model's price" (~109px at caption size there) overlapped
+          // its neighbor by ~28px. "model price" (~70px) fits the step
+          // with ~10px between adjacent labels and keeps the ratio's
+          // referent on stage -- a bare "2x" could read as 2x the peers'
+          // MONEY (the beat's other true fact), so the suffix is
+          // shortened, never dropped. Desktop keeps the full phrase.
+          .text(view.mobile ? 'model price' : "the model's price");
       }
     });
 
@@ -541,6 +566,16 @@ function overlay(container, data, view, scalesObj) {
   function drawZombieFootnote() {
     const z = sceneJson.zombie_money;
     if (!z) return;
+    // Mobile (390x844 DOM-geometry audit): the chip's figures line ran
+    // 34px past the viewport's right edge, and the whole footer band it
+    // lives in -- below region bottom, which IS the 62vh stage floor on
+    // mobile -- sits behind the 38vh prose sheet anyway (shared.js
+    // mobileAxisOrientation note: below-baseline text is occluded, G3).
+    // The receipt is not lost: b3's own card states the same figures in
+    // full ("302 housekeeping trades worth about $2,340"). Dropped behind
+    // a view.mobile guard rather than wrapped into three occluded lines;
+    // desktop keeps the chip.
+    if (view.mobile) return;
     const cents = z.max_price_c === 1 ? '1 cent' : `${z.max_price_c} cents`;
     // The chip leads with its own SUBJECT. Bare, the figures sat directly
     // under "each dot: $75,000 of real money" and read as a contradiction

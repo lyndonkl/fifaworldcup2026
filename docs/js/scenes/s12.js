@@ -18,8 +18,13 @@
  * preserved exactly (it is the point)." The four player lanes already stack
  * vertically on desktop (see scales()); on narrow viewports the same
  * vertical stack simply gets taller lanes and a narrower date axis — no
- * different arrangement is needed, so view.mobile only tightens spacing
- * below. The two-beat naive->resolved reveal is identical on every surface.
+ * different arrangement is needed. view.mobile adjusts apparatus only
+ * (390x844 DOM-geometry audit): the pinned caption's question line drops
+ * to annotation size so it fits the 44px band between the grain plate and
+ * the stage top, the Kane callout wraps to two tspans, and the
+ * assist-tiebreak footnote (whose fact b2's prose already states) is
+ * dropped. The two-beat naive->resolved reveal — same words, same
+ * sequence — is identical on every surface.
  *
  * DATA REQUESTS (see this scene's exit notes to the tile builder — CONTRACT
  * §5.5 defines only the generic scene-JSON shape, not per-scene fields):
@@ -213,9 +218,28 @@ function scales(data, view) {
     .domain([secToDate(manifest, startS), secToDate(manifest, endS > startS ? endS : dr.end_s)])
     .range([view.region.x + 96, xRangeMax]);
 
+  // Footer reserve (layout sweep, 1280x800 + 1512x945 audits): the lane
+  // block used to run to the region floor with the x-axis and three
+  // footer lines hung below it at fixed offsets -- measured, the tick
+  // labels ran into the axis title (iy 7px at both widths), and at
+  // 800px-tall viewports the footnote's baseline fell past the viewport
+  // edge. The lane floor now yields the room the footer stack actually
+  // needs, top to bottom: axis standoff, one tick row (6px tick line +
+  // 3px padding + a type-micro line), three packed text lines
+  // (caption / caption / tape boxes) with sp[0] gaps between them, and
+  // bottom breath -- token sizes per docs/design/tokens.css. On mobile
+  // region.h already ends at the prose sheet's top edge (0.62*H), well
+  // above this floor, so min() leaves the mobile geometry exactly as it
+  // was. overlay() places each footer line by measuring the row above
+  // (the s07.js getBBox idiom), so this budget only has to be an upper
+  // bound, not a pixel match.
+  const sp = view.tokens.spacing_px;
+  const footerReservePx = sp[1] + (6 + 3 + 15) + 3 * sp[0] + (17 + 17 + 16) + sp[1];
+  const chartBottom = Math.min(view.region.y + view.region.h, view.H - footerReservePx);
+
   const lane = d3.scaleBand()
     .domain(players.map((p) => p.key))
-    .range([view.region.y, view.region.y + view.region.h])
+    .range([view.region.y, chartBottom])
     .paddingInner(0.3)
     .paddingOuter(0.12);
 
@@ -333,8 +357,15 @@ function overlay(container, data, view, scalesObj) {
   players.forEach((p) => {
     const y0 = lane(p.key);
     if (y0 === undefined) return;
+    // Name row at the lane's upper-quarter line -- the midpoint of the
+    // gap between its own 100c and 50c tick rows -- instead of the lane's
+    // vertical center: centered, the long "(eliminated, reference)"
+    // suffix sat square on Haaland's 50c tick label (measured 22x15px at
+    // 1280x800 and 1512x945). Derived from the band, so the clearance
+    // holds at any lane height >= ~67px (every audited surface; the
+    // shortest, mobile, is ~83px).
     const row = laneLabels.append('g')
-      .attr('transform', `translate(${view.region.x}, ${y0 + lane.bandwidth() / 2})`);
+      .attr('transform', `translate(${view.region.x}, ${y0 + lane.bandwidth() * 0.25})`);
     row.append('text')
       .attr('class', 's12-lane-name')
       .attr('dy', '0.35em')
@@ -345,10 +376,16 @@ function overlay(container, data, view, scalesObj) {
       .text(p.label + (p.reference ? ' (eliminated, reference)' : ''));
   });
 
-  // Date axis, drawn once at the shared x range.
+  // Date axis, drawn once at the shared x range. The lane scale's own
+  // range bottom is the chart floor (scales() shrinks it so this whole
+  // footer stack fits above the viewport edge -- see footerReservePx
+  // there), so the axis hangs off the lane range, never the region floor.
+  const sp = view.tokens.spacing_px;
+  const chartBottom = lane.range()[1];
+  const axisTopY = chartBottom + sp[1];
   const axisG = g.append('g')
     .attr('class', 's12-axis-x')
-    .attr('transform', `translate(0, ${view.region.y + view.region.h + 8})`)
+    .attr('transform', `translate(0, ${axisTopY})`)
     // A fixed weekly-or-coarser interval, not a bare .ticks(n) hint: at this
     // scene's now-narrow (real-trade-derived) domain, .ticks(6) let d3 pick
     // 9 tightly-packed labels that ran into the axis title below them.
@@ -359,23 +396,32 @@ function overlay(container, data, view, scalesObj) {
       .style('fill', view.css('ink-low')))
     .call((sel) => sel.selectAll('line, path').style('stroke', view.css('ink-low')));
 
+  // Footer stack, top to bottom: the tick row above, then the x-axis
+  // title, the y-unit line, and (on b2) the assist-tiebreak footnote.
+  // Every line is dropped below the measured bottom of the row above it
+  // (the s07.js getBBox idiom; fallbacks only cover a detached svg,
+  // which overlay() never runs against), replacing the old fixed
+  // +36/+52/+68 offsets that ran the tick labels into the title (iy 7px
+  // at 1280x800 and 1512x945) and, at 800px-tall viewports, pushed the
+  // footnote's baseline off-screen. The sp[0] gaps keep the packed
+  // rhythm the old 16px baseline steps had at these type sizes.
+  let axisDepth = 6 + 3 + 12; // tick line + padding + micro text, fallback
+  try {
+    const abb = axisG.node().getBBox();
+    if (abb && abb.height > 0) axisDepth = abb.y + abb.height;
+  } catch (e) { /* keep fallback */ }
+
   // Axis titles (design-revision-spec G3/G4: every D3 axis names what it
   // measures and its unit; s12 previously shipped with no titled axis at
-  // all). X title sits centered below the tick labels, the standard slot.
-  g.append('text')
+  // all). X title sits centered below the tick labels, the standard slot
+  // -- centered on the chart's own plotted span (x.range() is already
+  // inset from the KEY, see scales()), not on the full region width,
+  // which hung the title's right edge past the plot once the key inset
+  // narrowed it.
+  const xTitle = g.append('text')
     .attr('class', 's12-axis-x-title')
-    .attr('x', view.region.x + view.region.w / 2)
-    // Text-collision sweep (Gate-5 item 3 disposition 2): this footer
-    // stack's three lines (x-axis title, the y-unit line, the assist-
-    // tiebreak footnote) were spaced by the usual >= space-24 rule, but at
-    // this viewport's actual region.h that rule runs the stack past 900px
-    // -- the unit line was clipped mid-glyph and the footnote landed
-    // entirely below the fold (baseline at region.h + 98 is off-screen at
-    // any viewport <= 926px tall). There simply isn't 74px of room below
-    // the tick labels here, so the three lines pack at 16px apart instead
-    // of 24-26px -- tighter than the rest of the piece's footer rhythm,
-    // but the alternative is a footnote nobody can ever read.
-    .attr('y', view.region.y + view.region.h + 36)
+    .attr('x', (x.range()[0] + x.range()[1]) / 2)
+    .attr('y', 0)
     .attr('text-anchor', 'middle')
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
@@ -385,6 +431,17 @@ function overlay(container, data, view, scalesObj) {
     // not the full listing period), so a reader checking the ticks against
     // the title never finds a mismatch.
     .text('date, tournament run-in (2026)');
+  let titleAscent = 11;   // caption-size ink metrics, fallback only
+  let titleDescent = 4;
+  try {
+    const tbb = xTitle.node().getBBox();
+    if (tbb && tbb.height > 0) {
+      titleAscent = -tbb.y;
+      titleDescent = tbb.y + tbb.height;
+    }
+  } catch (e) { /* keep fallback */ }
+  const xTitleBaseline = axisTopY + axisDepth + sp[0] + titleAscent;
+  xTitle.attr('y', xTitleBaseline);
 
   // Per-lane price axis (G3: "s12 has no y-axis" was the named gap). Each
   // player's row is its own 0-100c scale within its band, so the axis is
@@ -407,20 +464,30 @@ function overlay(container, data, view, scalesObj) {
         .style('fill', view.css('ink-low')))
       .call((sel) => sel.selectAll('line, path').style('stroke', view.css('ink-low')));
   });
-  g.append('text')
+  const yUnit = g.append('text')
     .attr('class', 's12-axis-y-title')
     .attr('x', view.region.x)
-    // Footer stack, top to bottom: x-axis title (region.h+36), this unit
-    // line, then the assist-tiebreak footnote (region.h+68) -- see the
-    // x-title comment above for why these sit 16px apart instead of the
-    // usual >= space-24 (this scene's region.h leaves no room for that
-    // gap and three lines both).
-    .attr('y', view.region.y + view.region.h + 52)
+    .attr('y', 0)
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('font-weight', 500)
     .style('fill', view.css('ink-mid'))
     .text('price of winning the Golden Boot (cents)');
+  let unitAscent = 11;    // caption-size ink metrics, fallback only
+  let unitDescent = 4;
+  try {
+    const ubb = yUnit.node().getBBox();
+    if (ubb && ubb.height > 0) {
+      unitAscent = -ubb.y;
+      unitDescent = ubb.y + ubb.height;
+    }
+  } catch (e) { /* keep fallback */ }
+  const yUnitBaseline = xTitleBaseline + titleDescent + sp[0] + unitAscent;
+  yUnit.attr('y', yUnitBaseline);
+  // Where the footnote's measured TOP edge goes when drawAnnotations()
+  // builds it on b2 (its baseline is then set from its own measured
+  // ascent, same idiom as the two lines above).
+  const footnoteTopY = yUnitBaseline + unitDescent + sp[0];
 
   // RESHAPE: connected price paths (design-revision-spec S12: "per-row
   // price paths with direct labels"). The dot cloud alone is real but too
@@ -483,25 +550,57 @@ function overlay(container, data, view, scalesObj) {
     // Naive-frame label starts ink-low, not amber (design-revision-spec
     // CR-11): amber on a debunked claim is an anchoring bug, not emphasis.
     .style('fill', view.css('ink-low'));
+  // Question line size is surface-dependent (390x844 DOM-geometry audit):
+  // the caption group hangs at region.y - 28, and on the phone the stage
+  // top is floored at 108 with the fixed grain plate ending ~64 above it
+  // -- a 44px band. At lede size (22px) with dy 1.6em the question's box
+  // ran ~12px below region.y, square onto the top lane's "100c" tick row
+  // (iy 7) and the July 7-8 callout block (iy 5). Annotation size with a
+  // matching em drop keeps the whole two-row caption inside the band
+  // (block bottom ~106 < 108) while the rewrite text -- the scene's
+  // signature, per the storyboard's mobile note -- stays word-for-word
+  // identical. Desktop keeps the lede, which every wide audit cleared.
   const captionQuestion = captionG.append('text')
     .attr('class', 's12-caption-question')
-    .attr('dy', '1.6em')
+    .attr('dy', view.mobile ? '1.5em' : '1.6em')
     .style('font-family', view.css('font-prose'))
-    .style('font-size', view.css('type-lede-size'))
+    .style('font-size', view.mobile
+      ? view.css('type-annotation-size')
+      : view.css('type-lede-size'))
     .style('fill', view.css('ink-hi'));
 
   // Annotation group for the resolved step (July 7-8 level, Kane halving,
   // assist tiebreak footnote). Built lazily on b2 so it never shows early.
   const annoG = g.append('g').attr('class', 's12-annotations').style('opacity', 0);
 
-  // Mirror an annotation leftward (G5) when its right-reading text would
-  // otherwise run past the chart's own right edge (xRight -- already
-  // inset to clear the KEY, see scales()) or the KEY RECT itself.
+  // Annotation placement (G5 + this layout sweep): right-reading first;
+  // mirrored left-reading second, but only when the whole mirrored run
+  // still fits inside the chart's own left edge -- unchecked, a mirrored
+  // label ran leftward across the tick gutter into the lane names and
+  // the 50c tick row (measured ix 10 and ix 22 at 1280x800). On a stage
+  // too narrow for either side, the text centers on the anchor, clamped
+  // to the plotted span, so it never enters the gutter on the left or
+  // crosses toward the KEY on the right. xRight is already inset to
+  // clear the KEY, see scales().
   const xRight = x.range()[1];
+  const xLeftEdge = x.range()[0];
   function placeAnnotationText(sel, px, estWidth) {
-    const mirror = px + 12 + estWidth > xRight;
-    sel.attr('x', mirror ? px - 12 : px + 12)
-      .attr('text-anchor', mirror ? 'end' : 'start');
+    const pad = view.tokens.spacing_px[0];
+    let anchor;
+    let tx;
+    if (px + 12 + estWidth <= xRight) {
+      anchor = 'start'; tx = px + 12;
+    } else if (px - 12 - estWidth >= xLeftEdge) {
+      anchor = 'end'; tx = px - 12;
+    } else {
+      anchor = 'middle';
+      tx = Math.max(xLeftEdge + estWidth / 2 + pad,
+        Math.min(px, xRight - estWidth / 2 - pad));
+    }
+    sel.attr('x', tx).attr('text-anchor', anchor);
+    // Multi-line labels break lines with x-carrying tspans; keep every
+    // line on the block's resolved anchor column.
+    sel.selectAll('tspan').attr('x', tx);
   }
 
   function drawAnnotations() {
@@ -524,13 +623,24 @@ function overlay(container, data, view, scalesObj) {
           .style('fill', 'none')
           .style('stroke', view.css('accent-annotation'))
           .style('stroke-width', view.css('dot-halo-stroke-px'));
+        // Two packed lines instead of one 46-character run: mirrored
+        // left on a narrow stage, the single line crossed the tick
+        // gutter into the Mbappe lane name (ix 10) and the 50c tick
+        // label (ix 22) at 1280x800. Half-length lines keep the mirrored
+        // block inside the plotted span at every audited width, and
+        // placeAnnotationText's clamped-center fallback covers stages
+        // narrower still. First baseline sits a line height above the
+        // old single-line slot, so the block still ends 12px above the
+        // anchored circle.
         const july78Label = annoG.append('text')
-          .attr('y', py - 12)
+          .attr('y', py - 30)
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-annotation-size'))
-          .style('fill', view.css('accent-annotation'))
-          .text('July 7–8: traded level, Mbappe one goal behind');
-        placeAnnotationText(july78Label, px, 320);
+          .style('fill', view.css('accent-annotation'));
+        july78Label.append('tspan').text('July 7–8: traded level,');
+        july78Label.append('tspan').attr('dy', '1.2em')
+          .text('Mbappe one goal behind');
+        placeAnnotationText(july78Label, px, 185);
       }
     }
 
@@ -546,29 +656,58 @@ function overlay(container, data, view, scalesObj) {
         // this same y a little further right (the narrated moment and the
         // line's last plotted point land close together here).
         const kaneLabel = annoG.append('text')
-          .attr('y', py - 20)
+          .attr('y', view.mobile ? py - 34 : py - 20)
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-annotation-size'))
-          .style('fill', view.css('ink-mid'))
-          .text('Kane: 120 scoreless minutes, price halved');
-        placeAnnotationText(kaneLabel, px, 285);
+          .style('fill', view.css('ink-mid'));
+        if (view.mobile) {
+          // 390x844 audit: the single 285px line broke
+          // placeAnnotationText's clamped-center fallback -- the mobile
+          // plotted span (x.range()) is only ~223px, so the left clamp
+          // bound exceeded the right one and Math.max shoved the block's
+          // right edge 45px past the viewport. Wrapped at the comma, the
+          // widest line (~200px) fits the span with the clamp bounds
+          // ordered again; same x-carrying tspan idiom as the July 7-8
+          // block. Lifted one extra line height so the block still ends
+          // clear above the anchored trade.
+          kaneLabel.append('tspan').text('Kane: 120 scoreless minutes,');
+          kaneLabel.append('tspan').attr('dy', '1.2em').text('price halved');
+          placeAnnotationText(kaneLabel, px, 200);
+        } else {
+          kaneLabel.text('Kane: 120 scoreless minutes, price halved');
+          placeAnnotationText(kaneLabel, px, 285);
+        }
       }
     }
 
-    if (anno.assist_tiebreak && anno.assist_tiebreak.text) {
-      annoG.append('text')
+    if (!view.mobile && anno.assist_tiebreak && anno.assist_tiebreak.text) {
+      // Desktop only (390x844 audit): the 84-character tape line ran
+      // 315px past the phone viewport's right edge, and its footer slot
+      // sits below the stage floor, under the mobile prose sheet. The
+      // fact it carries is not lost -- b2's prose states the assist
+      // tiebreak in full ("The contract's own tiebreak rule, based on
+      // assists, decided the rest") -- so on mobile the chip is dropped
+      // as secondary apparatus rather than wrapped into hidden space.
+      //
+      // Bottom of the footer stack: measured drop below the y-unit line
+      // (footnoteTopY, derived in the footer chain above), same getBBox
+      // idiom as the two lines over it. The old fixed offset (+68, and
+      // +98 before that) either grazed the unit line or fell off-screen
+      // depending on viewport height.
+      const footnote = annoG.append('text')
         .attr('class', 's12-footnote-chip')
         .attr('x', view.region.x)
-        // Bottom of the footer stack (x-axis title +36, unit line +52,
-        // this footnote +68 -- see s12-axis-x-title's comment). This was
-        // +98, which put its baseline below any viewport shorter than
-        // 926px -- the whole line was permanently off-screen, not merely
-        // tight.
-        .attr('y', view.region.y + view.region.h + 68)
+        .attr('y', 0)
         .style('font-family', view.css('font-tape'))
         .style('font-size', view.css('type-tape-size'))
         .style('fill', view.css('ink-low'))
         .text(anno.assist_tiebreak.text);
+      let footAscent = 10; // tape-size ink ascent, fallback only
+      try {
+        const fbb = footnote.node().getBBox();
+        if (fbb && fbb.height > 0) footAscent = -fbb.y;
+      } catch (e) { /* keep fallback */ }
+      footnote.attr('y', footnoteTopY + footAscent);
     }
 
     annoG.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in'])
@@ -584,7 +723,13 @@ function overlay(container, data, view, scalesObj) {
     if (beatId === 'b1') {
       captionLabel.style('fill', view.css('ink-low')).text('the naive read');
       captionQuestion.style('fill', view.css('ink-hi')).text('Same goals, double the price?');
-      annoG.style('opacity', 0);
+      // Remove the b2 annotations outright, not just fade them: an
+      // opacity-0 group still carries DOM geometry, and the 390x844 audit
+      // measured the leftover July 7-8 label colliding at the b1 stop
+      // after a scroll back up. drawAnnotations() rebuilds from scratch
+      // on every b2 entry, so removal here loses nothing.
+      annoG.interrupt().style('opacity', 0);
+      annoG.selectAll('*').remove();
       // Only the two contenders b1's prose actually discusses draw a line,
       // muted, matching the muted dots -- Kane and Haaland wait for b2 so
       // the key stays honest about what is on screen (see layout()).

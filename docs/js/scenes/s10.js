@@ -118,6 +118,18 @@
  * whether Pinnacle was still quoting (the killed 14-2 "Kalshi beats the
  * pros" finding named in findings-dossier.md's killed-findings list).
  *
+ * MOBILE LAYOUT AUDIT (390x844 DOM-geometry pass): two defects, both in
+ * this file's overlay. (1) "same price" collided with the "Fri 10" time
+ * tick — on mobile the axisTop flip puts tick labels INSIDE the stage,
+ * sharing the label's row, and axisLayer paints after bandLayer so the
+ * tick ink landed on top of the label's own scrim; the label lifts one
+ * spacing step clear of the tick row on mobile only. (2) the item-11
+ * echo note ran ~134px past the right viewport edge; on mobile it wraps
+ * at its own comma into two tspans (scrimmedLabel now accepts an array
+ * of lines) and moves to the clear lane above the band label, since the
+ * top strip is where b3's right-anchored verdict chip wraps. Desktop
+ * geometry is untouched. Details at each edit site.
+ *
  * ---------------------------------------------------------------------
  * DATA CONTRACT ASSUMPTIONS (flagged in this build's data_requests — the
  * exact internal shape of a per-scene JSON file is left to the tile
@@ -554,13 +566,22 @@ export default {
     // guess at placement. Takes the target layer as a parameter (Gate-5
     // item 11: the echo note below needs to paint in noteLayer, ABOVE
     // lineLayer, not in bandLayer underneath it, so it stays legible even
-    // if a clipped spike's flat top passes behind it).
+    // if a clipped spike's flat top passes behind it). `text` may be an
+    // array of lines (mobile layout audit: the echo note wraps into
+    // tspans at 390px, the s01.js pretitle-caption pattern); getBBox()
+    // measures the whole tspan block, so the scrim wraps every line.
     function scrimmedLabel(layer, x, y, anchor, color, text) {
       const t = layer.append('text')
         .attr('x', x).attr('y', y).attr('text-anchor', anchor)
         .attr('fill', color).attr('opacity', 0)
-        .style('font', '12px var(--font-apparatus)')
-        .text(text);
+        .style('font', '12px var(--font-apparatus)');
+      if (Array.isArray(text)) {
+        text.forEach((line, i) => {
+          t.append('tspan').attr('x', x).attr('dy', i === 0 ? 0 : '1.2em').text(line);
+        });
+      } else {
+        t.text(text);
+      }
       const bb = t.node().getBBox();
       const scrim = layer.insert('rect', () => t.node())
         .attr('x', bb.x - spacing[0]).attr('y', bb.y - spacing[0] / 2)
@@ -584,8 +605,20 @@ export default {
         .attr('y', yTop).attr('height', Math.max(0, y0 - yTop))
         .attr('fill', view.css('ink-low')).attr('stroke', 'none')
         .attr('fill-opacity', 0);
+      // Mobile text-collision fix (390x844 DOM audit): with the time axis
+      // flipped to axisTop, its tick labels render INSIDE the stage, in
+      // the ~21px row above the baseline (9px tick standoff + 12px type),
+      // and "same price" at y0 - spacing[0] printed straight through the
+      // "Fri 10" tick -- and, because bandLayer paints before axisLayer,
+      // the tick ink landed ON TOP of this label's own scrim, so this is
+      // a real collision, not a scrim-on-top case. Lifted one spacing
+      // step clear of that row (spacing[5] = 32 > 21px row + 8px air);
+      // it stays below the mobile x-axis title's row at y0 - spacing[6].
+      // Desktop keeps the tight berth: its axisBottom labels render
+      // OUTSIDE the region, below the line, so nothing shares the row.
+      const zeroLabelY = view.mobile ? y0 - spacing[5] : y0 - spacing[0];
       const [zeroLabel, zeroScrim] = scrimmedLabel(
-        bandLayer, view.region.x + view.region.w - spacing[1], y0 - spacing[0], 'end',
+        bandLayer, view.region.x + view.region.w - spacing[1], zeroLabelY, 'end',
         view.css('ink-hi'), 'same price',
       );
       const [bandLabel, bandScrim] = scrimmedLabel(
@@ -614,10 +647,29 @@ export default {
     // line itself.
     function drawEchoNote() {
       noteLayer.selectAll('*').remove();
+      const peak = Math.round(spikeMaxPts);
+      // Mobile edge fix (390x844 DOM audit): the one-line note ran ~134px
+      // past the right viewport edge (a ~460px string starting at
+      // region.x + 8 on a ~319px-wide region). At mobile width it wraps
+      // at its own comma into two tspans (the s01.js pretitle-caption
+      // pattern; longest line ~260px, inside the region), and it leaves
+      // the top strip -- where b3's right-anchored verdict chip wraps
+      // into those same rows -- for the clear lane above the band label:
+      // last-line baseline lands spacing[5] + spacing[2] - 1.2em above
+      // yTop, which keeps the block's scrim ~9px clear of the "within 5
+      // cents" scrim below it and out of the bright figure line's
+      // clipped-to-band zone entirely. Desktop keeps the one-line
+      // top-left berth.
+      const noteY = view.mobile
+        ? yTop - spacing[5] - spacing[2]
+        : view.region.y + spacing[2];
+      const noteText = view.mobile
+        ? ['dashed spikes are recording echoes,',
+          `reaching up to ${peak} points past this chart's cap`]
+        : `dashed spikes are recording echoes, reaching up to ${peak} points past this chart's cap`;
       const [noteLabel, noteScrim] = scrimmedLabel(
-        noteLayer, view.region.x + spacing[1], view.region.y + spacing[2], 'start',
-        view.css('ink-mid'),
-        `dashed spikes are recording echoes, reaching up to ${Math.round(spikeMaxPts)} points past this chart's cap`,
+        noteLayer, view.region.x + spacing[1], noteY, 'start',
+        view.css('ink-mid'), noteText,
       );
       if (!view.reducedMotion) {
         noteScrim.transition().delay(stagger * 2).duration(drawIn).attr('opacity', 0.8);

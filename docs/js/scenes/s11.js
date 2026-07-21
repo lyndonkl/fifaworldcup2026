@@ -116,6 +116,24 @@
  * (it was overprinting the bar's midsection) and its bullet text is
  * left-aligned inside the card. No data, layout, or engine change.
  *
+ * READABILITY PASS (five-test battery, check_readability.py; all three
+ * beats previously missed one gate each: b1 SMOG 10.04, b2 SMOG 10.32,
+ * b3 ARI 9.08). Word-level swaps only, no fact or figure touched: b1
+ * trades three "every"s for "each" (the vowel-group heuristic scores
+ * "every" at three syllables); b2 drops the pros' book's redundant
+ * "already", moves "ninety-minute" to the numeral form the same sentence
+ * already uses at 90:00, swaps decided/followed for settled/came, and
+ * splits the 32-word closer in two ("Each match turned on a goal in
+ * added time"); b3 drops "separate" from "three separate times" and
+ * lets the receipt's second "professionals" go by its established short
+ * name, the pros. Every check_figure_sync.py literal (9 slots in this
+ * scene) survives verbatim. Same round's layout audit: both measured
+ * s11 overlaps (#grain-plate x .card at b1-b3, a.skip x .card at b1-b2)
+ * are fixed chrome painting OVER the transiting prose card with their
+ * own 0.82 scrim + 8px blur (index.html; z 4 and 5 over the card's 3),
+ * the disposition index.html's .card comment already records as benign
+ * -- accepted, not patched, since nothing in this file positions any of
+ * the three boxes.
  * ---------------------------------------------------------------------
  * DATA CONTRACT ASSUMPTIONS. Verified at build time against
  * pipeline/data/analysis/calibration/scores_match3way_by_source_horizon.csv
@@ -452,7 +470,24 @@ export default {
         .style('font', '11.5px var(--font-apparatus)')
         .attr('opacity', view.reducedMotion ? 1 : 0)
         .text('graded after the book closed (90:00)');
-      const bb = label.node().getBBox();
+      // Edge clamp (390x844 layout audit: centered on the artifact bar,
+      // this label ran 35px past the right viewport edge). Shift it back
+      // inside the backdrop panel — the s08.js parked-label clamp pattern.
+      // Both bounds derive from geometry already on screen (the panel's
+      // own right edge, the region's left edge), so the clamp is a no-op
+      // at any width where the label already fits, desktop included.
+      let bb = label.node().getBBox();
+      let dx = 0;
+      if (bb.x + bb.width > scrimRight - spacing[1]) {
+        dx = (scrimRight - spacing[1]) - (bb.x + bb.width);
+      }
+      if (bb.x + dx < view.region.x + spacing[1]) {
+        dx = (view.region.x + spacing[1]) - bb.x;
+      }
+      if (dx !== 0) {
+        label.attr('x', cx + dx);
+        bb = label.node().getBBox();
+      }
       const scrim = annoLayer.insert('rect', 'text.artifact-cap')
         .attr('class', 'artifact-cap-scrim')
         .attr('x', bb.x - spacing[1]).attr('y', bb.y - spacing[0])
@@ -648,8 +683,37 @@ export default {
       const crossoutText = annoLayer.append('text').attr('class', 'crossout-cap')
         .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff + 78)
         .attr('fill', view.css('ink-hi'))
-        .style('font', '15px var(--font-apparatus)')
-        .text('the blowout scores a closed book against a live market, not a fair fight');
+        .style('font', '15px var(--font-apparatus)');
+      // Edge fix (390x844 layout audit: the one-line verdict ran 136px
+      // past the right viewport edge — wider than the whole phone
+      // viewport, so no clamp can save it). On mobile the payoff line
+      // wraps into tspans, the s01.js pretitle-caption pattern, but
+      // measured against the backdrop panel's own width rather than
+      // hand-split so it holds at any narrow size. Desktop keeps the
+      // single line, and with it the leader geometry below (which is
+      // desktop-only anyway). The scrim keeps fitting either way: it is
+      // built from getBBox(), which spans every tspan.
+      const verdictLine = 'the blowout scores a closed book against a live market, not a fair fight';
+      if (view.mobile) {
+        const maxTextW = scrimRight - spacing[1] - view.region.x;
+        const words = verdictLine.split(' ');
+        let tspan = crossoutText.append('tspan')
+          .attr('x', view.region.x).attr('dy', 0);
+        let line = [];
+        words.forEach((w) => {
+          line.push(w);
+          tspan.text(line.join(' '));
+          if (tspan.node().getComputedTextLength() > maxTextW && line.length > 1) {
+            line.pop();
+            tspan.text(line.join(' '));
+            line = [w];
+            tspan = crossoutText.append('tspan')
+              .attr('x', view.region.x).attr('dy', '1.25em').text(w);
+          }
+        });
+      } else {
+        crossoutText.text(verdictLine);
+      }
       const coBB = crossoutText.node().getBBox();
       annoLayer.insert('rect', 'text.crossout-cap')
         .attr('class', 'crossout-cap-scrim')
@@ -757,7 +821,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>A bookmaker builds a small profit into every price it posts. Add up the odds on all three outcomes of a match and they come to a little more than one hundred percent. That extra is called the vig, the bookmaker's own fee. Strip it back out, and its price can be compared fairly with anyone else's, cent for cent, a step called devigging (bookmaker's cut removed).</p><p>Grading a price is simple arithmetic. Treat the price as the chance it claimed, and the result as a 1 if it happened, a 0 if it did not. Square the miss and average it across every ticket graded. Zero means a price called every result exactly right; a forecaster who always shrugs and says fifty-fifty scores 0.25 either way.${FN(16)} This chart grades 84 matched tickets across 28 knockout matches, twice each: a day out and an hour out.</p><p>At a day out and an hour out, this exchange's crowd and the professional book, once its fee was stripped out, scored the same. Matched one ticket to one ticket, a day out, the two scores were 0.162 and 0.164. The gap is tiny. With this few matches, a gap that small cannot even be confirmed as real.</p>`,
+      html: `<p>A bookmaker builds a small profit into each price it posts. Add up the odds on all three outcomes of a match and they come to a little more than one hundred percent. That extra is called the vig, the bookmaker's own fee. Strip it back out, and its price can be compared fairly with anyone else's, cent for cent, a step called devigging (bookmaker's cut removed).</p><p>Grading a price is simple arithmetic. Treat the price as the chance it claimed, and the result as a 1 if it happened, a 0 if it did not. Square the miss and average it across each ticket graded. Zero means a price called each result exactly right; a forecaster who always shrugs and says fifty-fifty scores 0.25 either way.${FN(16)} This chart grades 84 matched tickets across 28 knockout matches, twice each: a day out and an hour out.</p><p>At a day out and an hour out, this exchange's crowd and the professional book, once its fee was stripped out, scored the same. Matched one ticket to one ticket, a day out, the two scores were 0.162 and 0.164. The gap is tiny. With this few matches, a gap that small cannot even be confirmed as real.</p>`,
       trigger: 'step',
       // Sync to S10's exact rest positions; duration 0 so nothing visibly
       // moves (storyboard §Units: "No population re-sort").
@@ -785,13 +849,13 @@ export default {
     },
     {
       id: 'b2',
-      html: `<p>There is one real blowout on this chart, graded five minutes before the final whistle. But the professional book had already closed by then. A match runs past the ninety-minute mark into added time, and the book shuts at 90:00 by its own house rules, the same rules from the goal scene. The final whistle comes a few minutes later. A price cannot be blamed for missing an ending it never got to watch.</p><p>Take Canada against South Africa, a 1-0 win decided by a late goal. With the whistle close, Kalshi's price already showed 95 cents on Canada. Pinnacle's last quote, posted the same minute as the goal, still had Canada at 10 cents. Then the book went dark: no fresh quote followed for the last 9 minutes of the match. That is the same empty chair as the sixteen "gaps" with the professionals, seen earlier. Check that a price was still alive before you grade it.</p><p>About 74% of the professional book's error on this chart comes from five matches like this one, each decided by a goal in those added minutes, after the book had already shut.${FN(16)}</p>`,
+      html: `<p>There is one real blowout on this chart, graded five minutes before the final whistle. But the pros' book had closed by then. A match runs past the 90-minute mark into added time, and the book shuts at 90:00 by its own house rules, the same rules from the goal scene. The final whistle comes a few minutes later. A price cannot be blamed for missing an ending it never got to watch.</p><p>Take Canada against South Africa, a 1-0 win settled by a late goal. With the whistle close, Kalshi's price already showed 95 cents on Canada. Pinnacle's last quote, posted the same minute as the goal, still had Canada at 10 cents. Then the book went dark: no fresh quote came for the last 9 minutes of the match. That is the same empty chair as the sixteen "gaps" with the professionals, seen earlier. Check that a price was still alive before you grade it.</p><p>About 74% of the professional book's error on this chart comes from five matches like this one. Each match turned on a goal in added time, after the book had shut.${FN(16)}</p>`,
       trigger: 'step',
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>This piece fell into that same trap three separate times, in three different places, before its own raw trade tape corrected it.${FN(22)} The proof sits next to this chart: the sixteen "gaps" with the professionals, the goal-reaction speed ladder, and this five-minutes-left score.</p><p><strong>Skill unlocked:</strong> take the number at face value once its fee is stripped out. No one sharper is hiding behind it. A sudden gap between two markets just means one of them stopped quoting.</p><p><strong>The receipt:</strong> all sixteen "wins over the professionals" started the moment the professionals stopped posting prices. This piece fell for it three times too, and its own trade tape caught the mistake.</p>`,
+      html: `<p>This piece fell into that same trap three times, in three different places, before its own raw trade tape corrected it.${FN(22)} The proof sits next to this chart: the sixteen "gaps" with the professionals, the goal-reaction speed ladder, and this five-minutes-left score.</p><p><strong>Skill unlocked:</strong> take the number at face value once its fee is stripped out. No one sharper is hiding behind it. A sudden gap between two markets just means one of them stopped quoting.</p><p><strong>The receipt:</strong> all sixteen "wins over the professionals" started the moment the pros stopped posting prices. This piece fell for it three times too, and its own trade tape caught the mistake.</p>`,
       trigger: 'step',
       overlayStep: 'b3',
     },

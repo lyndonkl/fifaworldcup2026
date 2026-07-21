@@ -8,9 +8,16 @@
  * MOBILE (storyboard S14 Mobile note): "Toggle becomes a large segmented
  * control; bucket count unchanged." The toggle below is already a large
  * segmented control per the design system (§9 S14 note: "amber-active
- * segmented control, 12.6:1, keyboard accessible"); view.mobile only
- * widens its hit targets and stacks it above the curve instead of beside
- * it, and bucket geometry (all 20 buckets) is identical on every surface.
+ * segmented control, 12.6:1, keyboard accessible"); view.mobile pins it
+ * full-width in the band below the grain plate (index.html's scoped
+ * .s14-toggle mobile block supplies position/left/right and the
+ * half-and-half wrapping chips; positionToggle() measures the live plate
+ * rect for `top`), stacked above the curve, whose y-range tops out below
+ * the toggle row (see scales()). The 0-10c inset is desktop-only (on
+ * phones its bottom-right berth sits exactly under the always-present
+ * KEY panel) and its payoff number folds into the ladder caption's
+ * basis-aware fourth line instead. Bucket geometry (all 20 buckets) is
+ * identical on every surface.
  *
  * DATA REQUESTS:
  *   1. `buckets[]` is close to a direct join of the two real pipeline
@@ -96,7 +103,16 @@ function parseBucketBounds(bucket) {
 
 function scales(data, view) {
   const x = d3.scaleLinear().domain([0, 100]).range([view.region.x, view.region.x + view.region.w]);
-  const yTop = view.region.y;
+  // Mobile (blind mobile round, s14 #4): the full-width toggle row lives
+  // in the band below the grain plate -- plate top 16 + the two-line
+  // plate clamp ~56 (index.html's own max-height formula) + 8 gap + a
+  // two-line segmented control ~56 + 8 air = 144 -- which reaches ~28px
+  // past region.y (108 at 390x844). The curve's y-range tops out below
+  // that row so the 95-100c marker (y ~109 on the raw region scale) and
+  // the diagonal's tip land in visible stage air instead of under the
+  // control. Desktop keeps region.y: the toggle clamps beside the KEY
+  // there, above the region.
+  const yTop = view.mobile ? Math.max(view.region.y, 144) : view.region.y;
   const yBottom = view.region.y + view.region.h;
   const y = d3.scaleLinear().domain([0, 100]).range([yBottom, yTop]);
   registry.register('s14.x', x);
@@ -274,21 +290,27 @@ function overlay(container, data, view, scalesObj) {
 
   // "Perfectly priced" (G3: the one licensed rotated label piece-wide,
   // because it names the diagonal line itself, not a data point).
-  {
-    const diagDeg = Math.atan2(y(100) - y(0), x(100) - x(0)) * (180 / Math.PI);
-    const midX = x(64);
-    const midY = y(64) - 10;
-    g.append('text')
-      .attr('class', 's14-diagonal-label')
-      .attr('x', midX).attr('y', midY)
-      .attr('transform', `rotate(${diagDeg}, ${midX}, ${midY})`)
-      .attr('text-anchor', 'middle')
-      .style('font-family', view.css('font-apparatus'))
-      .style('font-size', view.css('type-caption-size'))
-      .style('fill', view.css('ink-hi'))
-      .style('opacity', 0.65)
-      .text('perfectly priced');
-  }
+  // Held as a named selection: the DOM-geometry audit (1280x800 and
+  // 1512x945, s14/b4) measured this label 85x37px under the b4
+  // worst-bucket callout's mirrored text. The callout's own scrim
+  // already paints over it, so what remained was visual noise -- a
+  // half-struck word bleeding past the scrim edge. drawCallout() below
+  // fades this label out for exactly as long as the callout is up, and
+  // restores it when the callout re-locks (scrub-back to b1) or fails
+  // to resolve a bucket.
+  const diagDeg = Math.atan2(y(100) - y(0), x(100) - x(0)) * (180 / Math.PI);
+  const diagMidX = x(64);
+  const diagMidY = y(64) - 10;
+  const diagonalLabel = g.append('text')
+    .attr('class', 's14-diagonal-label')
+    .attr('x', diagMidX).attr('y', diagMidY)
+    .attr('transform', `rotate(${diagDeg}, ${diagMidX}, ${diagMidY})`)
+    .attr('text-anchor', 'middle')
+    .style('font-family', view.css('font-apparatus'))
+    .style('font-size', view.css('type-caption-size'))
+    .style('fill', view.css('ink-hi'))
+    .style('opacity', 0.65)
+    .text('perfectly priced');
 
   // Realized-rate marker path, connecting each bucket's active-weighting
   // point — the exact mark the toggle re-positions (storyboard: "the
@@ -353,10 +375,19 @@ function overlay(container, data, view, scalesObj) {
   // of each other on every beat past b1. region.y + 6 clears ladderLine2
   // by the same ~16px gap every other line in this stack already uses,
   // just inside the plot's empty top-left corner instead of above it.
+  // Mobile (blind mobile round, high #3): this label heads the in-region
+  // top-left apparatus stack (mode label -> ghost legend lane -> ladder
+  // caption), and the whole stack hangs off the measured bottom of the
+  // full-width toggle row -- positionToggle() re-sets this `y` (and the
+  // ladder caption's) on build and on every beat step, so the static
+  // value below is only the pre-measure default. The ghost tag's mobile
+  // legend row keys off this label's rendered box, so it follows.
   const modeLabel = g.append('text')
     .attr('class', 's14-mode-label')
     .attr('x', view.region.x + 4)
-    .attr('y', view.region.y + 6)
+    .attr('y', view.mobile
+      ? view.region.y + 6 + (view.tokens.spacing_px[3] || 16)
+      : view.region.y + 6)
     .style('font-family', view.css('font-apparatus'))
     .style('font-size', view.css('type-caption-size'))
     .style('font-weight', 600)
@@ -455,22 +486,49 @@ function overlay(container, data, view, scalesObj) {
       const pts = markerData(ghostBasis);
       mainGhost.datum(pts).attr('d', line)
         .transition().duration(dur).style('opacity', 0.6);
-      // Tag anchored to the ghost's low-mid stretch (~22c), not its
-      // terminus: both curves end in the top-right corner, where the b4
-      // callout, the whipsaw buckets, and the KEY already compete -- the
-      // blind re-read could not find the tag there. Below the curve in
-      // the low-mid range is open canvas in both bases.
-      const anchor = pts.reduce((best, p) =>
-        (Math.abs(p.px - 22) < Math.abs(best.px - 22) ? p : best), pts[0]);
-      const tex = x(anchor.px) + 150;
-      const tey = y(anchor.py) + 34;
-      ghostTagText.attr('x', tex).attr('y', tey)
-        .text(ghostBasis === 'markets'
-          ? 'counted equally (before)'
-          : 'weighted by dollars (before)');
-      ghostTagSwatch
-        .attr('x1', tex + 6).attr('y1', tey - 4)
-        .attr('x2', x(anchor.px) + 6).attr('y2', y(anchor.py) + 6);
+      const tagLabel = ghostBasis === 'markets'
+        ? 'counted equally (before)'
+        : 'weighted by dollars (before)';
+      if (view.mobile) {
+        // Mobile legend row (390x844 DOM-geometry audit, s14/b2 + b3:
+        // the curve-anchored tag landed inside the inset panel, striking
+        // the "paid N%" payoff label on one beat and the inset's own
+        // y-axis tick on the next -- at ~318px of region width the inset
+        // spans most of the chart's lower half, so no curve-adjacent
+        // lane exists). The tag becomes a legend-style row directly
+        // under the mode label it complements ("now weighted by: dollars
+        // traded" over "counted equally (before)"), in the plot's empty
+        // top-left corner (low-price/high-realized holds no marks on
+        // either basis, which is why the mode label already lives
+        // there). The swatch draws as a short dash sample beside the
+        // text instead of a leader to the curve; every coordinate
+        // derives from the mode label's own rendered box.
+        const mb = modeLabel.node().getBBox();
+        const swatchX0 = view.region.x + 4;
+        const swatchLen = 18;
+        const tey = mb.y + 2 * mb.height;
+        const tex = swatchX0 + swatchLen + 6;
+        ghostTagText.attr('text-anchor', 'start')
+          .attr('x', tex).attr('y', tey).text(tagLabel);
+        ghostTagSwatch
+          .attr('x1', swatchX0).attr('y1', tey - 4)
+          .attr('x2', swatchX0 + swatchLen).attr('y2', tey - 4);
+      } else {
+        // Tag anchored to the ghost's low-mid stretch (~22c), not its
+        // terminus: both curves end in the top-right corner, where the b4
+        // callout, the whipsaw buckets, and the KEY already compete -- the
+        // blind re-read could not find the tag there. Below the curve in
+        // the low-mid range is open canvas in both bases.
+        const anchor = pts.reduce((best, p) =>
+          (Math.abs(p.px - 22) < Math.abs(best.px - 22) ? p : best), pts[0]);
+        const tex = x(anchor.px) + 150;
+        const tey = y(anchor.py) + 34;
+        ghostTagText.attr('text-anchor', 'end')
+          .attr('x', tex).attr('y', tey).text(tagLabel);
+        ghostTagSwatch
+          .attr('x1', tex + 6).attr('y1', tey - 4)
+          .attr('x2', x(anchor.px) + 6).attr('y2', y(anchor.py) + 6);
+      }
       const tb = ghostTagText.node().getBBox();
       ghostTagScrim
         .attr('x', tb.x - 5).attr('y', tb.y - 3)
@@ -496,7 +554,15 @@ function overlay(container, data, view, scalesObj) {
   // to an empty line"): if the cheap buckets are absent, the toggle/beat
   // calls below still have something to call.
   let drawInset = () => {};
-  if (cheapBuckets.length) {
+  // Mobile (blind mobile round, s14 critical #2): the inset's bottom-right
+  // berth (~198x138 with margins) sits exactly under the always-present
+  // mobile KEY panel (band ~y 420-515 at 390x844), so the panel occluded
+  // it on every beat. The inset -- and the main-chart zoom bracket that
+  // only exists to point at it -- is desktop-only; the mobile drawInset
+  // in the else-branch below folds the payoff number into the ladder
+  // caption's own fourth line instead: same cheapBuckets[0] row, same
+  // basis-aware fields the inset label reads, no number invented.
+  if (cheapBuckets.length && !view.mobile) {
     const insetW = 190;
     const insetH = 130;
     const insetPad = 30;
@@ -607,6 +673,23 @@ function overlay(container, data, view, scalesObj) {
           .attr('width', bb.width + 6).attr('height', bb.height + 4);
       }
     };
+  } else if (cheapBuckets.length) {
+    // Mobile payoff line (critical #2): with the inset gone, the
+    // penny-ticket payoff survives as the ladder caption's fourth line.
+    // Reads the identical fields the inset label read (cheapBuckets[0],
+    // the 1-5c deepest-sag bucket, basis-selected), re-fired on every
+    // weighting change through the same setWeighting -> drawInset path,
+    // so the figure stays live and basis-aware. The caption itself only
+    // becomes visible at b2, matching the beat where its other lines
+    // arrive (the b1 prose already carries the 1.19% band figure).
+    drawInset = function drawInsetMobile(weighting) {
+      const b = cheapBuckets[0]; // 1-5c: the deepest part of the sag
+      const py = weighting === 'dollars' && b.vol_weighted_win_rate_pct !== undefined
+        ? b.vol_weighted_win_rate_pct : b.win_rate_pct;
+      if (ladderPayoff) {
+        ladderPayoff.text(`the ${b.lo_c}-${b.hi_c}c tickets paid ${(+py).toFixed(1)}%`);
+      }
+    };
   }
 
   // Ladder-attribution caption (72% / 55%), one two-line ink-mid block
@@ -619,8 +702,28 @@ function overlay(container, data, view, scalesObj) {
     .style('font-size', view.css('type-caption-size'))
     .style('fill', view.css('ink-mid'))
     .style('opacity', 0);
+  // Mobile wrap (390x844 DOM-geometry audit, s14 edge defect: the
+  // one-line 72% caption ran 87px past the viewport's right edge).
+  // Same pattern as s01's pretitle-caption: the long first line splits
+  // at its own clause break into two tspans on mobile; desktop keeps
+  // the two-line lane. Mobile placement (blind mobile round, high #3:
+  // the region.y - 30 lane hid the 72% line under the grain plate, and
+  // the toggle row now owns the below-plate band): positionToggle()
+  // re-anchors this block's `y` inside the region's top-left, below the
+  // mode-label and ghost-legend lanes, on build and on every beat step.
   const ladderLine1 = ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '0em');
+  const ladderLine1b = view.mobile
+    ? ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '1.2em')
+    : null;
   const ladderLine2 = ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '1.2em');
+  // Mobile-only fourth line (blind mobile round, critical #2): with the
+  // 0-10c inset dropped on phones, the penny-ticket payoff lands here --
+  // the mobile drawInset above rewrites this tspan from the same bucket
+  // fields the inset label read, on every weighting change, so it stays
+  // basis-aware with nothing hardcoded.
+  const ladderPayoff = view.mobile
+    ? ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '1.2em')
+    : null;
 
   // Tick-floor bracket at 1-2c. Fresh blind review, minor b: the bare
   // 1.5px underline read as a stray mark -- visible end ticks turn it into
@@ -629,22 +732,33 @@ function overlay(container, data, view, scalesObj) {
   const tickFloor = sceneJson.tick_floor || { lo_c: 1, hi_c: 2 };
   const tickBracketY = view.region.y + view.region.h + 34;
   const tickBracket = g.append('g').attr('class', 's14-tick-bracket').style('opacity', 0);
-  tickBracket.append('line')
-    .attr('x1', x(tickFloor.lo_c)).attr('x2', x(tickFloor.hi_c))
-    .attr('y1', tickBracketY).attr('y2', tickBracketY)
-    .style('stroke', view.css('ink-mid')).style('stroke-width', 1.5);
-  [tickFloor.lo_c, tickFloor.hi_c].forEach((c) => {
+  // Desktop-only (390x844 DOM-geometry audit, s14 pair: the bracket's
+  // tape label collided 174x5px with the centered x-axis title -- at
+  // ~318px of region width the two must share the one band below the
+  // axis, and no lane there clears the tick labels, the title, AND the
+  // prose sheet's top edge). The bracket is secondary apparatus at that
+  // width: the ladder caption's second line already names the
+  // one-to-two-cent tick floor in words, so mobile drops the bracket
+  // rather than cramming it. The group itself stays on both surfaces
+  // (empty on mobile) so b2's opacity transition needs no guard.
+  if (!view.mobile) {
     tickBracket.append('line')
-      .attr('x1', x(c)).attr('x2', x(c))
-      .attr('y1', tickBracketY - 5).attr('y2', tickBracketY)
+      .attr('x1', x(tickFloor.lo_c)).attr('x2', x(tickFloor.hi_c))
+      .attr('y1', tickBracketY).attr('y2', tickBracketY)
       .style('stroke', view.css('ink-mid')).style('stroke-width', 1.5);
-  });
-  tickBracket.append('text')
-    .attr('x', x(tickFloor.lo_c)).attr('y', view.region.y + view.region.h + 48)
-    .style('font-family', view.css('font-tape'))
-    .style('font-size', view.css('type-tape-size'))
-    .style('fill', view.css('ink-mid'))
-    .text(`${tickFloor.lo_c}-${tickFloor.hi_c} cents: the tick floor`);
+    [tickFloor.lo_c, tickFloor.hi_c].forEach((c) => {
+      tickBracket.append('line')
+        .attr('x1', x(c)).attr('x2', x(c))
+        .attr('y1', tickBracketY - 5).attr('y2', tickBracketY)
+        .style('stroke', view.css('ink-mid')).style('stroke-width', 1.5);
+    });
+    tickBracket.append('text')
+      .attr('x', x(tickFloor.lo_c)).attr('y', view.region.y + view.region.h + 48)
+      .style('font-family', view.css('font-tape'))
+      .style('font-size', view.css('type-tape-size'))
+      .style('fill', view.css('ink-mid'))
+      .text(`${tickFloor.lo_c}-${tickFloor.hi_c} cents: the tick floor`);
+  }
 
   // Worst-bucket callout: the amber singleton protocol (halo core ring),
   // pinned to the active weighting basis's own worst bucket (90-95c on
@@ -658,11 +772,20 @@ function overlay(container, data, view, scalesObj) {
   let calloutUnlocked = false;
   const callout = g.append('g').attr('class', 's14-callout').style('opacity', 0);
   function drawCallout(weighting) {
+    const dur = view.tokens.motion.durations_ms['overlay-draw-in'];
     callout.selectAll('*').remove();
     if (!calloutUnlocked) {
       // Re-locked (scrub-back to b1's intro): clear instantly so the next
-      // unlock gets its fade-in again.
+      // unlock gets its fade-in again. The diagonal label comes back with
+      // the callout gone (see the audit note at its declaration), and so
+      // does a mobile ladder caption this callout's scrim had displaced
+      // (only once b2 has actually filled it -- an empty caption stays
+      // hidden).
       callout.style('opacity', 0);
+      diagonalLabel.transition().duration(dur).style('opacity', 0.65);
+      if (view.mobile && ladderLine1.text()) {
+        ladderCaption.transition().duration(dur).style('opacity', 1);
+      }
       return;
     }
     // Gate-5 provenance audit (WRONG_SCOPE): the SAME hardcoded "90-95c"
@@ -674,7 +797,17 @@ function overlay(container, data, view, scalesObj) {
       ? sceneJson.worst_bucket_label_dollars
       : sceneJson.worst_bucket_label_markets) || sceneJson.worst_bucket_label || '90-95c';
     const b = buckets.find((bb) => (bb.label || bb.bucket) === label);
-    if (!b) return;
+    if (!b) {
+      diagonalLabel.transition().duration(dur).style('opacity', 0.65);
+      if (view.mobile && ladderLine1.text()) {
+        ladderCaption.transition().duration(dur).style('opacity', 1);
+      }
+      return;
+    }
+    // Layout audit (1280x800 + 1512x945, s14/b4): the mirrored callout
+    // text lands on the rotated diagonal label. The scrim occludes it
+    // anyway; hiding it for the callout's lifetime removes the noise.
+    diagonalLabel.transition().duration(dur).style('opacity', 0);
     const px = weighting === 'dollars' && b.vol_weighted_price_c !== undefined ? b.vol_weighted_price_c : b.mean_price_c;
     const py = weighting === 'dollars' && b.vol_weighted_win_rate_pct !== undefined ? b.vol_weighted_win_rate_pct : b.win_rate_pct;
     callout.append('circle')
@@ -705,8 +838,23 @@ function overlay(container, data, view, scalesObj) {
     // right-reading label would run past the chart -- mirror left (G5)
     // when that's the case, same as this scene's other at-mark labels.
     // 300 is the longer numbers line's width, not the old headline's 260.
+    // Mobile (blind mobile round, #4): neither side fits beside the dot
+    // at ~318px of region width -- mirrored end-anchored at x(px) - 14,
+    // the dollars-basis 65-70c headline runs ~40px off the screen's left
+    // edge -- so the text block drops BELOW the halo instead,
+    // right-aligned to the region's right edge. Clear air on both bases
+    // with the mobile y-range topping out at 144: the count-basis 90-95c
+    // rows land near y 270-305 and the dollars-basis 65-70c rows near
+    // y 340-375, below the toggle row (~136) and above the KEY band's
+    // ~y 420 top.
     const calloutMirror = x(px) + 14 + 300 > view.region.x + view.region.w;
-    const tx = calloutMirror ? x(px) - 14 : x(px) + 14;
+    const tx = view.mobile
+      ? view.region.x + view.region.w - 2
+      : (calloutMirror ? x(px) - 14 : x(px) + 14);
+    const textY = view.mobile
+      ? y(py) + view.tokens.dot['radius-annotated-halo-px'] + 8
+      : y(py);
+    const textAnchor = (view.mobile || calloutMirror) ? 'end' : 'start';
     // Blind re-read (MEDIUM): the mirrored text lands where the rotated
     // "perfectly priced" diagonal label and both curves pass, striking
     // through the numbers line -- the one line proving the prose. Scrim
@@ -716,8 +864,8 @@ function overlay(container, data, view, scalesObj) {
       .style('fill', view.css('bg-card'))
       .style('opacity', 0.85);
     const calloutText = callout.append('text')
-      .attr('x', tx).attr('y', y(py))
-      .attr('text-anchor', calloutMirror ? 'end' : 'start')
+      .attr('x', tx).attr('y', textY)
+      .attr('text-anchor', textAnchor)
       .style('font-family', view.css('font-apparatus'))
       .style('fill', view.css('accent-annotation'));
     calloutText.append('tspan')
@@ -732,6 +880,27 @@ function overlay(container, data, view, scalesObj) {
     calloutScrim
       .attr('x', ctb.x - 6).attr('y', ctb.y - 4)
       .attr('width', ctb.width + 12).attr('height', ctb.height + 8);
+    // Mobile stack safety (blind mobile round, #4): the below-halo text
+    // block and the ladder caption share the region's left-right air, and
+    // font metrics shift the estimates above by a few px either way --
+    // so the collision is MEASURED, not assumed. On a real hit the
+    // caption gets the same displacement treatment the diagonal label
+    // already gets from this callout (fade for the callout's lifetime);
+    // it comes back when the callout moves clear (a toggle flip) or
+    // re-locks (see the two restore sites above).
+    if (view.mobile) {
+      const cb = ladderCaption.node().getBBox();
+      const sx0 = ctb.x - 6; const sy0 = ctb.y - 4;
+      const sx1 = sx0 + ctb.width + 12; const sy1 = sy0 + ctb.height + 8;
+      const hit = ladderLine1.text() && cb.width > 0
+        && sx0 < cb.x + cb.width && sx1 > cb.x
+        && sy0 < cb.y + cb.height && sy1 > cb.y;
+      if (hit) {
+        ladderCaption.transition().duration(dur).style('opacity', 0);
+      } else if (ladderLine1.text()) {
+        ladderCaption.transition().duration(dur).style('opacity', 1);
+      }
+    }
     callout.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
   }
 
@@ -752,6 +921,15 @@ function overlay(container, data, view, scalesObj) {
   // rail's prose and #grain-plate ("count every market equally" /
   // "weight by dollars traded" printing over the S14 rail card in every
   // captured frame, b1 through b4). Wiring in the spec's own numbers.
+  // Mobile (blind mobile round, critical #1): the !view.mobile guard
+  // below used to leave the control ENTIRELY unpositioned on phones --
+  // rendering at #html-overlay's (0, 0), under the fixed grain plate,
+  // right chip clipped off-screen. index.html's scoped .s14-toggle
+  // mobile block now pins it full-width (position absolute, left/right
+  // space-16, chips flexed half-and-half with wrapping labels so both
+  // fit at 390px); the one coordinate CSS cannot know -- the live
+  // plate's bottom edge -- is measured in positionToggle() below and
+  // set as an inline `top`. The aria-checked styling is untouched.
   if (!view.mobile) {
     toggleWrap
       .style('position', 'absolute')
@@ -776,6 +954,79 @@ function overlay(container, data, view, scalesObj) {
     .style('font-size', view.css('type-annotation-size'))
     .text((d) => d.label)
     .on('click', (event, d) => setWeighting(d.key, true));
+
+  // Key-exclusion clamp (DOM-geometry audit, 1280x800 s14/b1-b4: #chip
+  // over the "weight by dollars traded" chip, 70x46px). The persistent
+  // KEY panel reserves layout.key-exclusion-{w,h}-px in the top-right
+  // corner -- the exact rect s08.js's keyX0 and s16.js's keyGutterRect()
+  // already codify -- and CR-13's stage-centered placement crosses its
+  // left edge once the viewport narrows (the stage center sits at ~68%
+  // of viewport width, so the group's right half reaches the exclusion
+  // edge from roughly 1450px down). Everything here is derived from
+  // live geometry (tokens + the rendered control's own measured width),
+  // no per-viewport constants: keep the spec's center, pull left just
+  // enough that the group's right edge clears the exclusion edge by one
+  // spacing-8 step, and if no left-of-key position exists at this width
+  // (the exclusion edge crosses left of where the group could start
+  // inside the stage), drop the group below the KEY's reserved height
+  // instead -- the two placements the design system allows next to the
+  // KEY. Re-run on every beat step so a late font load (which changes
+  // the measured width) can never leave a stale clamp.
+  function positionToggle() {
+    const sp = view.tokens.spacing_px;
+    const gapPx = sp[1] || 8;
+    if (view.mobile) {
+      // Full-width segmented row in the band below the grain plate
+      // (blind mobile round, critical #1). The scoped CSS owns
+      // position/left/right; `top` tracks the live plate rect, with a
+      // sane fallback (plate top space-16 + the ~56px two-line clamp
+      // height index.html's own #grain-plate max-height formula yields)
+      // if the plate is missing or reports degenerate geometry. Runs on
+      // build and on every beat step, so a late font load or a
+      // re-filled grain string never leaves a stale top.
+      const plate = document.getElementById('grain-plate');
+      const pr = plate ? plate.getBoundingClientRect() : null;
+      const plateBottom = (pr && pr.height > 0 && pr.bottom > 0 && pr.bottom < view.H * 0.3)
+        ? pr.bottom
+        : (sp[3] || 16) + 56;
+      toggleWrap.style('top', `${Math.round(plateBottom + gapPx)}px`);
+      // The in-region top-left apparatus stack (high #3) hangs off the
+      // control's own measured bottom: mode label one text-height below
+      // the row; ghost legend keyed off the mode label's box
+      // (drawMainGhost already derives tey = mb.y + 2*mb.height); the
+      // ladder caption's first baseline one further lane down (3.2
+      // heights clears the ghost row's scrim without opening a dead
+      // band). This replaces the static region.y-relative lanes that
+      // landed under the plate (the hidden 72% line) and would now land
+      // under the toggle.
+      const tr = toggleWrap.node().getBoundingClientRect();
+      const mh = modeLabel.node().getBBox().height || 14;
+      modeLabel.attr('y', Math.round(tr.bottom + gapPx + mh));
+      const mb = modeLabel.node().getBBox();
+      ladderCaption.attr('y', Math.round(mb.y + 3.2 * mb.height));
+      return;
+    }
+    const L = view.tokens.layout;
+    const marginPx = sp[4] || 24;
+    const keyX0 = view.W - marginPx - (L['key-exclusion-w-px'] || 280);
+    const keyY1 = marginPx + (L['key-exclusion-h-px'] || 132);
+    const node = toggleWrap.node();
+    const w = node ? node.getBoundingClientRect().width : 0;
+    const centered = view.region.x + view.region.w / 2;
+    const naturalTop = view.region.y + (sp[3] || 16);
+    let cx = centered;
+    let top = naturalTop;
+    if (naturalTop < keyY1) {
+      // The control shares the KEY's horizontal band: clamp against the
+      // exclusion edge (or dodge below it when clamping cannot fit).
+      const maxCx = keyX0 - gapPx - w / 2;
+      const minCx = view.region.x + w / 2;
+      cx = Math.min(centered, maxCx);
+      if (cx < minCx) { cx = centered; top = keyY1 + gapPx; }
+    }
+    toggleWrap.style('left', `${cx}px`).style('top', `${top}px`);
+  }
+  positionToggle();
 
   function setWeighting(weighting, animate) {
     const changed = weighting !== currentWeighting;
@@ -814,6 +1065,10 @@ function overlay(container, data, view, scalesObj) {
   }
 
   function step(beatId) {
+    // Re-clamp against the KEY exclusion edge with the control's final
+    // rendered width (fonts are certainly settled by the first scroll-
+    // driven beat; the call is idempotent).
+    positionToggle();
     if (beatId === 'b1') {
       // Route through setWeighting (not bare drawMarkers) so a scrub-back
       // from b3/b4 resets the chips' aria-checked state along with the
@@ -835,7 +1090,15 @@ function overlay(container, data, view, scalesObj) {
       // decimal place, so chart and prose never look like they disagree).
       const pctLadder = attr.pct_in_ten_plus_leg_ladders;
       const pctFloor = attr.pct_at_tick_floor;
-      ladderLine1.text(`${pctLadder != null ? Math.round(pctLadder) : '—'}% of the overpriced tickets sit in prop ladders of ten bets or more.`);
+      const ladderPct = pctLadder != null ? Math.round(pctLadder) : '—';
+      if (ladderLine1b) {
+        // Mobile: the same sentence, split at its clause break (see the
+        // wrap note at the tspan declarations).
+        ladderLine1.text(`${ladderPct}% of the overpriced tickets`);
+        ladderLine1b.text('sit in prop ladders of ten bets or more.');
+      } else {
+        ladderLine1.text(`${ladderPct}% of the overpriced tickets sit in prop ladders of ten bets or more.`);
+      }
       ladderLine2.text(`${pctFloor != null ? Math.round(pctFloor) : '—'}% sit at the one-to-two-cent tick floor.`);
       ladderCaption.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
       tickBracket.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
@@ -912,27 +1175,27 @@ const s14 = {
     },
     {
       id: 'b2',
-      html: `<p>Take one match. Spain 1-0 is a ticket. Spain 2-0 is
-        another. Spain 2-1, another. Line up every possible final score
-        and you have a ladder, one ticket per rung. This is a prop, a
-        side bet on anything other than who wins the match, and the
-        exact-score ladder is only one of dozens like it. The exact-score
-        family alone listed roughly 2,700 tickets across the
+      html: `<p>Take one match. Spain 1-0 is a ticket. Spain 2-0 is a
+        second ticket. Spain 2-1, a third. Line up each final score the
+        match could reach and you have a ladder, one ticket per rung.
+        This is a prop, a side bet on anything other than who wins the
+        match, and the exact-score ladder is only one of dozens like it.
+        That family alone listed roughly 2,700 tickets across the
         tournament.<sup><a href="#fn-20">20</a></sup></p>
-        <p>Most rungs on a ladder like that barely trade. The tick, the
-        smallest price step allowed, is one cent, and it sets a floor. A
-        ticket priced for a genuine 1-in-500 shot should trade near a
-        fifth of a cent, but the floor will not let it: it can only
-        trade at five times its true worth, or not trade at all.
-        Correcting that gap would cost more in locked-up money and fees
-        than the fix would ever earn back, so almost nobody tries.
+        <p>Most rungs on a ladder like that hardly trade. The tick, the
+        smallest price step the rules allow, is one cent, and it sets a
+        floor. A ticket priced for a genuine 1-in-500 shot should trade
+        near a fifth of a cent, but the floor will not let it: it can
+        only trade at five times its true worth, or not trade at all.
+        Closing that gap would cost more in locked-up money and fees
+        than the fix would ever earn back, so almost no one tries.
         Lottery money buys the ticket anyway, drawn by the cheap dream,
-        not the math. The overpricing lands exactly where that chain
+        not the math. The overpricing lands where that chain
         predicts: 72% of the overpriced penny tickets sit inside prop
         ladders of ten bets or more, and 55% sit right at that
         one-to-two-cent floor.<sup><a href="#fn-20">20</a></sup> Skill 2
         promised that near-empty markets do not earn trust, and that
-        Skill 5 would show exactly how they go wrong. This is that
+        Skill 5 would show just how they go wrong. This is that
         promise, paid in full.</p>`,
       trigger: 'step',
       overlayStep: 'b2',
@@ -972,21 +1235,20 @@ const s14 = {
     {
       id: 'b4',
       html: `<p>Count each ticket equally again, and the worst-priced
-        tickets of all were not longshots. They
-        were the 90-to-95-cent favorites: 242 of them, paying an average
-        of 92.4 cents for a chance that came true only 69.4% of the time,
-        a 23-point miss.<sup><a href="#fn-20">20</a></sup></p>
-        <p>A tempting guess is that the tournament's famous upsets landed
-        there: Germany, Brazil, and France, all dead early while still
-        priced as favorites. The tape says otherwise. Of the 74 losing
-        tickets in that bucket, 0% are a Germany, Brazil, or France
-        match-win or advance bet. Instead, 80% are bets on which named
-        player scores first. A team can be a heavy favorite to win and
-        still field eleven players who might score first; pricing the
-        team's own win chance onto one specific name overstates that
-        one player's odds, favorite or not. The old story, that crowds
-        only overpay for longshots, is not even half right. They overpay
-        for the wrong favorite too.</p>`,
+        tickets of all were not longshots. They were the 90-to-95-cent
+        favorites: 242 of them. Buyers paid an average of 92.4 cents
+        for a chance that came true only 69.4% of the time. That is a
+        23-point miss.<sup><a href="#fn-20">20</a></sup></p>
+        <p>A tempting guess is that the famous upsets landed there:
+        Germany, Brazil, and France, all dead early while still priced
+        as favorites. The tape says no. Of the 74 losing tickets in
+        that bucket, 0% are a Germany, Brazil, or France match-win or
+        advance bet. Instead, 80% are bets on which named player scores
+        first. A team can be a heavy favorite to win and still field
+        eleven players who might score first. Push the team's own win
+        chance onto one name, and that name is priced too high. The old
+        story, that crowds only overpay for longshots, is not even half
+        right. They overpay for the wrong favorite too.</p>`,
       trigger: 'step',
       overlayStep: 'b4',
     },

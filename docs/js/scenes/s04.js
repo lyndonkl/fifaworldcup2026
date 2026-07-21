@@ -170,7 +170,20 @@ export default {
     // hour axis's own tick row immediately above the grid -- a tighter
     // gap here reproduced the exact "title collides with tick text"
     // defect disposition 1 exists to fix, just one lane lower.
-    const compGapBottom = region.h * 0.06;
+    // MOBILE (390x844 DOM-geometry audit): at region.h ~415px the 6%
+    // gap is ~25px, too short to hold BOTH rows it exists to hold --
+    // the hour axis's tick text (baseline 9px above the grid per
+    // d3.axisTop's tickSizeInner+tickPadding, ~12px of micro type) and
+    // the hour axis title (baseline 16px below curveBottom, ~14px of
+    // caption type) -- so the title rendered straight through the
+    // "6:00"/"12:00" tick labels (audit pairs at s04/b1). The 44px
+    // floor is those two rows plus ~6px of clear air, derived from the
+    // axis-tick offset and the two type sizes, not a per-width tune;
+    // the grid alone absorbs the lost height. Desktop keeps the pure
+    // fraction (6% of any desktop stage already clears 44px).
+    const compGapBottom = view.mobile
+      ? Math.max(region.h * 0.06, 44)
+      : region.h * 0.06;
     const gridTop = compTop + compH + compGapBottom;
     const gridH = region.y + region.h - gridTop;
 
@@ -419,17 +432,28 @@ export default {
       .style('font', `var(--type-micro-size) var(--font-apparatus)`)
       .call(axisDay);
     // Shares `titleY` with the hour title above (both anchored to
-    // `compRect.curveBottom`, see that comment). The two titles do not
-    // collide with EACH OTHER because they occupy different x-ranges:
-    // this one starts at gridRect.x, the hour title is centered on the
-    // grid's full width, ~150px+ apart at any stage width this piece ships.
-    g.append('text').attr('class', 'axis-title axis-title-day')
-      .attr('x', gridRect.x).attr('y', titleY)
-      .attr('text-anchor', 'start')
-      .attr('fill', view.css('ink-mid'))
-      .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
-      .style('font-weight', 500)
-      .text('tournament day (date)');
+    // `compRect.curveBottom`, see that comment). On DESKTOP the two
+    // titles do not collide with EACH OTHER because they occupy
+    // different x-ranges: this one starts at gridRect.x, the hour title
+    // is centered on the grid's full width, ~150px+ apart at any
+    // desktop stage width this piece ships. On MOBILE (~318px of
+    // stage) the centered hour title's left edge reaches back over
+    // this one (69px measured at 390x844), and there is no second row
+    // to stagger into -- so this title is desktop-only. Nothing is
+    // lost at the phone width: the day axis's own tick labels are
+    // literal dates ("Jun 11"), which name the axis better than the
+    // title does; the hour axis keeps its title because its bare
+    // "6:00" ticks do NOT self-describe (the Eastern Time unit is
+    // load-bearing for b3's waking-hours reading).
+    if (!view.mobile) {
+      g.append('text').attr('class', 'axis-title axis-title-day')
+        .attr('x', gridRect.x).attr('y', titleY)
+        .attr('text-anchor', 'start')
+        .attr('fill', view.css('ink-mid'))
+        .style('font', `${view.css('type-caption-size')} var(--font-apparatus)`)
+        .style('font-weight', 500)
+        .text('tournament day (date)');
+    }
 
     // Kickoff-histogram bounded strip (own axis, never painted over the cells).
     const kh = (sj.kickoff_hist && sj.kickoff_hist.hours) || new Array(24).fill(0);
@@ -508,8 +532,23 @@ export default {
     }
     const moneyLabelAt = biggestLead(moneyPts, creditPts);
     const creditLabelAt = biggestLead(creditPts, moneyPts);
+    // MOBILE (390x844 DOM-geometry audit, s04/b2 pair): at ~318px of
+    // stage the two labels' data-derived spots overlapped by ~108x7px
+    // (the 35-char credit label alone is wider than half the lane).
+    // Two mobile-only moves, both still data-derived: (1) the credit
+    // label shortens to "the schedule's credit" -- the same term b3's
+    // prose and the amber bracket label already use, so no new
+    // vocabulary; (2) the money label flips BELOW its own curve point,
+    // into the money-over-credit gap it marks, clamped inside the
+    // lane. Below-vs-above puts a full text row of vertical clearance
+    // between the two labels at any mobile width, however narrow the
+    // lane squeezes their x-positions together. Desktop keeps both
+    // full labels above their curves, unchanged.
     compG.append('text')
-      .attr('x', lineX(moneyLabelAt.h)).attr('y', compY(moneyLabelAt.v) - 8)
+      .attr('x', lineX(moneyLabelAt.h))
+      .attr('y', view.mobile
+        ? Math.min(compY(moneyLabelAt.v) + 14, compRect.curveBottom - 4)
+        : compY(moneyLabelAt.v) - 8)
       .attr('text-anchor', 'middle')
       .attr('fill', view.css('identity-teal'))
       .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
@@ -519,7 +558,7 @@ export default {
       .attr('text-anchor', creditLabelAt.h < 4 ? 'start' : 'middle')
       .attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
-      .text("what the schedule's credit predicts");
+      .text(view.mobile ? "the schedule's credit" : "what the schedule's credit predicts");
 
     // The amber bracket itself: same slim tick-and-label shape the prior
     // grid-top version used, now anchored to the comparison lane's own
@@ -543,7 +582,11 @@ export default {
     // instead, matching the beat's own prose exactly.
     const residual = typeof sj.waking_residual === 'number' ? sj.waking_residual : null;
     const residualText = residual ? `${residual.toFixed(1)}x` : 'more';
-    const bandLabel = compG.append('text')
+    // Label + scrim share one group so the KEY-exclusion dodge below can
+    // move them together with a single transform, never re-deriving
+    // either's geometry.
+    const bandLabelG = compG.append('g').attr('class', 's04-band-label');
+    const bandLabel = bandLabelG.append('text')
       .attr('x', bandX + bandW - 12).attr('y', bracketY - 10)
       .attr('text-anchor', 'end')
       .attr('fill', view.css('accent-annotation'))
@@ -555,11 +598,48 @@ export default {
     // clear of every cell, and keeps the bg-canvas scrim behind the
     // glyphs as a second line of defense.
     const bandBB = bandLabel.node().getBBox();
-    compG.insert('rect', 'text')
+    bandLabelG.insert('rect', 'text')
       .attr('x', bandBB.x - 8).attr('y', bandBB.y - 4)
       .attr('width', bandBB.width + 16).attr('height', bandBB.height + 8)
       .attr('rx', 3)
       .attr('fill', view.css('bg-canvas')).attr('opacity', 0.85);
+
+    // KEY-panel exclusion dodge (layout audit, 1280x800, s04/b3: div#chip
+    // x this label, 202x5px painted-over). The persistent KEY paints ABOVE
+    // the SVG overlay (--z-chip-and-grain-plate over --z-d3-overlay), so a
+    // label under it is not clipped, it is invisible -- the same failure
+    // s08.js's period-band labels dodge with the token-derived edge
+    // `view.W - spacing - key-exclusion-w-px`. The comparison lane sits
+    // high enough that on short viewports (800px tall) this right-anchored
+    // label rises into the KEY's band; on taller viewports it rests below
+    // it, which is why only 1280x800 measured the hit. Horizontal edge
+    // comes from the tokens (the KEY's max-width caps it inside that
+    // budget, so the token edge is always the conservative one); vertical
+    // extent takes the LIVE #chip rect when it exceeds the token height --
+    // the audit caught exactly that case: b2's three wrapped key rows run
+    // ~20px past key-exclusion-h-px, which a token-only test would miss.
+    // Re-run from step('b3') (and once more next frame, after the beat's
+    // chrome settles) so it tracks whatever the chip holds when the label
+    // is actually visible, at every desktop width, with no per-width
+    // constants.
+    function dodgeBandLabel() {
+      bandLabelG.attr('transform', null);
+      if (view.mobile) return;
+      const sp = view.tokens.spacing_px;
+      const margin = sp[4] || 24;
+      const keyX0 = view.W - margin - (view.tokens.layout['key-exclusion-w-px'] || 280);
+      let keyY1 = margin + (view.tokens.layout['key-exclusion-h-px'] || 132);
+      const chipEl = document.getElementById('chip');
+      if (chipEl) {
+        const cr = chipEl.getBoundingClientRect();
+        if (cr.height > 0) keyY1 = Math.max(keyY1, cr.bottom);
+      }
+      const pad = 8;
+      const r = bandLabelG.node().getBoundingClientRect();
+      if (r.right > keyX0 - pad && r.top < keyY1 + pad) {
+        bandLabelG.attr('transform', `translate(${(keyX0 - pad) - r.right},0)`);
+      }
+    }
 
     // Rest-day row markers + caption (structure-spec S4 §2: the drop-ratio
     // ratios demote out of prose into this caption). Gate-5 provenance
@@ -599,7 +679,24 @@ export default {
           stripG.style('display', null);
         } else if (beatId === 'b3') {
           compG.style('visibility', 'visible');
-          restG.style('display', null);
+          // MOBILE (390x844 DOM-geometry audit, edge defect): the
+          // rest-day caption ran 172px past the viewport's right edge,
+          // and its anchor row (gridRect bottom + 24) sits below the
+          // mobile stage region's bottom edge -- i.e. behind the prose
+          // sheet, which owns everything under 62vh and paints above
+          // the overlay. There is no on-stage lane left for a wrapped
+          // version (the gap above the grid is fully booked by the
+          // axis title and tick rows, see compGapBottom). Neither b2
+          // nor b3 prose references rest days -- this caption is
+          // demoted-dossier apparatus (structure-spec S4 §2), so at
+          // phone width the whole group (markers + caption) stays
+          // down rather than shipping orphaned tick marks the reader
+          // cannot decode. Desktop unchanged.
+          restG.style('display', view.mobile ? 'none' : null);
+          // Main.js re-invokes step() with the active beat on resize
+          // rebuilds too, so the dodge tracks every width change.
+          dodgeBandLabel();
+          requestAnimationFrame(dodgeBandLabel);
         }
       },
       exit() { g.remove(); },

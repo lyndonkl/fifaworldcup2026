@@ -103,7 +103,14 @@ const STAGE_LABEL = { R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarterfinal'
 // (which CONTRACT §6.1 reserves for d3 scale objects).
 function panelLayout(view) {
   const region = view.region;
-  const roadH = view.mobile ? 50 : 62;
+  // Mobile DOM audit (390x844): the old 50px mobile road left each slot box
+  // only 20px tall (boxH = roadH - 30 floor, see buildRoadDiagram), stacking
+  // the stage label ("Round of 32") and the opponent name ("Germany") with
+  // 4px between baselines -- a real collision, not a scrim. Every width now
+  // gets desktop's 62px road, so the two rows keep the same 14px baseline
+  // separation that already reads clean at desktop sizes; the ~4px of lane
+  // height this costs each of the three panels is invisible at 390x844.
+  const roadH = 62;
   const topGap = 10;
   const laneGapY = view.mobile ? 8 : 14;
   const laneCount = TEAMS.length;
@@ -170,7 +177,11 @@ function buildRoadDiagram(g, view, roadRect, road) {
   const gap = view.mobile ? 4 : 8;
   const boxW = (roadRect.w - gap * (n - 1)) / n;
   const boxY = roadRect.y + 16;
-  const boxH = Math.min(roadRect.h - 30, view.mobile ? 26 : 30);
+  // One boxH at every width (paired with panelLayout's single 62px roadH):
+  // the mobile-only 26px cap re-created the stage-label/opponent collision
+  // the taller road exists to prevent -- 30px keeps the stage row (boxY+10)
+  // and the opponent row (boxY+boxH-6) a full text-box apart on mobile too.
+  const boxH = Math.min(roadRect.h - 30, 30);
   slots.forEach((slot, i) => {
     const bx = roadRect.x + i * (boxW + gap);
     const status = (slot.post && slot.post.status) || 'tbd';
@@ -282,11 +293,22 @@ export default {
     // Mirror inset: true minute grain, its own real-time x and its own
     // cents y -- built to make the amplitude the wide chart's multiples
     // axis cannot show (design-review S9: "amplitude-crushed... invisible")
-    // visible on purpose. gapY reserves room for the wide chart's OWN
-    // x-axis ticks + title below it (+8+24, the piece's own standard
-    // bottom-axis offset -- walkthrough capture caught these colliding
-    // with the inset's own title when the gap was too tight).
-    const gapY = view.mobile ? 44 : 50;
+    // visible on purpose. gapY reserves the wide chart's whole bottom-axis
+    // stack: the +8 axis offset every other bottom axis uses, d3's own
+    // default 6px tick line + 3px tick padding, one micro-size tick-label
+    // line box, a full micro ascent of standoff, then the axis title's own
+    // line box -- all derived from the same micro type token the axis text
+    // is drawn with (s03 reads the token the same way), never a fixed
+    // pixel budget. The layout audit measured the old fixed "+24" title
+    // baseline grazing the 20h-60h tick-label boxes by 22x9px at 1280,
+    // 1440, and 1512 alike; the graze is font-driven, so the cure is
+    // font-derived and holds at every width.
+    const microPx = parseFloat(
+      (view.tokens.typography.scale.find((t) => t.name === 'micro') || {}).size,
+    ) || 12;
+    const tickBoxPx = 6 + 3 + microPx * 1.2;
+    const axisTitleY = mirrorMainRect.y + mirrorMainRect.h + 8 + tickBoxPx + microPx;
+    const gapY = Math.ceil(8 + tickBoxPx + microPx * 1.4 + (view.mobile ? 8 : 12));
     const mirrorInsetRect = {
       x: region.x,
       y: mirrorMainRect.y + mirrorMainRect.h + gapY,
@@ -314,6 +336,7 @@ export default {
       xFull,
       yMirror,
       mirrorMainRect,
+      axisTitleY,
       xInset,
       yInset,
       mirrorInsetRect,
@@ -592,7 +615,7 @@ export default {
 
     // ------------------------------------------------------------------
     // b3: the wide mirror chart, then the marker, then the magnified inset.
-    const { xFull, yMirror, mirrorMainRect } = scales;
+    const { xFull, yMirror, mirrorMainRect, axisTitleY } = scales;
     const mirrorMainG = g.append('g').attr('class', 's09-mirror-main').style('display', 'none');
     mirrorMainG.append('g')
       .attr('transform', `translate(0,${mirrorMainRect.y + mirrorMainRect.h + 8})`)
@@ -602,11 +625,13 @@ export default {
           .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
         s.selectAll('path,line').attr('stroke', view.css('ink-low'));
       });
-    // Same +8/+8+24 tick/title offsets every other scene's bottom axis
-    // uses (s01/s02/s06/s07/s08/s12/s15) -- the walkthrough capture caught
-    // a tighter, ad hoc offset here overlapping the tick labels themselves.
+    // Title baseline computed in scales() from the micro type token: one
+    // full ascent below the bottom of the tick-label boxes, so the title
+    // clears the 20h-60h ticks at every viewport width. The prior fixed
+    // "+24" (borrowed from other scenes' bottom axes) measured a 22x9px
+    // graze against the tick labels at 1280/1440/1512 in the layout audit.
     mirrorMainG.append('text')
-      .attr('x', mirrorMainRect.x + mirrorMainRect.w / 2).attr('y', mirrorMainRect.y + mirrorMainRect.h + 8 + 24)
+      .attr('x', mirrorMainRect.x + mirrorMainRect.w / 2).attr('y', axisTitleY)
       .attr('text-anchor', 'middle')
       .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-micro-size'))
       .attr('fill', view.css('ink-mid')).text('hours after Norway’s own shock, three days wide');
@@ -694,7 +719,7 @@ export default {
         // (walkthrough capture caught the overlap).
         markerG.append('line')
           .attr('x1', (bx0 + bx1) / 2).attr('x2', mirrorInsetRect.x + mirrorInsetRect.w / 2)
-          .attr('y1', mirrorMainRect.y + mirrorMainRect.h + 8 + 24 + 12).attr('y2', mirrorInsetRect.y)
+          .attr('y1', Math.min(axisTitleY + 8, mirrorInsetRect.y - 2)).attr('y2', mirrorInsetRect.y)
           .attr('stroke', view.css('ink-low')).attr('stroke-width', 1)
           .attr('stroke-dasharray', '2,3').attr('stroke-opacity', 0.5);
       }
@@ -842,13 +867,13 @@ export default {
     },
     {
       id: 'b2',
-      html: `<p>What happened next in each price followed real news about
+      html: `<p>What happened next in each price tracked real news about
         the road ahead, not fading hype. Paraguay's price drifted once
         France was confirmed as its next opponent. Belgium's price steadied
         once a Spain quarterfinal was locked in. Norway's price kept
         climbing once England was confirmed as its own next
         game.<sup><a href="#fn-14">14</a></sup></p>
-        <p>Next, zoom into one pair: Norway's price and Argentina's, moving
+        <p>Next, zoom into one pair. Norway's price and Argentina's moved
         together in the same match.</p>`,
       trigger: 'step',
       overlayStep: 'b2',

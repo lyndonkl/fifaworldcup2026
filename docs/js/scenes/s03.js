@@ -393,12 +393,38 @@ export default {
       // meaning in the label, anchored at the LEFT end of the line where
       // the KEY panel (top-right) can never occlude it.
       pfLabel = g.append('text')
-        .attr('x', chartRect.x + 8).attr('y', y(pf.usd) - 6)
+        .attr('x', chartRect.x + 8)
         .attr('text-anchor', 'start')
         .attr('fill', view.css('ink-mid'))
         .style('font', `${view.tokens.typography.scale.find((s) => s.name === 'caption').size} var(--font-apparatus)`)
-        .text(`${fmt.usd(pf.usd)}: the press number, about one week stale`)
         .style('opacity', 0);
+      if (view.mobile) {
+        // Mobile layout audit (390px, pair s03/b1): the short mobile
+        // chart (region.h * 0.16) puts y(pf.usd) on the same text row as
+        // the amber crossover label pinned at chartRect.y + 12, and the
+        // one-line label is nearly chart-wide, so the two collided
+        // (~227x6 px) whenever both are shown (b2 reveals the dim floor
+        // line under the amber annotation; b3 brightens both). Drop the
+        // label BELOW its dashed line and wrap it into two tspans (the
+        // s01 pretitle-caption wrap pattern): the amber row above stays
+        // clear, and the shorter lines keep the tail clear of the
+        // crossing dot at the chart's right edge. The clamp keeps the
+        // second line inside the chart at any region height; fills and
+        // opacity set on the parent <text> inherit to the tspans, so
+        // step()'s reveal/brighten transitions are unchanged.
+        const lineH = 15;
+        const yTop = Math.min(y(pf.usd) + 14, chartRect.y + chartRect.h - lineH - 4);
+        pfLabel.attr('y', yTop);
+        pfLabel.append('tspan')
+          .attr('x', chartRect.x + 8).attr('dy', 0)
+          .text(`${fmt.usd(pf.usd)}: the press number,`);
+        pfLabel.append('tspan')
+          .attr('x', chartRect.x + 8).attr('dy', lineH)
+          .text('about one week stale');
+      } else {
+        pfLabel.attr('y', y(pf.usd) - 6)
+          .text(`${fmt.usd(pf.usd)}: the press number, about one week stale`);
+      }
 
       // Gate-4 visual-story review (s03 C3, "the strongest encoding
       // available -- position on a common scale -- is unused"): mark the
@@ -702,10 +728,24 @@ export default {
     };
   },
 
+  // Layout-audit disposition (round of 2026-07-21, desktop widths 1280/
+  // 1440/1512): this scene's only flagged overlaps are the two fixed
+  // chrome pills over a scrolling beat card at the audit's mid-active
+  // stop -- #grain-plate x card (all beats) and a.skip x card (a
+  // neighboring card's tail/head in the corner at 1280/1512). Both are
+  // the documented-accepted scrim case, not defects: the chrome is the
+  // upper element (tokens.css --z-prose-card 3 < --z-chip-and-grain-plate
+  // 4 < --z-skip-controls 5) and each carries the 0.82 bg + blur(8px)
+  // scrim treatment (index.html #grain-plate rule; .skip rule per Gate-5
+  // item 3 disposition 2), so the pill reads cleanly over blurred prose
+  // during the pass-under; index.html's .card comment records the same
+  // plate-x-card audit hits as benign at the reading rest. Nothing in
+  // this module positions either pill or the card, so no code change
+  // here could (or should) alter that geometry.
   beats: [
     {
       id: 'b1',
-      html: '<p>The tournament kicked off, and the money arrived all at once. Watch two towers grow: one for bets on the tournament winner, one for bets on single matches.</p>',
+      html: '<p>The tournament kicked off, and the money poured in all at once. Watch two towers grow: one for bets on the tournament winner, one for bets on single matches.</p>',
       trigger: 'step',
       state: 'day1',
       kind: 'resort',

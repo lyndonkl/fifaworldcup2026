@@ -16,6 +16,15 @@
  * "keep your eye on the far right" cue precedes it); the December 5 draw
  * marker demotes from amber to ink-mid so amber stays a true singleton.
  *
+ * BLIND-MOBILE ROUND (post-Gate-5; chrome fact: main.js now sets
+ * body.scrub-deep once a mobile scrub track passes 60%, sliding the KEY
+ * panel off-screen, so the old KEY band ~y459-515 is clear stage air at
+ * late scrub). Mobile-only fixes: (1) the watch cue moves out from under
+ * the prose sheet into clear air below the December rule and rewords for
+ * the vertical timeline's orientation; (2) the axis title hangs from the
+ * MEASURED #grain-plate bottom instead of an assumed 64px; (3) the two
+ * boundary ticks carry the year. Desktop text and geometry untouched.
+ *
  * Object constancy: this scene's resting-field position formula is
  * DELIBERATELY identical to s01.js's (same bucket/stack algorithm, same
  * view.region, same per-dot identity = population tile row index), so
@@ -206,8 +215,35 @@ export default {
       .attr('transform', view.mobile
         ? `translate(${view.region.x - 8}, 0)`
         : `translate(0, ${view.region.y + view.region.h + 8})`);
+    // Mobile tick format (390x844 layout audit, s02/b1@0.5): the gutter
+    // left of the vertical axis is region.x = 48px wide, and axisLeft's
+    // end-anchored labels finish 9px left of the axis line (tick 6 +
+    // padding 3), i.e. at absolute x = 31. A "%b %y" label ("May 26")
+    // measures ~42px at type-micro, so every tick ran 4-11px off the
+    // viewport's left edge. Month-only labels (~22px) fit the berth with
+    // ~8px to spare at any phone width (the berth is a fixed floor, not
+    // width-proportional); the year span the short labels lean on is
+    // carried by the axis title, which on mobile now sits horizontal
+    // above the region top (see below) where it can keep the full
+    // "(May 2025 to July 2026)" range.
+    // Blind-mobile-round fix 3: month-only ticks carried no year at all.
+    // The two BOUNDARY ticks -- the top tick and the January tick -- now
+    // carry it ("Jul '25" / "Jan '26" form), derived from the tick dates
+    // themselves; every other tick stays month-only so the 31px berth
+    // holds. The audit above measured a month+year run at ~42px at
+    // type-micro, wider than the berth, so a measured guard below wraps a
+    // year label's "'yy" onto its own second line whenever the rendered
+    // single-line run would cross the viewport's left edge -- rendered
+    // geometry, never paper font math, same discipline as the desktop
+    // collision pass further down.
+    const fmtMonth = d3.utcFormat('%b');
+    const fmtMonthYear = d3.utcFormat("%b '%y");
+    const fmtYearOnly = d3.utcFormat("'%y");
+    const isBoundaryTick = (d, i) => i === 0 || d.getUTCMonth() === 0;
+    const mTicks = view.mobile ? timeX.ticks(d3.utcMonth.every(2)) : [];
     const axis = view.mobile
-      ? d3.axisLeft(timeX).ticks(d3.utcMonth.every(2)).tickFormat(d3.utcFormat('%b %y'))
+      ? d3.axisLeft(timeX).ticks(d3.utcMonth.every(2))
+        .tickFormat((d, i) => (isBoundaryTick(d, i) ? fmtMonthYear(d) : fmtMonth(d)))
       : d3.axisBottom(timeX).ticks(d3.utcMonth.every(2)).tickFormat(d3.utcFormat('%b %y'));
     axisG.call(axis);
     axisG.selectAll('text')
@@ -215,6 +251,24 @@ export default {
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'));
     axisG.selectAll('path,line').attr('stroke', view.css('ink-low'));
+    if (view.mobile) {
+      axisG.selectAll('.tick text').each(function (d, i) {
+        if (!isBoundaryTick(d, i)) return;
+        let w = 0;
+        try { w = this.getComputedTextLength(); } catch (e) { /* keep 0 */ }
+        // End-anchored tick labels finish at absolute x = region.x - 8
+        // (group translate) - 9 (tick 6 + padding 3); a run wider than
+        // that berth crosses x=0 off-screen. 2px of safety margin.
+        const berth = view.region.x - 8 - 9;
+        if (w > 0 && berth - w < 2) {
+          const t = d3.select(this);
+          const tickX = t.attr('x');
+          t.text(fmtMonth(d));
+          t.append('tspan').attr('x', tickX).attr('dy', '1.1em')
+            .text(fmtYearOnly(d));
+        }
+      });
+    }
 
     // G3 axis-label standard: a titled unit on every axis, plain words.
     function titleStyle(sel) {
@@ -223,19 +277,84 @@ export default {
         .style('font-size', view.css('type-caption-size'))
         .style('font-weight', 500);
     }
+    let timeTitleEl = null;
     if (view.mobile) {
-      const tx = view.region.x - 8 - 24;
-      const ty = view.region.y + view.region.h / 2;
-      titleStyle(g.append('text').attr('class', 'axis-title axis-title-time')
-        .attr('x', tx).attr('y', ty).attr('text-anchor', 'middle')
-        .attr('transform', `rotate(-90, ${tx}, ${ty})`)
-        .text('from listing to the final (May 2025 to July 2026)'));
+      // Mobile-audit fix (390x844, s02/b1@0.5: five tick labels each cut
+      // ~16px into this title's box): the old rotated title strip sat at
+      // x ~ [8, 24] of the 48px gutter, exactly where the end-anchored
+      // tick labels also have to live -- the gutter cannot hold both a
+      // ~17px-wide rotated caption strip and a ~22px month label plus the
+      // 6px tick marks, at ANY font size that stays legible. So the title
+      // leaves the gutter: horizontal, two lines, start-anchored at
+      // region.x just above the region top, in the free band under the
+      // grain plate (fixed top-left). This also brings the vertical
+      // time axis in line with the G3 note s08.js records for its own
+      // y axes ("y titles are never rotated"). Wrap pattern = s01.js's
+      // pretitle-caption mobile block (x re-set per tspan, dy -1.2em /
+      // +1.2em); the split point keeps the full year range on its own
+      // line because the month-only tick labels (above) depend on it.
+      // Blind-mobile-round fix 2: this berth used to assume the plate's
+      // box stops at ~64px, but its rendered rect runs deeper (two-line
+      // clamp + padding + border lands its bottom at ~72-74px) and
+      // clipped line 1's ascenders at y~73. The live #grain-plate rect
+      // is now measured (getBoundingClientRect, the same element-measure
+      // pattern s11.js uses on #chip) and line 1 hangs from plateBottom
+      // + 6. Two guards: (a) the element's own y is its line-2 BASELINE
+      // (tspan dys are relative), so the measured top converts through
+      // ~0.8em of ascent + the 1.2em line step = 2em; the berth also
+      // FLOORS at the old region.y - standoff constant, which covers
+      // both "plate unmeasurable" and "plate currently one line tall"
+      // (enterScene() runs before activateBeat() swaps in this scene's
+      // own two-line grain string, so a cold mount can measure a shallow
+      // plate). (b) The whole block clamps so line 2 still clears the
+      // first tick row (~y153 at 390x844).
+      const annStandoff = tokens.layout['annotation-leader-standoff-px'] || 8;
+      // caption's clamp() floor is 13.5px, and below the 900px mobile
+      // breakpoint 1.3vw never reaches it, so 13.5 IS the resolved size
+      // at every mobile width; parseFloat cannot read the clamp() string
+      // (NaN), so the || fallback is the live value, kept token-derived
+      // in case the token ever becomes a plain px size.
+      const capPx = parseFloat(
+        (tokens.typography.scale.find((t) => t.name === 'caption') || {}).size,
+      ) || 13.5;
+      let anchorY = view.region.y - annStandoff; // the old constant berth
+      const plateEl = document.getElementById('grain-plate');
+      if (plateEl) {
+        const pr = plateEl.getBoundingClientRect();
+        if (pr.height > 0) anchorY = Math.max(anchorY, pr.bottom + 6 + 2 * capPx);
+      }
+      const firstTickY = mTicks.length ? timeX(mTicks[0]) : view.region.y + 45;
+      anchorY = Math.min(anchorY, firstTickY - annStandoff);
+      const mTitle = g.append('text').attr('class', 'axis-title axis-title-time')
+        .attr('x', view.region.x)
+        .attr('y', anchorY)
+        .attr('text-anchor', 'start');
+      mTitle.append('tspan')
+        .attr('x', view.region.x).attr('dy', '-1.2em')
+        .text('from listing to the final');
+      mTitle.append('tspan')
+        .attr('x', view.region.x).attr('dy', '1.2em')
+        .text('(May 2025 to July 2026)');
+      titleStyle(mTitle);
     } else {
-      titleStyle(g.append('text').attr('class', 'axis-title axis-title-time')
+      // Layout-audit fix (1280x800 + 1512x945, s02/b1 stops: the "Sep 25"
+      // .. "Mar 26" tick-label boxes cut ~11px into this title's box):
+      // the old fixed `y = axis + 8 + 24` BASELINE assumed the ticks stop
+      // 24px below the axis origin, but their rendered rects reach
+      // deeper. Same fix s01.js's placeClockTitle() already proved on the
+      // identical defect: the title's TOP edge is re-derived below (see
+      // the desktop collision pass after the watch cue) from the axis
+      // group's own rendered bounding box plus the standard annotation
+      // standoff token, so the two boxes cannot intersect at any width
+      // and no width-specific constant is needed. The y set here is a
+      // provisional fallback only (kept in case the svg is ever detached
+      // when the pass runs and getBBox cannot measure).
+      timeTitleEl = g.append('text').attr('class', 'axis-title axis-title-time')
         .attr('x', view.region.x + view.region.w / 2)
         .attr('y', view.region.y + view.region.h + 8 + 24)
         .attr('text-anchor', 'middle')
-        .text('from listing to the final (May 2025 to July 2026)'));
+        .text('from listing to the final (May 2025 to July 2026)');
+      titleStyle(timeTitleEl);
     }
 
     // One stack-direction label at the ribbon's thickest point
@@ -262,16 +381,33 @@ export default {
     // reference marks below now use (standoff+14/+34/+54 for wall/here/
     // this label) -- WALL_MS is this label's own x too, so it needs a
     // row wallMarker isn't already sitting on.
-    const thickLabel = g.append('text').attr('class', 's02-thick-label')
-      .style('opacity', 0);
-    titleStyle(thickLabel);
-    thickLabel.text('thicker = more money that day');
-    if (view.mobile) {
-      thickLabel.attr('x', view.region.x + view.region.w / 2 + 12)
-        .attr('y', timeX(WALL_MS))
-        .attr('text-anchor', 'start');
-    } else {
-      thickLabel.attr('x', timeX(WALL_MS))
+    // Mobile (390x844 audit, s02/b1@0.5: this label's start-anchored run
+    // from mid-region ran 24px off the viewport's right edge): DROPPED at
+    // mobile width rather than clamped or wrapped. Every honest berth
+    // fails there: the label belongs on the June-11 row (its referent),
+    // but on the vertical mobile timeline that row (y ~ 486 of 844) sits
+    // inside the fixed mobile KEY panel's band (bottom-right, bottom =
+    // 38vh sheet + 8px, key-exclusion-h-mobile 56px, and s02's two-row
+    // key reaches wider than the ~76px strip left of it) -- the same
+    // opaque-panel trap this scene already documents for desktop
+    // above-region placement -- and any below/right-of-region berth is
+    // under the prose sheet or off-screen. The encoding it teaches is not
+    // orphaned on the phone: the grain plate's unit line ("1 dot =
+    // {grainUsd} traded again") plus the beat's own dollars-per-day prose
+    // carry thickness = money, per the mobile judgment rule (drop
+    // secondary apparatus over cramming). Desktop placement unchanged.
+    // Re-checked against the scrub-deep chrome change (blind-mobile
+    // round): the KEY now leaves the band past t 0.6, but this label
+    // fades in from t > 0.02 and stays for the whole scrub, so its
+    // referent row is still KEY-occupied for the first 60% of the track;
+    // the mobile drop stands.
+    let thickLabel = null;
+    if (!view.mobile) {
+      thickLabel = g.append('text').attr('class', 's02-thick-label')
+        .style('opacity', 0);
+      titleStyle(thickLabel);
+      thickLabel.text('thicker = more money that day')
+        .attr('x', timeX(WALL_MS))
         .attr('y', view.region.y + view.region.h + 8 + 54)
         .attr('text-anchor', 'middle');
     }
@@ -293,8 +429,16 @@ export default {
           .attr('y1', pos).attr('y2', pos)
           .attr('stroke', color).attr('stroke-dasharray', dash || null)
           .attr('opacity', weight);
+        // opts.mobileRowsUp (blind-mobile round, here/final de-overprint,
+        // see the note under finalMarker below): whole annotation-line
+        // rows to lift this label above the stock pos - 6 row. Mobile
+        // only; the desktop branch keeps its own vpos/yOverride rows.
+        const annPx = parseFloat(
+          (tokens.typography.scale.find((t) => t.name === 'annotation') || {}).size,
+        ) || 15;
         grp.append('text')
-          .attr('x', view.region.x + view.region.w).attr('y', pos - 6)
+          .attr('x', view.region.x + view.region.w)
+          .attr('y', pos - 6 - (opts.mobileRowsUp || 0) * 1.2 * annPx)
           .attr('text-anchor', 'end').attr('fill', color).attr('opacity', weight)
           .text(label);
       } else {
@@ -356,22 +500,160 @@ export default {
     );
     const finalMarker = markerAt(
       FINAL_MS, view.css('ink-low'), '1,4', 'the final', 0.6,
-      { vpos: 'below', mirror: true }, // dimmed: a future date
+      // dimmed: a future date. mobileRowsUp lifts its MOBILE label one
+      // annotation row (~18px) above the stock pos - 6 berth -- see the
+      // de-overprint note just below; desktop keeps vpos/mirror rows.
+      { vpos: 'below', mirror: true, mobileRowsUp: 1 },
     );
+    // Blind-mobile-round item 4 re-verification (chrome fact: main.js
+    // sets body.scrub-deep past 60% of a mobile scrub track, sliding the
+    // KEY panel off-screen, so the old KEY band ~y459-515 is clear stage
+    // air at late scrub). Recomputed against the live domain (axis start
+    // May 15 '25, domain end Jul 20 '26; 390x844 region y 108, h ~415,
+    // bottom = sheet top ~523): the wall label's mobile berth is
+    // timeX(WALL_MS) - 6 ~ y480 (appears t >= 0.92, KEY gone) and "you
+    // are here" is timeX(frozenMs) - 6 ~ y517 with its text box bottom
+    // ~y520 (appears t > 0.85, KEY gone) -- both in visible stage air
+    // above the sheet, so neither berth changes.
+    // Here/final de-overprint (same round, follow-up): frozenMs and
+    // FINAL_MS sit within a day on this axis, so their mobile labels
+    // both landed on the same right-anchored ~y517 row and overprinted
+    // at t > 0.95 (desktop splits them across below-ribbon rows; mobile
+    // markerAt had a single row per marker). The dimmed "the final"
+    // lifts one annotation row via mobileRowsUp (baseline ~y499, box
+    // ~[487, 502]) so the live "you are here" keeps the row nearest its
+    // own rule; the lifted box clears the wall label's (bottom ~483) by
+    // ~4px and "you are here"'s (top ~505) by ~3px, all inside the
+    // scrub-deep-cleared band above the sheet.
 
     // Withholding + cue (design-revision-spec §2 S2 / perception-brief
     // §7): the last visible caption before the wall bursts into view.
     // Never names the wall before it appears.
+    // Blind-mobile-round fix 1 (MAJOR): the old shared line and mobile
+    // berth were both wrong on the phone. Berth: region bottom + 24
+    // (~547 of 844) sat fully UNDER the prose sheet, whose top edge IS
+    // the region's bottom (H*0.62 ~ 523) -- the cue rendered but was
+    // never visible. Wording: on the vertical mobile timeline the wall
+    // arrives at the BOTTOM, so "far right" pointed phone readers at the
+    // wrong edge. The mobile cue now reads "Keep your eye on the bottom
+    // of the timeline." (cue text is narration, not a figure-sync slot;
+    // register kept: plain words, no em dashes) and sits in clear stage
+    // air, right-anchored one line below the December rule (~y321 of
+    // 844) -- a band no chrome ever occupies: the mobile KEY band
+    // (~y459-515) is far below it, and past t 0.6 body.scrub-deep slides
+    // the KEY off-screen anyway, so the cue's whole 0.7-0.92 visibility
+    // window is chrome-free. Desktop text and berth unchanged.
     const watchCue = g.append('text').attr('class', 's02-watch-cue')
       .style('opacity', 0);
     titleStyle(watchCue);
-    watchCue.attr('fill', view.css('ink-low')).text('Keep your eye on the far right.');
+    watchCue.attr('fill', view.css('ink-low'));
     if (view.mobile) {
-      watchCue.attr('x', view.region.x).attr('y', view.region.y + view.region.h + 24)
-        .attr('text-anchor', 'start');
-    } else {
-      watchCue.attr('x', view.region.x + view.region.w).attr('y', view.region.y - 24)
+      watchCue.text('Keep your eye on the bottom of the timeline.')
+        .attr('x', view.region.x + view.region.w)
+        .attr('y', timeX(DRAW_WEEK_MS) + 16)
         .attr('text-anchor', 'end');
+    } else {
+      watchCue.text('Keep your eye on the far right.')
+        .attr('x', view.region.x + view.region.w).attr('y', view.region.y - 24)
+        .attr('text-anchor', 'end');
+    }
+
+    // ---- Desktop collision pass (layout-audit fixes, 1280x800 +
+    // 1512x945 s02/b1 stops) ----
+    // Everything here is measured from rendered geometry (the s04.js
+    // dodgeBandLabel() / s01.js placeClockTitle() patterns -- svg user
+    // units match client px in this app, s04 relies on the same), so the
+    // fixes hold at every desktop width, not just the audited three.
+    // Opacity-0 labels still have live geometry, so marks that fade in
+    // later measure fine here.
+    if (!view.mobile) {
+      const sp = tokens.spacing_px;
+      const pad = sp[1] || 8;      // key-rect standoff, same as s04's
+      const gapPad = sp[0] || 4;   // label-vs-label breathing room
+      // KEY no-fly rect, the exact budget s08.js/s16.js codify: the
+      // fixed #chip paints ABOVE this svg (--z-chip-and-grain-plate over
+      // --z-d3-overlay), so a label under it is not clipped, it is
+      // simply invisible. Exclusion height maxes with the chip's live
+      // rect (s04's refinement) in case its rows run taller.
+      const keyX0 = view.W - (sp[4] || 24)
+        - (tokens.layout['key-exclusion-w-px'] || 280);
+      let keyY1 = (sp[4] || 24) + (tokens.layout['key-exclusion-h-px'] || 132);
+      const chipEl = document.getElementById('chip');
+      if (chipEl) {
+        const cr = chipEl.getBoundingClientRect();
+        if (cr.height > 0) keyY1 = Math.max(keyY1, cr.bottom);
+      }
+      const rectOf = (sel) => sel.node().getBoundingClientRect();
+
+      // (a) Axis title: TOP edge = axis's own rendered depth + standoff
+      // token (fixes the tick-label x title graze at 1280/1440/1512).
+      const axisOriginY = view.region.y + view.region.h + 8;
+      let axisDepth = 24; // fallback = the old constant
+      try {
+        const bb = axisG.node().getBBox();
+        if (bb && bb.height > 0) axisDepth = bb.y + bb.height;
+      } catch (e) { /* keep fallback */ }
+      const annStandoff = tokens.layout['annotation-leader-standoff-px'] || 8;
+      timeTitleEl
+        .attr('dominant-baseline', 'hanging')
+        .attr('y', axisOriginY + axisDepth + annStandoff);
+
+      // (b) The title now sits a row lower, in the same horizontal band
+      // as the below-ribbon marker rows' labels at some widths ("you are
+      // here" is the live one; the loop takes all four so a font-metric
+      // shift can't resurrect this). If a row label to the title's right
+      // would graze it, slide the title left until it clears; centered
+      // mid-axis, it has hundreds of px of slack before region.x.
+      const rowLabels = [
+        drawWeekMarker.select('text'), wallMarker.select('text'),
+        hereMarker.select('text'), finalMarker.select('text'), thickLabel,
+      ];
+      let tRect = rectOf(timeTitleEl);
+      let shift = 0;
+      rowLabels.forEach((sel) => {
+        const r = rectOf(sel);
+        const vOverlap = r.top < tRect.bottom + gapPad && r.bottom > tRect.top - gapPad;
+        const hGraze = r.left < tRect.right + gapPad && r.left > tRect.left;
+        if (vOverlap && hGraze) shift = Math.min(shift, (r.left - gapPad) - tRect.right);
+      });
+      if (shift < 0) {
+        // Never push the title's left edge past the region's.
+        shift = Math.max(shift, view.region.x - tRect.left);
+        timeTitleEl.attr('x', +timeTitleEl.attr('x') + shift);
+      }
+
+      // (c) "December 5: the twitch" (audited 1280x800: its start-
+      // anchored run crosses into the KEY rect, ix 19 -- rendered, then
+      // painted over): when the measured run breaks the KEY edge, flip
+      // it to end-anchor at the marker line's other side (open stage to
+      // the left), clamped to the KEY edge for the narrowest desktops
+      // where even the flipped run's tail would still cross it.
+      const dwText = drawWeekMarker.select('text');
+      const dwr = rectOf(dwText);
+      if (dwr.right > keyX0 - pad && dwr.top < keyY1 + pad) {
+        dwText.attr('text-anchor', 'end')
+          .attr('x', Math.min(timeX(DRAW_WEEK_MS) - 6, keyX0 - pad));
+      }
+
+      // (d) Watch cue (audited 1280x800 + 1512x945: ix 199 under the
+      // KEY): its right-edge anchor clamps to the KEY exclusion edge.
+      const cueR = rectOf(watchCue);
+      if (cueR.right > keyX0 - pad && cueR.top < keyY1 + pad) {
+        watchCue.attr('x', Math.min(view.region.x + view.region.w, keyX0 - pad));
+      }
+
+      // (e) The clamped cue and the (possibly flipped) December label
+      // now share horizontal range at 1280-1512, on rows only ~12px
+      // apart -- and both are visible together in the cue's 0.7-0.92
+      // window. Lift the cue until its box clears the label's by the
+      // gap pad; measured, so it is a no-op whenever they already clear.
+      const cueR2 = rectOf(watchCue);
+      const dwr2 = rectOf(dwText);
+      const hMeet = cueR2.right > dwr2.left - gapPad && cueR2.left < dwr2.right + gapPad;
+      const vMeet = cueR2.bottom > dwr2.top - gapPad && cueR2.top < dwr2.bottom + gapPad;
+      if (hMeet && vMeet) {
+        watchCue.attr('y', +watchCue.attr('y') + ((dwr2.top - gapPad) - cueR2.bottom));
+      }
     }
 
     function fadeIn(sel) { sel.transition().duration(drawIn).style('opacity', 1); }
@@ -380,10 +662,10 @@ export default {
     return {
       step() {
         fadeIn(drawWeekMarker);
-        fadeIn(thickLabel);
+        if (thickLabel) fadeIn(thickLabel); // desktop-only (see its berth note)
       },
       scrub(t) {
-        if (t > 0.02) { fadeIn(drawWeekMarker); fadeIn(thickLabel); }
+        if (t > 0.02) { fadeIn(drawWeekMarker); if (thickLabel) fadeIn(thickLabel); }
         if (t > 0.7 && t < 0.92) fadeIn(watchCue); else fadeOut(watchCue);
         if (t >= 0.92) fadeIn(wallMarker); else fadeOut(wallMarker);
         if (t > 0.85) fadeIn(hereMarker);

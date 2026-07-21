@@ -76,6 +76,34 @@ function humanizeStageLabel(label) {
   return STAGE_LABELS[label] || String(label).replace(/_/g, ' ');
 }
 
+// Mobile-short stage labels (390x844 DOM-geometry audit, s15/b1: the five
+// spelled-out labels overlapped 13-75px pairwise on one row -- at the
+// mobile stage width the lane pitch is ~46-55px while "after the round of
+// 16" alone measures ~118px). Same before/after semantics, fewer words;
+// an unmapped id degrades through humanizeStageLabel exactly as before.
+const STAGE_LABELS_MOBILE = {
+  pre_tournament: 'before',
+  post_group_pre_r32: 'after groups',
+  post_r32_pre_r16: 'after round of 32',
+  post_r16_pre_qf: 'after round of 16',
+  post_qf_pre_sf: 'after quarters',
+};
+function humanizeStageLabelMobile(label) {
+  if (!label) return '';
+  return STAGE_LABELS_MOBILE[label] || humanizeStageLabel(label);
+}
+
+// Two-row tick stagger, the second half of the same mobile fix: even with
+// short labels one row cannot hold five of them at a ~46-55px pitch, so
+// odd ticks drop one full text row. Offsets are em-relative (they track
+// the tick font's own size, no px constants): even ticks keep d3's own
+// 0.71em default; odd ticks sit 1.59em lower, which clears any font's
+// line box (~1.3em) so the two rows' boxes cannot intersect either.
+function staggerTicksMobile(axisSel) {
+  axisSel.selectAll('.tick text')
+    .attr('dy', (d, i) => (i % 2 ? '2.3em' : '0.71em'));
+}
+
 /* ---------------------------------------------------------------- */
 /* Core placement, shared by layout() and anchors.strip().           */
 /* region = { x, y, w, h } in CSS px (view.region for the live scene, */
@@ -95,7 +123,13 @@ function computeStripState(data, view, region, { drained }) {
   const stages = (data.scene && data.scene.stages) || [];
   const stageIds = stages.length ? stages.map((s) => s.id) : ['s1', 's2', 's3', 's4', 's5'];
 
-  const x = d3.scalePoint().domain(stageIds).range([region.x + 40, region.x + region.w - 40]).padding(0.6);
+  // Mobile reclaims the 40px side gutters (390x844 audit): at the 48px
+  // stage floor the strip's usable span is ~239px with them, ~287px
+  // without, and that extra lane pitch is what gives the staggered short
+  // tick labels (see staggerTicksMobile) their clearance. Desktop keeps
+  // the original inset; nothing else about the lane grammar changes.
+  const laneInset = view.mobile ? 16 : 40;
+  const x = d3.scalePoint().domain(stageIds).range([region.x + laneInset, region.x + region.w - laneInset]).padding(0.6);
   const y = d3.scaleLinear().domain([0, 100]).range([region.y + region.h - 8, region.y + 8]);
   const laneW = Math.max(x.step() * x.padding(), 24);
 
@@ -265,8 +299,14 @@ export default {
       .attr('transform', `translate(0, ${view.region.y + view.region.h + 8})`)
       .call(d3.axisBottom(scales.x).tickFormat((id) => {
         const s = stages.find((st) => st.id === id);
-        return humanizeStageLabel(s ? s.label : id);
+        const raw = s ? s.label : id;
+        return view.mobile ? humanizeStageLabelMobile(raw) : humanizeStageLabel(raw);
       }));
+    // Mobile stage-label collisions (390x844 audit, s15/b1: eight pairwise
+    // overlaps, worst 75px): short labels + the two-row stagger together.
+    // Applied before the tickDepth measurement below, so the x-axis title
+    // hangs under the deeper row too.
+    if (view.mobile) staggerTicksMobile(axisG);
     axisG.selectAll('text')
       .attr('fill', view.css('ink-mid'))
       .attr('font-family', view.css('font-apparatus'))
@@ -281,8 +321,24 @@ export default {
     // series this scene's data layer does not compute (CLAUDE.md: keep
     // every data binding intact; a label rewrite must stay truthful to it).
     const xRange = scales.x.range ? scales.x.range() : [view.region.x, view.region.x + view.region.w];
+    // Layout audit (1280/1440/1512 sweep): at a fixed y=24 this title's box
+    // intersected the three widest tick labels ("after the groups", "after
+    // the round of 32", "after the round of 16") by ~11px at every desktop
+    // width -- d3's tick text bottoms out around y 21-22 at micro size,
+    // right where a caption-size ascender hung at y=24 begins. Same fix as
+    // s01.js placeClockTitle(): measure the rendered ticks' own depth and
+    // hang the title below it by the annotation standoff token, so the two
+    // boxes cannot intersect at any width or font-metric combination. The
+    // constant 24 survives only as the detached-svg fallback s01 keeps too.
+    let tickDepth = 24;
+    try {
+      const tb = axisG.node().getBBox(); // ticks + domain path only (pre-title)
+      if (tb && tb.height > 0) tickDepth = tb.y + tb.height;
+    } catch (e) { /* detached svg: keep fallback */ }
     axisG.append('text').attr('class', 's15-x-title')
-      .attr('x', (xRange[0] + xRange[1]) / 2).attr('y', 24)
+      .attr('x', (xRange[0] + xRange[1]) / 2)
+      .attr('y', tickDepth + view.tokens.layout['annotation-leader-standoff-px'])
+      .attr('dominant-baseline', 'hanging')
       .attr('text-anchor', 'middle')
       .attr('fill', view.css('ink-mid'))
       .attr('font-family', view.css('font-apparatus')).attr('font-weight', 500)
@@ -297,7 +353,7 @@ export default {
     const keySafeX = view.mobile ? Infinity
       : view.W - view.tokens.spacing_px[4]
         - (view.tokens.layout['key-exclusion-w-px'] || 280) - view.tokens.spacing_px[3];
-    g.append('text').attr('class', 's15-y-title')
+    const yTitle = g.append('text').attr('class', 's15-y-title')
       .attr('x', Math.min(view.region.x + view.region.w, keySafeX - view.tokens.spacing_px[3]))
       .attr('y', view.region.y - 12)
       .attr('text-anchor', 'end')
@@ -351,25 +407,79 @@ export default {
       labelSpain.attr('x', scales.x(stages[0].id) - 8).attr('y', scales.y(stages[0].opta_pct) + 34);
     }
 
+    // Mobile row change (390x844 audit, s15/b1: 101x16px box overlap with
+    // the y-title): at the mobile stage width the region.y - 12 row cannot
+    // hold both this left-anchored caption and the right-anchored y-title,
+    // and lifting the caption a row higher would put it into the fixed
+    // grain plate's measured band (main.js's 108px region.y floor exists
+    // to clear it). So on the phone the caption moves INSIDE the stage,
+    // top-left over the dimmed rest field (s05's mobile ledger precedent),
+    // two spacing rows down so its box also clears the settle label's
+    // region.y + 16 row -- the audit measures faded-out text too. Desktop
+    // keeps the shared top row plus the measured-lift check below.
     const pinnedCaption = g.append('text').attr('class', 's15-pinned')
-      .attr('x', view.region.x).attr('y', view.region.y - 12)
+      .attr('x', view.region.x)
+      .attr('y', view.mobile
+        ? view.region.y + view.tokens.spacing_px[6]
+        : view.region.y - 12)
       .attr('fill', view.css('accent-annotation'))
       .attr('font-family', view.css('font-apparatus')).attr('font-weight', 600)
       .attr('font-size', view.css('type-annotation-size'))
       .attr('opacity', 0)
       .text('One opinion, read five times.');
+    // Layout audit (1280x800: ix 8 / iy 15-17): this caption (left-anchored
+    // at region.x) and the keySafeX-clamped y-title share the region.y - 12
+    // row, and at narrow desktop stages their measured boxes meet near the
+    // row's middle. Both strings are static, so measure both once (s04.js
+    // getBBox pattern); when the horizontal gap closes below one
+    // spacing_px[1] unit, lift the caption a full measured row above the
+    // y-title. Wide stages keep the single shared row unchanged.
+    if (!view.mobile) {
+      try {
+        const yTB = yTitle.node().getBBox();
+        const pinB = pinnedCaption.node().getBBox();
+        if (pinB.x + pinB.width + view.tokens.spacing_px[1] > yTB.x) {
+          pinnedCaption.attr('y', (view.region.y - 12)
+            - (pinB.y + pinB.height - yTB.y)
+            - view.tokens.spacing_px[0]);
+        }
+      } catch (e) { /* detached svg: keep the shared row */ }
+    }
 
     const settleMark = g.append('g').attr('class', 's15-settle').attr('opacity', 0);
     settleMark.append('line')
       .attr('x1', view.region.x + view.region.w).attr('x2', view.region.x + view.region.w)
       .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
       .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
-    settleMark.append('text')
+    const settleLabel = settleMark.append('text')
       .attr('x', view.region.x + view.region.w - 6).attr('y', view.region.y + 16)
       .attr('text-anchor', 'end')
       .attr('fill', view.css('accent-annotation'))
       .attr('font-family', view.css('font-tape')).attr('font-size', view.css('type-tape-size'))
       .text('July 14 · settled');
+    // KEY-exclusion rect (layout audit 1280/1512: ix 133 / iy 15): right-
+    // anchored at the region's right edge, this label's box sat inside the
+    // fixed KEY panel's reserved top-right rect on desktop, so the key's
+    // opaque card painted straight over it. Same exclusion budget s08.js's
+    // keyX0 and s19.js's keyBottomY codify: the rect's height runs
+    // key-exclusion-h-px below the key's spacing_px[4] top inset (keySafeX
+    // above already encodes its left edge). The label belongs to its settle
+    // line, which spans the full region height, so rather than detach it
+    // leftward past keySafeX it drops below the key's reserved height plus
+    // a spacing_px[2] standoff -- shifted by its own measured box, exact at
+    // any width; a stage whose top-right corner clears the key rect keeps
+    // the original row.
+    if (!view.mobile) {
+      const keyBottomY = view.tokens.spacing_px[4]
+        + (view.tokens.layout['key-exclusion-h-px'] || 132);
+      try {
+        const lb = settleLabel.node().getBBox();
+        if (lb.x + lb.width > keySafeX && lb.y < keyBottomY) {
+          settleLabel.attr('y', view.region.y + 16
+            + (keyBottomY + view.tokens.spacing_px[2] - lb.y));
+        }
+      } catch (e) { /* detached svg: keep the original row */ }
+    }
     // Devig annotation (design-revision-spec S15 item 4): must appear
     // BEFORE the drain, never during it, and sit near France's mid-stage
     // cluster rather than the corner. "devigged" carries its plain-words
@@ -380,15 +490,28 @@ export default {
     // gap_kalshi_minus_opta_pp column the chart's dots-vs-line already
     // draws), min to max, so the number can never drift from the chart.
     const gapVals = stages.map((s) => s.gap_pp).filter((v) => typeof v === 'number');
-    const devigText = gapVals.length
-      ? `+${Math.min(...gapVals).toFixed(1)} to +${Math.max(...gapVals).toFixed(1)} points above the model, devigged (bookmaker’s cut removed)`
-      : 'above the model, devigged (bookmaker’s cut removed)';
+    // Split at the clause boundary so mobile can wrap: at 390px the single
+    // line measured ~469px and poked 52px past the right viewport edge and
+    // 27px past the left (mobile DOM-geometry audit). Desktop joins the
+    // two halves back into the exact original one-line string.
+    const devigLead = gapVals.length
+      ? `+${Math.min(...gapVals).toFixed(1)} to +${Math.max(...gapVals).toFixed(1)} points above the model,`
+      : 'above the model,';
+    const devigTail = 'devigged (bookmaker’s cut removed)';
     const devigNote = g.append('text').attr('class', 's15-devig')
       .attr('text-anchor', 'middle')
       .attr('fill', view.css('ink-mid'))
       .attr('font-family', view.css('font-apparatus')).attr('font-size', view.css('type-caption-size'))
-      .attr('opacity', 0)
-      .text(devigText);
+      .attr('opacity', 0);
+    if (view.mobile) {
+      // s01 pretitle-caption wrap pattern: two tspans stacked about the
+      // anchor row; each line is ~245px, inside the 390px viewport at the
+      // mid-stage anchor. tspan x is set with the anchor below.
+      devigNote.append('tspan').attr('dy', '-1.2em').text(devigLead);
+      devigNote.append('tspan').attr('dy', '1.2em').text(devigTail);
+    } else {
+      devigNote.text(`${devigLead} ${devigTail}`);
+    }
     if (stages.length) {
       const midStage = stages[Math.floor(stages.length / 2)];
       // Text-collision sweep (Gate-5 item 3 disposition 2): both this note
@@ -400,7 +523,9 @@ export default {
       // close enough on this data that the two labels rendered as one
       // garbled line. -85 clears modelLineLabel with margin regardless of
       // exactly how close those two model-line readings land.
-      devigNote.attr('x', scales.x(midStage.id)).attr('y', scales.y(midStage.opta_pct) - 85);
+      const devigX = scales.x(midStage.id);
+      devigNote.attr('x', devigX).attr('y', scales.y(midStage.opta_pct) - 85);
+      devigNote.selectAll('tspan').attr('x', devigX);
     }
 
     const fade = (sel, on) => sel.transition().duration(400).attr('opacity', on ? 1 : 0);
@@ -435,7 +560,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: '<p>For thirteen months, this market held one steady opinion. Bookmakers add a small fee to every price. Strip that fee out, a step this piece calls <strong>devigged</strong>, the bookmaker&rsquo;s cut removed, and the market&rsquo;s real belief shows. At five points during the tournament, the devigged price put France a few cents above a computer model&rsquo;s guess. It put Spain a few cents below that same guess, almost every time.<sup class="fn"><a href="#fn-21">21</a></sup></p>',
+      html: '<p>For thirteen months, this market held one steady view. Bookmakers add a small fee to each price. Strip that fee out, a step this piece calls <strong>devigged</strong>, the bookmaker&rsquo;s cut removed, and the market&rsquo;s real belief shows. At five points during the tournament, that stripped price put France a few cents above a computer model&rsquo;s guess. It put Spain a few cents below that same guess, almost every time.<sup class="fn"><a href="#fn-21">21</a></sup></p>',
       trigger: 'step',
       state: 'assemble',
       kind: 'resort',
@@ -450,7 +575,7 @@ export default {
     },
     {
       id: 'b2',
-      html: '<p>That is one opinion, checked five times. Five snapshots of one held opinion do not add up to five independent opinions.</p>',
+      html: '<p>That is one opinion, checked five times. Five snapshots of one held view do not add up to five separate views.</p>',
       trigger: 'step',
       // no state: dots hold; this step is the pinned-caption beat only
       overlayStep: 'b2',
@@ -502,8 +627,14 @@ export default {
             .attr('transform', `translate(0,${rect.y + rect.h})`)
             .call(d3.axisBottom(built.x).tickFormat((id) => {
               const s = stages.find((st) => st.id === id);
-              return humanizeStageLabel(s ? s.label : id);
+              const raw = s ? s.label : id;
+              return view.mobile ? humanizeStageLabelMobile(raw) : humanizeStageLabel(raw);
             }))
+            // Same mobile short-label + stagger treatment as the live
+            // overlay's axis: the S16 L5 recap draws this axis on an even
+            // narrower rect, where the spelled-out one-row labels collide
+            // worse than the live scene's did in the 390x844 audit.
+            .call((s) => { if (view.mobile) staggerTicksMobile(s); })
             .call((s) => {
               s.selectAll('text').attr('fill', view.css('ink-low'))
                 .style('font-family', view.css('font-apparatus')).style('font-size', view.css('type-micro-size'));
@@ -528,12 +659,14 @@ export default {
   },
 };
 
-/* NOTE (resolved in the prose-polish pass): design-system.md §8 FIX #3
- * requires the word "devigged" in S15's beat copy, not only in the overlay
- * annotation. Beat b1 now carries it ("the devigged price put France three
- * to five points above Opta"), so the two authorities agree; the footnote
- * marker also moved onto b1, where the statistic actually lives, and b1/b2
- * are now each a complete sentence. The numbers stay storyboard-verbatim
- * ("three to five points"); only the framing gained the required qualifier.
+/* NOTE (resolved in the prose-polish pass; requoted in the readability
+ * pass): design-system.md §8 FIX #3 requires the word "devigged" in S15's
+ * beat copy, not only in the overlay annotation. Beat b1 carries it in its
+ * definition clause ("a step this piece calls devigged, the bookmaker's
+ * cut removed"), so the two authorities agree; the footnote marker also
+ * moved onto b1, where the statistic actually lives, and b1/b2 are now
+ * each a complete sentence. The readability pass (SMOG gate) later
+ * swapped b1's SECOND "devigged" for "that stripped price", which still
+ * points at the same defined term; the required word itself stays in b1.
  * The overlay's `s15-devig` annotation (step b3) still carries the same
  * qualifier, which is now a reinforcement rather than the sole disclosure. */

@@ -212,6 +212,44 @@ export default {
     const region = view.region;
     const g = svg.append('g').attr('class', 's05-overlay');
 
+    // KEY-panel exclusion (design-revision-spec G5/CR-2): the persistent
+    // KEY (#chip, fixed top-right on desktop) paints ABOVE this overlay
+    // (--z-chip-and-grain-plate over --z-d3-overlay), so a label under it
+    // is not clipped, it is painted over. Layout audit (1280x800 and
+    // 1512x945, s05/b1-b3) measured exactly that: the diagonal label and
+    // the core-series label both sat inside the KEY's reserved rect.
+    // Edges derive from the tokens the same way s08.js and s04.js derive
+    // them; the vertical edge additionally takes the live #chip rect when
+    // that runs taller than the token budget (the wrapped-key-rows case
+    // s04's audit caught). Mobile moves the KEY to the bottom-right band,
+    // so no top-right exclusion applies there.
+    const sp4 = view.tokens.spacing_px[4] || 24;
+    const keyX0 = view.mobile ? Infinity
+      : view.W - sp4 - (view.tokens.layout['key-exclusion-w-px'] || 280);
+    let keyY1 = view.mobile ? -Infinity
+      : sp4 + (view.tokens.layout['key-exclusion-h-px'] || 132);
+    if (!view.mobile) {
+      const chipEl = document.getElementById('chip');
+      if (chipEl) {
+        const cr = chipEl.getBoundingClientRect();
+        if (cr.height > 0) keyY1 = Math.max(keyY1, cr.bottom);
+      }
+    }
+    // Ground scrim for annotation rows the reference lines pass under
+    // (the SVG analogue of index.html's shared .scrim-card, per s04's
+    // band-label precedent): a bg-canvas rect behind the glyphs so the
+    // dashed equality diagonal and the Lorenz reference line read as
+    // passing behind the row, never through it. getBBox needs the text
+    // live and visible, so callers hide the GROUP only afterwards.
+    const scrimBehind = (grp, textSel) => {
+      const bb = textSel.node().getBBox();
+      grp.insert('rect', 'text')
+        .attr('x', bb.x - 8).attr('y', bb.y - 4)
+        .attr('width', bb.width + 16).attr('height', bb.height + 8)
+        .attr('rx', 3)
+        .attr('fill', view.css('bg-canvas')).attr('opacity', 0.85);
+    };
+
     // Below-threshold hatched band (D3 mark, never dots — CONTRACT §1.3).
     const bandW = region.w * ml.tailFrac;
     const patternId = 's05-hatch';
@@ -232,15 +270,40 @@ export default {
     // "N markets · under one dot each · M combined" template; sits
     // inside the band once it is tall enough to hold text, else just
     // below it, left-aligned to region.x either way.
+    // MOBILE (390x844 DOM-geometry audit, s05/b1): the single below-axis
+    // line ran 171px past the right viewport edge and sat on the x-axis
+    // tick row ("25%".."100%"). The phone slot is INSIDE the region
+    // instead -- the lower-left triangle above the band is dot-free by
+    // construction (below-grain markets own zero dots, and the smallest
+    // dotted columns hug the region bottom) -- wrapped at its own
+    // interpunct into two rows (s01's pretitle-caption tspan pattern),
+    // stacked above the tail bracket's reserved rows, on the shared
+    // ground scrim so the dashed equality diagonal reads as passing
+    // behind the chip. Every coordinate derives from the band's own
+    // geometry; no per-width constants.
     const bandLabelInside = bandH >= 20;
-    const bandLabel = g.append('text').attr('class', 's05-below-band-label')
-      .attr('x', region.x + 4)
-      .attr('y', bandLabelInside
-        ? region.y + region.h - bandH / 2 + 4
-        : region.y + region.h + 8 + 10)
+    const bandTop = region.y + region.h - bandH;
+    const grainTxt = `$${Math.round(view.grain.usd).toLocaleString('en-US')}`;
+    const bandG = g.append('g').attr('class', 's05-below-band-chip');
+    const bandLabel = bandG.append('text').attr('class', 's05-below-band-label')
       .attr('fill', view.css('ink-mid'))
-      .style('font', `var(--type-tape-size) var(--font-tape)`)
-      .text(`${fmt.count(belowGrain.markets)} markets · under one dot each ($${Math.round(view.grain.usd).toLocaleString('en-US')}) · ${fmt.usd(belowGrain.usd)} combined`);
+      .style('font', `var(--type-tape-size) var(--font-tape)`);
+    if (view.mobile) {
+      const rowX = region.x + 4;
+      bandLabel.attr('x', rowX).attr('y', bandTop - 60);
+      bandLabel.append('tspan').attr('x', rowX).attr('y', bandTop - 60)
+        .text(`${fmt.count(belowGrain.markets)} markets · under one dot each`);
+      bandLabel.append('tspan').attr('x', rowX).attr('y', bandTop - 46)
+        .text(`(${grainTxt}) · ${fmt.usd(belowGrain.usd)} combined`);
+      scrimBehind(bandG, bandLabel);
+    } else {
+      bandLabel
+        .attr('x', region.x + 4)
+        .attr('y', bandLabelInside
+          ? region.y + region.h - bandH / 2 + 4
+          : region.y + region.h + 8 + 10)
+        .text(`${fmt.count(belowGrain.markets)} markets · under one dot each (${grainTxt}) · ${fmt.usd(belowGrain.usd)} combined`);
+    }
 
     // Axes (G3: "missing apparatus to add" -- S5 had none). Ticks at the
     // five round percentages the spec calls out; titles name what each
@@ -276,32 +339,31 @@ export default {
       .style('font-weight', 500)
       .text('share of all the money (%)');
 
-    // Concentration figures (structure-spec S5 b2: the Gini numbers move
-    // out of body prose into a caption). Footnote-weight, ink-low.
-    // Gate-5 item 3 screenshot: this line was sitting past the visible
-    // stage on shorter viewports (#stage is a fixed, non-scrolling
-    // viewport-height layer -- anything below view.H is off-screen, not
-    // just scrolled out of view), clipping it at the bottom edge. Clamped
-    // to the same safe margin (view.safe) every other bottom-anchored
-    // element in the piece respects. The numbers themselves are bound to
-    // the scene JSON (never hardcoded), so a refreeze cannot desync this
-    // caption from the data the way the beat prose desynced upstream.
-    const giniPooledTxt = (typeof sj.gini_pooled === 'number' ? sj.gini_pooled : 0.930).toFixed(3);
-    const giniWithinTxt = (typeof sj.gini_within_family === 'number' ? sj.gini_within_family : 0.44).toFixed(2);
-    const giniY = Math.min(region.y + region.h + 58, view.H - view.safe);
-    const giniCaption = g.append('text').attr('class', 's05-gini-caption')
-      .attr('x', region.x).attr('y', giniY)
-      .attr('fill', view.css('ink-low'))
-      .style('font', `var(--type-micro-size) var(--font-apparatus)`)
-      .text(`market concentration (Gini): ${giniPooledTxt} overall, ${giniWithinTxt} within one family`)
-      .style('display', 'none');
-
-    // Equality diagonal + real Lorenz reference line.
+    // Equality diagonal + real Lorenz reference line. Label placement
+    // (layout audit 1280x800/1512x945, s05/b1-b3: #chip over this label,
+    // and this label over the core-series row): the old anchor at the
+    // diagonal's top-right ENDPOINT sat inside the KEY's reserved rect
+    // and shared the corner with the core-series annotation. Desktop now
+    // slides the anchor down the line to the key-exclusion edge and sets
+    // the baseline just above the line at that point (the triangle above
+    // the diagonal is empty by construction), so the label still names
+    // the line it touches at every desktop width -- both coordinates
+    // derive from the token edge and the line's own geometry, no
+    // per-width constants. MOBILE (390x844 DOM-geometry audit, s05/b1):
+    // the endpoint anchor at y(1)+12 shared the top-right corner with
+    // the core-series ledger row (2,338px^2 overlap), so the phone takes
+    // the same slide-down-the-line treatment -- anchored at 62% of the
+    // x-domain (a scale-free fraction, over the band's dot-free stretch,
+    // clear of the top-right ledger and of the bottom-left band chip) --
+    // and shares desktop's above-the-line baseline formula, so the label
+    // still names the line it touches at every width.
     g.append('line').attr('class', 's05-diagonal')
       .attr('x1', x(0)).attr('y1', y(0)).attr('x2', x(1)).attr('y2', y(1))
       .attr('stroke', view.css('ink-low')).attr('stroke-width', 1).attr('stroke-dasharray', '2,3');
+    const diagAnchorX = view.mobile ? x(0.62) : Math.min(x(1) - 4, keyX0 - 8);
     g.append('text').attr('class', 's05-diagonal-label')
-      .attr('x', x(1) - 4).attr('y', y(1) + 12)
+      .attr('x', diagAnchorX)
+      .attr('y', y(x.invert(diagAnchorX)) - 8)
       .attr('text-anchor', 'end')
       .attr('fill', view.css('ink-mid'))
       .style('font', `var(--type-micro-size) var(--font-apparatus)`)
@@ -326,18 +388,91 @@ export default {
       .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
       .text(`${fmt.count(tail.markets)} markets, ${tail.share_pct != null ? tail.share_pct : '—'}% of the money`);
 
+    // Right-aligned annotation ledger: the core-series row plus the Gini
+    // row share one anchor near the sweep's concentrated corner. Layout
+    // audit (1280x800/1512x945, s05/b2-b3): the core row's old slot at
+    // region.y + 16 sat inside the KEY's reserved rect at every audited
+    // desktop width, so on desktop the ledger stacks BELOW the key-
+    // exclusion bottom instead (keyY1 + one 20px step; rows 20px apart).
+    // The reference lines cross that corner, so both rows sit on the
+    // shared ground scrim. Mobile keeps the KEY bottom-right and the
+    // original region.y + 16 row.
+    const ledgerX = region.x + region.w * (1 - (ml.tailFrac ? (1 - ml.tailFrac) * 0.06 : 0.06));
+    const ledgerY = view.mobile ? region.y + 16 : Math.max(region.y + 16, keyY1 + 20);
+
     // Core-series concentration callout (co-located with the tail bracket step).
     const core = sj.core_series;
     let coreLabel = null;
+    let coreG = null;
     if (core) {
-      coreLabel = g.append('text').attr('class', 's05-core-label')
-        .attr('x', region.x + region.w * (1 - (ml.tailFrac ? (1 - ml.tailFrac) * 0.06 : 0.06)))
-        .attr('y', region.y + 16).attr('text-anchor', 'end')
+      coreG = g.append('g').attr('class', 's05-core');
+      coreLabel = coreG.append('text').attr('class', 's05-core-label')
+        .attr('x', ledgerX)
+        .attr('y', ledgerY).attr('text-anchor', 'end')
         .attr('fill', view.css('ink-mid'))
-        .style('font', `var(--type-annotation-size) var(--font-apparatus)`)
-        .text(`${core.legs} legs across 3 core series absorb ${core.share_pct}% of all dollars`)
-        .style('display', 'none');
+        .style('font', `var(--type-annotation-size) var(--font-apparatus)`);
+      if (view.mobile) {
+        // MOBILE (390x844 DOM-geometry audit, s05/b1): the one-line row
+        // ran 34px past the LEFT viewport edge, through the y-axis
+        // gutter's "100%" tick. Wrapped at its own clause break into two
+        // right-anchored tspans (s01's pattern); the rows stay inside
+        // the region at every width, and the shared ground scrim keeps
+        // the equality diagonal passing behind them, mirroring desktop.
+        coreLabel.append('tspan').attr('x', ledgerX).attr('y', ledgerY)
+          .text(`${core.legs} legs across 3 core series`);
+        coreLabel.append('tspan').attr('x', ledgerX).attr('y', ledgerY + 14)
+          .text(`absorb ${core.share_pct}% of all dollars`);
+        scrimBehind(coreG, coreLabel);
+      } else {
+        coreLabel.text(`${core.legs} legs across 3 core series absorb ${core.share_pct}% of all dollars`);
+        scrimBehind(coreG, coreLabel);
+      }
+      coreG.style('display', 'none');
     }
+
+    // Concentration figures (structure-spec S5 b2: the Gini numbers move
+    // out of body prose into a caption). Footnote-weight, ink-low. The
+    // numbers stay bound to the scene JSON (never hardcoded), so a
+    // refreeze cannot desync this caption from the data the way the beat
+    // prose desynced upstream.
+    // PLACEMENT (layout audit 1280x800, s05/b2-b3): this caption used to
+    // sit 22px under the x-axis title, clamped to view.safe (Gate-5
+    // item 3's off-stage fix). On an 800px-tall stage that clamp ate the
+    // designed gap and the caption measured as intersecting the axis
+    // title -- below the tick labels there is not enough height for both
+    // rows, and pulling the title up instead would graze the tick labels.
+    // Desktop therefore moves the caption onto the ledger above, one row
+    // below the core-series line, over the sweep's empty upper triangle
+    // (dots hug the lower right by construction, so that row is ground,
+    // not data). Mobile's region bottom sits at 62vh, where the original
+    // below-axis slot plus the item-3 clamp still fit vertically, so
+    // mobile keeps the slot -- but wraps the line (see the mobile branch
+    // below) because the 390px audit caught it poking the right edge.
+    const giniPooledTxt = (typeof sj.gini_pooled === 'number' ? sj.gini_pooled : 0.930).toFixed(3);
+    const giniWithinTxt = (typeof sj.gini_within_family === 'number' ? sj.gini_within_family : 0.44).toFixed(2);
+    const giniG = g.append('g').attr('class', 's05-gini');
+    const giniCaption = giniG.append('text').attr('class', 's05-gini-caption')
+      .attr('fill', view.css('ink-low'))
+      .style('font', `var(--type-micro-size) var(--font-apparatus)`);
+    if (view.mobile) {
+      // MOBILE (390x844 DOM-geometry audit, s05/b1): the one-line caption
+      // ran 25px past the right viewport edge. Wrapped at its own comma
+      // into two tspans in the same below-axis slot; the item-3 clamp
+      // now reserves one extra 14px row so the second line stays inside
+      // view.safe too.
+      const gx = region.x;
+      const gy = Math.min(region.y + region.h + 58, view.H - view.safe - 14);
+      giniCaption.attr('x', gx).attr('y', gy);
+      giniCaption.append('tspan').attr('x', gx).attr('y', gy)
+        .text(`market concentration (Gini): ${giniPooledTxt} overall,`);
+      giniCaption.append('tspan').attr('x', gx).attr('y', gy + 14)
+        .text(`${giniWithinTxt} within one family`);
+    } else {
+      giniCaption.attr('x', ledgerX).attr('y', ledgerY + 20).attr('text-anchor', 'end')
+        .text(`market concentration (Gini): ${giniPooledTxt} overall, ${giniWithinTxt} within one family`);
+      scrimBehind(giniG, giniCaption);
+    }
+    giniG.style('display', 'none');
 
     // Novelty-market callout (de-politicize swap; see prose-plan Part 3).
     // REVISION (design-revision-spec CR-15 / S5 §2): two-line amber +
@@ -371,19 +506,31 @@ export default {
     const novelty = sj.novelty_market;
     let noveltyG = null;
     if (novelty) {
-      noveltyG = g.append('g').attr('class', 's05-novelty').style('display', 'none');
+      noveltyG = g.append('g').attr('class', 's05-novelty');
       // The band spans most of the stage width, so anchor the callout to
       // its right end and let the text run LEFT across the dimmed tail
       // (clamped inside the region), never off the right edge. A short
       // vertical leader drops from the callout down to the band. Three
       // lines (18px rhythm) so the ordering-definition line never has to
       // fight for horizontal room the way one long line would.
-      const anchorX = Math.min(region.x + bandW, region.x + region.w - 8);
+      // MOBILE (390x844 DOM-geometry audit, s05/b2-b3): rows 2 and 3 ran
+      // 17px past the LEFT viewport edge when right-anchored at the
+      // band's edge -- the 318px-wide phone region cannot hold a ~273px
+      // row left of that anchor. The phone right-anchors the TEXT at the
+      // region's right edge instead (widest honest berth, still inside
+      // the region at every width) while the leader keeps its referent,
+      // the band's right edge; the stack also lifts higher above the
+      // band so it clears the below-band chip rows and the tail
+      // bracket's row, and the row block takes the shared ground scrim
+      // so the leader and the equality diagonal read as passing behind
+      // it, never through it.
+      const bandEdgeX = Math.min(region.x + bandW, region.x + region.w - 8);
+      const anchorX = view.mobile ? region.x + region.w - 8 : bandEdgeX;
       const bandTopY = region.y + region.h - bandH;
-      const labelY = region.y + region.h - bandH - 76;
+      const labelY = region.y + region.h - bandH - (view.mobile ? 120 : 76);
       noveltyG.append('line')
-        .attr('x1', anchorX - 4).attr('y1', bandTopY)
-        .attr('x2', anchorX - 4).attr('y2', labelY + 6)
+        .attr('x1', bandEdgeX - 4).attr('y1', bandTopY)
+        .attr('x2', bandEdgeX - 4).attr('y2', labelY + 6)
         .attr('stroke', view.css('accent-annotation')).attr('stroke-width', 1.5);
       // Rank and total are read from the scene JSON every time -- never a
       // hardcoded number -- and the second line states what the rank
@@ -407,6 +554,26 @@ export default {
         .attr('fill', view.css('ink-mid'))
         .style('font', `var(--type-caption-size) var(--font-apparatus)`)
         .text('lit because it is surprising, not because it is big');
+      if (view.mobile) {
+        // One scrim behind the union of the three rows (not the leader:
+        // grp.getBBox() would include it and drag the scrim down to the
+        // band). Measured live, then the group hides below -- the same
+        // measure-then-hide order the coreG scrim relies on.
+        let ux0 = Infinity; let uy0 = Infinity; let ux1 = -Infinity; let uy1 = -Infinity;
+        noveltyG.selectAll('text').nodes().forEach((n) => {
+          const b = n.getBBox();
+          ux0 = Math.min(ux0, b.x); uy0 = Math.min(uy0, b.y);
+          ux1 = Math.max(ux1, b.x + b.width); uy1 = Math.max(uy1, b.y + b.height);
+        });
+        if (Number.isFinite(ux0)) {
+          noveltyG.insert('rect', 'text')
+            .attr('x', ux0 - 8).attr('y', uy0 - 4)
+            .attr('width', ux1 - ux0 + 16).attr('height', uy1 - uy0 + 8)
+            .attr('rx', 3)
+            .attr('fill', view.css('bg-canvas')).attr('opacity', 0.85);
+        }
+      }
+      noveltyG.style('display', 'none');
     }
 
       // Emphasis decay ledger (G4 "one-change-per-step"): step 1 shows
@@ -420,16 +587,16 @@ export default {
       step(beatId) {
         if (beatId === 'b1') {
           tailBracket.style('display', 'none');
-          coreLabel && coreLabel.style('display', 'none');
+          coreG && coreG.style('display', 'none');
           noveltyG && noveltyG.style('display', 'none');
           lorenzPath && lorenzPath.style('display', 'none');
-          giniCaption.style('display', 'none');
+          giniG.style('display', 'none');
           bandLabel.attr('fill', view.css('ink-mid'));
         } else if (beatId === 'b2') {
           tailBracket.style('display', null);
-          coreLabel && coreLabel.style('display', null);
+          coreG && coreG.style('display', null);
           lorenzPath && lorenzPath.style('display', null);
-          giniCaption.style('display', null);
+          giniG.style('display', null);
           bandLabel.transition().duration(dim).attr('fill', view.css('ink-low'));
         } else if (beatId === 'b3') {
           noveltyG && noveltyG.style('display', null);

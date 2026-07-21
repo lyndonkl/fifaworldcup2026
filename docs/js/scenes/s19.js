@@ -265,12 +265,17 @@ export default {
         .style('font', '12px var(--font-apparatus)')
         .text(text);
     }
-    function yAxisTitle(text) {
+    // MOBILE (390x844 DOM-geometry audit): the y title starts at region.x
+    // (48px on the phone) and a 12px full phrase can run past the 390px
+    // viewport edge (b3's ran 10px out). Callers with a long title pass a
+    // shortened mobile variant; the phone renders that, desktop keeps the
+    // full phrase.
+    function yAxisTitle(text, mobileText) {
       chartLayer.append('text').attr('class', 's19-y-title')
         .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff)
         .attr('fill', view.css('ink-mid'))
         .style('font', '12px var(--font-apparatus)')
-        .text(text);
+        .text(view.mobile && mobileText ? mobileText : text);
     }
     function fadeIn(sel) {
       if (view.reducedMotion) { sel.attr('opacity', 1); return sel; }
@@ -342,18 +347,33 @@ export default {
           if (view.reducedMotion) rect.attr('y', target.y).attr('height', target.height);
           else rect.transition().delay(stagger).duration(drawIn).attr('y', target.y).attr('height', target.height);
 
+          // MOBILE (390x844 DOM-geometry sweep, adjacent to the flagged
+          // defects): region.y is floored at 108 on the phone and a settled
+          // bar tops out a hair under it, so the above-bar "-20/-6" stack
+          // rose to y~88 -- straight through the Zone K caption row (HTML,
+          // top 72, so the svg-pair audit could not see the collision) and
+          // grazing the grain plate's ~64px bottom. When the stack has no
+          // honest headroom above the region top, the phone sets the value
+          // INSIDE the bar's top (ink-hi on the solid fill stays legible)
+          // and drops the tiny qualifier line -- secondary apparatus at
+          // this width: the caption and the key rows both already say
+          // frozen-vs-whistle. Desktop keeps the above-bar stack.
+          const clampInside = view.mobile && (y(v) - 34 < view.region.y);
           const label = bars.append('text')
-            .attr('x', bx + bw / 2).attr('y', y(v) - 20)
+            .attr('x', bx + bw / 2)
+            .attr('y', clampInside ? view.region.y + spacing[2] : y(v) - 20)
             .attr('text-anchor', 'middle')
             .attr('fill', solid ? view.css('ink-hi') : view.css('ink-mid'))
             .style('font', '13px var(--font-apparatus)')
             .text(fmt.cents(v));
-          bars.append('text')
-            .attr('x', bx + bw / 2).attr('y', y(v) - 6)
-            .attr('text-anchor', 'middle')
-            .attr('fill', view.css('ink-low'))
-            .style('font', '10.5px var(--font-apparatus)')
-            .text(qualifier);
+          if (!clampInside) {
+            bars.append('text')
+              .attr('x', bx + bw / 2).attr('y', y(v) - 6)
+              .attr('text-anchor', 'middle')
+              .attr('fill', view.css('ink-low'))
+              .style('font', '10.5px var(--font-apparatus)')
+              .text(qualifier);
+          }
           fadeIn(label);
         });
       });
@@ -373,7 +393,17 @@ export default {
       const spainSettled = rows[0].settled;
       if (spainSettled !== null && spainSettled !== undefined) {
         const ax = x0('Spain') + x1('settled') + x1.bandwidth() / 2;
-        const ay = Math.max(y(spainSettled) - 40, keyBottomY + spacing[2]);
+        // MOBILE: keyBottomY is -Infinity on the phone (the key lives
+        // bottom-right there), so the desktop floor was inert and the pill
+        // floated at y~68 -- over the Zone K caption row and under the
+        // grain plate's bottom edge. The phone floors it at region.y +
+        // spacing[6] (well inside the near-full-height settled bar), a
+        // clear line below the clamped in-bar value label above it.
+        const ay = Math.max(
+          y(spainSettled) - 40,
+          keyBottomY + spacing[2],
+          view.mobile ? view.region.y + spacing[6] : -Infinity,
+        );
         fadeIn(scrimText(bars, ax, ay, 'middle', view.css('accent-annotation'), 'the winner ticket paid', 600));
       }
 
@@ -485,8 +515,21 @@ export default {
         fadeIn(chartLayer.append('circle')
           .attr('cx', x(last.minute)).attr('cy', y(last.tie_price_c))
           .attr('r', 3.5).attr('fill', view.css('ink-hi')));
+        // MOBILE (390x844 DOM-geometry audit, svg-pair): above the endpoint
+        // this label shares the y-axis title's row -- y(99c) sits ~4px
+        // under region.y on the phone, so "- spacing[2]" landed the text
+        // right where the 12px title line runs from region.x (measured
+        // overlap 76x15px). The phone hangs it BELOW the endpoint instead:
+        // the settlement plateau is the top of the price scale, so the
+        // canvas under it (running leftward from the last tick, 'end'
+        // anchored) is clear down to the ~87c climb at every minute the
+        // label can span. Desktop keeps the above-the-line placement -- its
+        // title ends well left of the label's span there.
+        const settleLabelY = view.mobile
+          ? y(last.tie_price_c) + spacing[4]
+          : y(last.tie_price_c) - spacing[2];
         fadeIn(chartLayer.append('text')
-          .attr('x', x(last.minute) - spacing[1]).attr('y', y(last.tie_price_c) - spacing[2])
+          .attr('x', x(last.minute) - spacing[1]).attr('y', settleLabelY)
           .attr('text-anchor', 'end')
           .attr('fill', view.css('ink-hi')).style('font', '13px var(--font-apparatus)')
           .text(`settled at ${fmt.cents(last.tie_price_c)}`));
@@ -522,10 +565,20 @@ export default {
       const ext = d3.extent(gaps);
       const y = d3.scaleLinear().domain(ext).nice().range([y0, view.region.y]);
 
+      // MOBILE (390x844 DOM-geometry audit, svg-pairs): five full-phrase
+      // stage labels ("before the tournament" ... "after the quarterfinals")
+      // run ~110-145px each on a ~46px point-scale step, so every adjacent
+      // pair overlapped, up to 74px deep. At this width the interior
+      // checkpoint labels are secondary apparatus: the x-axis title already
+      // says "five checkpoints," the tick MARKS keep all five positions,
+      // and the prose names the count -- so the phone labels only the first
+      // and last checkpoints (which fit with ~45px clear between them) and
+      // blanks the middle three. Desktop keeps all five labels.
       styleAxis(
         chartLayer.append('g').attr('class', 's19-axis-x')
           .attr('transform', `translate(0,${y0})`)
           .call((view.mobile ? d3.axisTop(x) : d3.axisBottom(x)).tickFormat((id) => {
+            if (view.mobile && id !== ids[0] && id !== ids[ids.length - 1]) return '';
             const s = stages.find((st) => st.id === id);
             return humanizeStageLabel(s ? s.label : id);
           })),
@@ -538,7 +591,12 @@ export default {
         view.css('ink-mid'),
       );
       xAxisTitle('five checkpoints in the tournament (stage)');
-      yAxisTitle('market price minus model odds (percentage points, devigged)');
+      // MOBILE (390x844 DOM-geometry audit, edge): the full phrase ran 10px
+      // past the viewport's right edge from region.x = 48. The phone keeps
+      // the quantity phrase and shortens only the parenthetical -- "pp"
+      // matches the y ticks' own suffix.
+      yAxisTitle('market price minus model odds (percentage points, devigged)',
+        'market price minus model odds (pp, devigged)');
 
       chartLayer.append('line')
         .attr('x1', view.region.x).attr('x2', view.region.x + view.region.w)
@@ -642,7 +700,20 @@ export default {
       if (spain) {
         const by = yBand('Spain');
         const w = Math.max(0, x(spain.dollars) - (view.region.x + 90));
-        fadeIn(scrimText(bars, view.region.x + 90 + w + 8, by - 8, 'start',
+        // MOBILE (390x844 DOM-geometry audit, edge): start-anchored past the
+        // longest bar's tip, the text ran 67px off the viewport's right
+        // edge -- the tip itself is already within ~95px of it. The phone
+        // flips the anchor to 'end' at the tip so the text runs leftward
+        // over the clear row above the top bar (Spain is the first row;
+        // scrimText's backing rect keeps the amber legible where it crosses
+        // the bar's corner). Desktop keeps the start anchor: its berth
+        // right of the bar, below the KEY, is the placement the x-range
+        // comment above establishes.
+        const tipX = view.region.x + 90 + w;
+        fadeIn(scrimText(bars,
+          view.mobile ? tipX - spacing[1] : tipX + spacing[1],
+          by - 8,
+          view.mobile ? 'end' : 'start',
           view.css('accent-annotation'), `already the loudest of ${nb.n_markets || markets.length}`, 600));
       }
 
@@ -708,6 +779,27 @@ export default {
     };
   },
 
+  /* Layout-audit disposition (Gate-5 DOM-geometry sweep, desktop 1280x800 /
+   * 1440x900 / 1512x945): the one pair flagged at every s19 beat is the
+   * fixed #grain-plate over this scene's scrolling prose card (ix 381-464,
+   * iy 61 = the plate's full box inside the card's box). The audit stop
+   * sits PAST each beat's activation point (scrollY = beat top + 55% of
+   * the viewport height, audit_layout.py), a mid-transit frame where the
+   * card's center is already above the viewport's top edge — the card on
+   * its way out, not at its centered reading position (where its top rests
+   * hundreds of px below the plate; index.html's "S19 card-lane clearance"
+   * rules, 150vh/50vh, already guarantee each card clears the plate before
+   * the next beat rests). ACCEPTED, not repositioned: the plate is the
+   * upper element (--z-chip-and-grain-plate: 4 over --z-prose-card: 3,
+   * docs/design/tokens.css) and carries the deliberate scrim the design
+   * system prescribes for fixed chrome over scrolled-past prose — the
+   * 0.82-alpha fill + 8px backdrop blur on #grain-plate in index.html,
+   * the same accepted mechanism its text-collision sweep documents for
+   * #chip and .skip ("stops the bleed-through, the same way scrolling
+   * text is not readable under the KEY"). The audit is a pure box-pair
+   * intersection check and cannot see that occlusion. Nothing in this
+   * file positions either box; the only s19-side lever is shortening the
+   * narrated grain line below, which is content, not layout. */
   beats: [
     {
       id: 'b1',
@@ -756,7 +848,7 @@ export default {
     },
     {
       id: 'b4',
-      html: `<p>About eleven minutes after Spain&rsquo;s coronation settled, Kalshi opened a market on who wins the 2030 World Cup.${FN(25)} Eighty-two countries, priced before the confetti finished falling. Spain&rsquo;s ticket was already the loudest of them, about seven times the volume of the next-biggest country.${FN(25)}</p><p>The next belief was already trading before this one finished being read. Every market above, and this new one too, is still yours to check. The lab is open below.</p>`,
+      html: `<p>About eleven minutes after Spain&rsquo;s winner ticket settled, Kalshi listed a market on who wins the 2030 World Cup.${FN(25)} Eighty-two countries, priced before the confetti came down. Spain&rsquo;s ticket was the loudest of them right away, about seven times the volume of the next country down.${FN(25)}</p><p>The next belief was trading before this one was read to the end. Each market above, and this new one too, is still yours to check. The lab is open below.</p>`,
       trigger: 'step',
       chip: [
         { token: 'identity-crimson', glyph: 'block', label: "crimson = Spain's 2030 winner ticket" },

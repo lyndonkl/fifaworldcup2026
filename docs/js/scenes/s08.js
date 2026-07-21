@@ -89,6 +89,28 @@
  *      would paint over it; kick outcome is tick height (a make stands
  *      full height, a miss stops short); the regulation leg's terminal
  *      pin is labeled off price_at_whistle_c.
+ *
+ * Layout-audit fixes (2026-07 DOM-geometry round, s08 rows at 1280x800
+ * and 1512x945): (1) the x-axis title's baseline now derives from the
+ * measured bottom of the tallest tick label instead of a width-tuned
+ * y=28, clearing the 120'/135'/150' tick grazes at any stage width;
+ * (2) band labels are measured box-against-box with the full KEY
+ * exclusion rect (the old guard checked only their left edge) and
+ * either wrap to two lines in place or park below the axis on the
+ * measured title row -- "extra time, second half" no longer runs under
+ * the KEY panel at narrow desktop widths.
+ *
+ * Blind mobile-review fixes (2026-07 round, scored 5.5; main.js's
+ * scrub-deep KEY retreat past 60% is assumed chrome): (HIGH) on mobile
+ * the x-axis moves inside the region -- both lanes shrink to reserve a
+ * 34px axis band above region bottom (== the prose sheet's top), so the
+ * match clock keeps a readable scale on phones; desktop rows unchanged.
+ * (MEDIUM) the amber decay plate drops to its headline line at phone
+ * width (the goal-move figures stay in the guarded beat prose) and is
+ * measured so its bottom clears the settlement-pin label and the ADVANCE
+ * descriptor. (LOW) the Tah label row clamps on short mobile lanes so it
+ * cannot reach the kick strip. The mobile grain template shortens so the
+ * two-line plate keeps the match identity, tokens still live.
  */
 
 import {
@@ -213,7 +235,20 @@ export default {
   zoom: {
     key: 'gerpar',
     tagBit: 'ZOOM_GERPAR',
-    grainText: '1 dot = 1 trade · showing every {n}th of {count} trades · Germany-Paraguay, June 29',
+    // Blind mobile-review fix (2026-07 round): the mobile grain plate
+    // clamps to two lines, and the desktop template ellipsized away
+    // "Germany-Paraguay, June 29" -- the one clause naming the match.
+    // A getter keyed on main.js's own mobile predicate (W < 900, read
+    // live at each beat activation) serves a shorter template that keeps
+    // the match identity and the live {n}/{count} tokens; interpolation
+    // still runs through zoomGrainText(), so no count is ever hardcoded.
+    // The window guard keeps the module parseable/importable in Node.
+    get grainText() {
+      const mobile = typeof window !== 'undefined' && window.innerWidth < 900;
+      return mobile
+        ? '1 dot = 1 trade · every {n}th of {count} · Germany-Paraguay'
+        : '1 dot = 1 trade · showing every {n}th of {count} trades · Germany-Paraguay, June 29';
+    },
   },
 
   scales(data, view) {
@@ -222,7 +257,17 @@ export default {
     const winEnd = spec ? new Date(spec.window[1]).getTime() : Date.now();
     const x = d3.scaleUtc().domain([winStart, winEnd])
       .range([view.region.x, view.region.x + view.region.w]);
-    const laneH = view.region.h / 2;
+    // Blind mobile-review fix (2026-07 round, HIGH): the x-axis used to
+    // hang below region bottom (+8), which on the phone stage is exactly
+    // where the prose sheet starts (region bottom == sheet top, 62vh) --
+    // the piece's organizing match clock had no readable scale at all.
+    // On mobile the axis is budgeted INSIDE the region: both lanes give
+    // up half of a 34px axis band (ticks + title, compacted in overlay())
+    // that sits above region bottom. Desktop: axisBandH = 0, geometry
+    // byte-identical to the pre-fix layout.
+    const axisBandH = view.mobile ? 34 : 0;
+    const plotH = view.region.h - axisBandH;
+    const laneH = plotH / 2;
     const pad = laneH * 0.1;
     const yReg = d3.scaleLinear().domain([0, 100])
       .range([view.region.y + laneH - pad, view.region.y + pad]);
@@ -231,7 +276,10 @@ export default {
     registry.register('s08.x', x);
     registry.register('s08.yReg', yReg);
     registry.register('s08.yAdv', yAdv);
-    return { x, yReg, yAdv, laneH, laneTop: { reg: view.region.y, adv: view.region.y + laneH } };
+    return {
+      x, yReg, yAdv, laneH, plotH,
+      laneTop: { reg: view.region.y, adv: view.region.y + laneH },
+    };
   },
 
   layout(data, view) {
@@ -363,7 +411,13 @@ export default {
   },
 
   overlay(container, data, view, scales) {
-    const { x, yReg, yAdv, laneTop, laneH } = scales;
+    const { x, yReg, yAdv, laneTop, laneH, plotH } = scales;
+    // plotBottom is where the lanes end. Desktop: == region bottom (the
+    // axis still hangs +8 below, unchanged). Mobile: the 34px axis band
+    // (scales() budget) sits between plotBottom and region bottom, so
+    // full-height furniture (period bands, boundary dashes, the whistle
+    // line) must stop at plotBottom, not region bottom.
+    const plotBottom = view.region.y + plotH;
     const g = container.svg;
 
     // Whistle instant + kickoff instant, hoisted above the axis block so
@@ -402,11 +456,39 @@ export default {
     // SVG overlay (tokens.css --z-chip-and-grain-plate over --z-d3-overlay)
     // and reserves layout.key-exclusion-{w,h}-px there (the exact budget
     // s16.js's keyGutterRect() already codifies) -- a label drawn under it
-    // is not clipped, it is simply invisible, painted over. The last band
-    // (the shootout) lands in exactly that corner on this scene's own
-    // window, so its label is skipped rather than silently hidden.
+    // is not clipped, it is simply invisible, painted over.
+    const keyMargin = view.tokens.spacing_px[4] || 24;
     const keyX0 = view.mobile ? Infinity
-      : view.W - (view.tokens.spacing_px[4] || 24) - (view.tokens.layout['key-exclusion-w-px'] || 280);
+      : view.W - keyMargin - (view.tokens.layout['key-exclusion-w-px'] || 280);
+    // Layout-audit fix (2026-07 round, 1280x800 rows): the old guard tested
+    // only a label's LEFT edge against the exclusion (bx0 + 4 < keyX0), so
+    // a label that STARTED clear could still run under the KEY -- "extra
+    // time, second half" crossed the exclusion edge by 14px at the 1280
+    // stage width and was painted over. Every band label is now measured
+    // after render and tested box-against-box with the full reserved key
+    // rect (the same budget keyGutterRect() codifies), with an 8px
+    // standoff:
+    //   1. a single line on the shared label row is kept when it clears;
+    //   2. else the label wraps to two lines stacked UP off that same row
+    //      (the bottom line stays aligned with its neighbors; the top
+    //      line grows into open canvas above the region), kept when the
+    //      whole wrapped box clears;
+    //   3. else it parks below the axis on the title row (the shootout
+    //      band's existing MINOR (a) treatment), placed further down once
+    //      the measured axis-title baseline exists.
+    const keyRect = view.mobile ? null : {
+      x0: keyX0,
+      x1: view.W - keyMargin,
+      y0: keyMargin,
+      y1: keyMargin + (view.tokens.layout['key-exclusion-h-px'] || 132),
+    };
+    // bb is a getBBox() box {x,y,width,height}; zone is {x0,x1,y0,y1}.
+    const hitsZone = (bb, zone, pad) => bb.x < zone.x1 + pad
+      && bb.x + bb.width > zone.x0 - pad
+      && bb.y < zone.y1 + pad
+      && bb.y + bb.height > zone.y0 - pad;
+    const parkedLabels = []; // { xEnd, label } -- placed after the axis title
+    const mobileBandLabels = []; // { sel, bx1, label } -- resolved in the mobile pass below
     periodBands.forEach((band, bi) => {
       if (!band.start || !band.end) return;
       const b0 = new Date(band.start).getTime();
@@ -417,52 +499,198 @@ export default {
       if (bw <= 0) return;
       bandsG.append('rect')
         .attr('x', bx0).attr('width', bw)
-        .attr('y', view.region.y).attr('height', view.region.h)
+        .attr('y', view.region.y).attr('height', plotH)
         .attr('fill', 'var(--field-rest)')
         .attr('fill-opacity', bi % 2 === 0 ? 0.035 : 0.07);
       if (bi > 0) {
         bandsG.append('line')
           .attr('x1', bx0).attr('x2', bx0)
-          .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
+          .attr('y1', view.region.y).attr('y2', plotBottom)
           .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1)
           .attr('stroke-dasharray', '2,3').attr('stroke-opacity', 0.5);
       }
-      if (bw >= 44 && bx0 + 4 < keyX0) {
-        bandsG.append('text')
-          .attr('x', bx0 + 4).attr('y', view.region.y - 20)
-          .attr('font-family', 'var(--font-apparatus)')
-          .attr('font-size', 'var(--type-micro-size)')
-          .attr('fill', 'var(--ink-low)')
-          .text(band.label);
-      } else if (bw >= 44 && Number.isFinite(keyX0)) {
-        // Design-review MINOR (a): the shootout band opens under the KEY
-        // panel on desktop, so its in-plot label row would be painted
-        // over. Park the label below the axis line instead -- text-end
-        // under the band's own right edge, on the axis title's baseline
-        // row. The title is centered and this sits hard right, so the
-        // two clear each other at any desktop stage width.
-        bandsG.append('text')
-          .attr('x', bx1).attr('y', view.region.y + view.region.h + 8 + 28)
-          .attr('text-anchor', 'end')
-          .attr('font-family', 'var(--font-apparatus)')
-          .attr('font-size', 'var(--type-micro-size)')
-          .attr('fill', 'var(--ink-low)')
-          .text(band.label);
+      if (bw < 44) return;
+      const labelSel = bandsG.append('text')
+        .attr('x', bx0 + 4).attr('y', view.region.y - 20)
+        .attr('font-family', 'var(--font-apparatus)')
+        .attr('font-size', 'var(--type-micro-size)')
+        .attr('fill', 'var(--ink-low)')
+        .text(band.label);
+      let bb = null;
+      try { bb = labelSel.node().getBBox(); } catch (e) { bb = null; }
+      if (bb === null) {
+        // Unmeasurable (detached render): fall back to the legacy
+        // left-edge guard so behavior degrades to the pre-audit shape.
+        if (bx0 + 4 < keyX0) return;
+        labelSel.remove();
+        if (Number.isFinite(keyX0)) {
+          parkedLabels.push({
+            xEnd: Math.min(bx1, view.region.x + view.region.w),
+            label: band.label,
+          });
+        }
+        return;
       }
+      if (view.mobile) {
+        // Mobile (2026-07 390x844 DOM-geometry audit): no KEY exclusion
+        // exists at this width, so the ladder below never ran and every
+        // band label kept the shared row -- where the narrow stage ran
+        // three of them together. Collect for the measured right-to-left
+        // pass after this loop instead.
+        mobileBandLabels.push({ sel: labelSel, bx1, label: band.label });
+        return;
+      }
+      if (!keyRect || !hitsZone(bb, keyRect, 8)) return; // clears the KEY
+      // Step 2: two-line wrap, stacked upward off the shared label row.
+      const words = String(band.label).split(/\s+/);
+      if (words.length > 1) {
+        const lineH = Math.max(12, Math.round(bb.height * 1.15));
+        for (let k = words.length - 1; k >= 1; k--) {
+          labelSel.text(null);
+          labelSel.append('tspan')
+            .attr('x', bx0 + 4).attr('y', view.region.y - 20 - lineH)
+            .text(words.slice(0, k).join(' '));
+          labelSel.append('tspan')
+            .attr('x', bx0 + 4).attr('y', view.region.y - 20)
+            .text(words.slice(k).join(' '));
+          let wbb = null;
+          try { wbb = labelSel.node().getBBox(); } catch (e) { wbb = null; }
+          if (wbb && !hitsZone(wbb, keyRect, 8)) return; // wrapped fit
+        }
+      }
+      // Step 3: no in-plot placement clears the KEY; park below the axis.
+      labelSel.remove();
+      parkedLabels.push({
+        xEnd: Math.min(bx1, view.region.x + view.region.w),
+        label: band.label,
+      });
     });
 
+    // Mobile band-label pass (2026-07 390x844 DOM-geometry audit): at this
+    // width the shared row ran "extra time, first half" 56px into "extra
+    // time, second half", which ran 46px into "penalty shootout", itself
+    // 4px past the viewport's right edge. Resolution is measured
+    // right-to-left so the shootout -- the climax the beat copy sends the
+    // reader to -- always wins the row (the same precedence the
+    // parkedLabels loop below already encodes for desktop):
+    //   1. a label overrunning the region clamps text-anchor:end to its
+    //      band's own right edge (the parked-label clamp, applied
+    //      in-plot);
+    //   2. a label colliding with one already kept retries as the store
+    //      label's own leading clause (the text before its first comma:
+    //      "extra time, first half" -> "extra time") -- a data-derived
+    //      cut, no invented copy;
+    //   3. still colliding, it drops -- the band's shading and dashed
+    //      boundary stay, the same degradation the bw < 44 guard already
+    //      applies to bands too narrow to label.
+    if (view.mobile && mobileBandLabels.length) {
+      const regionRight = view.region.x + view.region.w;
+      const keptBoxes = [];
+      const measureSel = (sel) => {
+        try { return sel.node().getBBox(); } catch (e) { return null; }
+      };
+      const collides = (bb) => keptBoxes.some((k) => hitsZone(bb, {
+        x0: k.x, x1: k.x + k.width, y0: k.y, y1: k.y + k.height,
+      }, 8));
+      mobileBandLabels.slice().reverse().forEach((m) => {
+        let bb = measureSel(m.sel);
+        if (!bb) return; // detached render: leave the label untouched
+        if (bb.x + bb.width > regionRight) {
+          m.sel.attr('text-anchor', 'end')
+            .attr('x', Math.min(m.bx1, regionRight));
+          bb = measureSel(m.sel) || bb;
+        }
+        if (collides(bb)) {
+          const clause = String(m.label).split(',')[0].trim();
+          if (clause && clause !== String(m.label)) {
+            m.sel.text(clause);
+            bb = measureSel(m.sel) || bb;
+          }
+          if (collides(bb)) { m.sel.remove(); return; }
+        }
+        keptBoxes.push(bb);
+      });
+    }
+
+    // Blind mobile-review fix (2026-07 round, HIGH): on mobile the axis
+    // row moves INSIDE the region, onto the 34px band scales() reserved
+    // below the shrunk lanes (translate at plotBottom, no +8 drop), with
+    // compacted tick metrics (tickSize 4, padding 2) and a tighter title
+    // gap so ticks + title fit the band above the prose sheet's top edge
+    // (== region bottom on the phone stage). Desktop keeps the original
+    // below-region row and d3 default metrics, unchanged.
     const axisG = g.append('g')
-      .attr('transform', `translate(0,${view.region.y + view.region.h + 8})`)
+      .attr('transform', `translate(0,${view.mobile ? plotBottom : view.region.y + view.region.h + 8})`)
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-micro-size)')
-      .call(d3.axisBottom(x).ticks(6).tickFormat(matchMinuteLabel));
-    axisG.append('text')
-      .attr('x', view.region.x + view.region.w / 2).attr('y', 28)
+      .call(view.mobile
+        ? d3.axisBottom(x).ticks(6).tickSize(4).tickPadding(2).tickFormat(matchMinuteLabel)
+        : d3.axisBottom(x).ticks(6).tickFormat(matchMinuteLabel));
+    // Layout-audit fix (2026-07 round, 1280x800 + 1512x945 rows): the
+    // title's y=28 was a constant tuned at one width, and whenever a tick
+    // label (120', 135', 150') landed inside the centered title's span the
+    // two em boxes grazed by ~4px. The baseline now derives from the
+    // measured bottom edge of the tallest tick label plus one spacing_px
+    // step of clearance plus the title's own measured ascent, so the
+    // standoff holds at every stage width without a width-tuned constant.
+    // Mobile fallback matches the compacted metrics (tickSize 4 + padding
+    // 2 + micro line) so an unmeasurable render still fits the 34px band.
+    let tickBottom = view.mobile ? 16 : 21; // ~ tickSize + padding + micro line
+    axisG.selectAll('.tick text').each(function measureTick() {
+      try {
+        const b = this.getBBox();
+        if (b.y + b.height > tickBottom) tickBottom = b.y + b.height;
+      } catch (e) { /* keep fallback */ }
+    });
+    // Mobile: 2px, not a spacing step -- the measured chain (tickBottom +
+    // gap + title ascent + descent) must total under the 34px band.
+    const titleGap = view.mobile ? 2 : (view.tokens.spacing_px[1] || 8);
+    const axisTitle = axisG.append('text')
+      .attr('x', view.region.x + view.region.w / 2).attr('y', 0)
       .attr('text-anchor', 'middle')
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-caption-size)')
       .attr('fill', 'var(--ink-mid)')
       .text('match clock (minutes, wall time since kickoff)');
+    let axisTitleY = tickBottom + titleGap + 11; // fallback ascent
+    let titleBB = null;
+    try {
+      titleBB = axisTitle.node().getBBox(); // measured at y=0: bbox.y = -ascent
+      axisTitleY = tickBottom + titleGap - titleBB.y;
+    } catch (e) { /* keep fallback */ }
+    axisTitle.attr('y', axisTitleY);
+    // Parked band labels (step 3 of the band-label ladder above): text-end
+    // under the band's own right edge, sharing the measured title baseline
+    // (the shootout band's pre-existing below-axis treatment, now on the
+    // title's real row instead of a second hand-tuned y). Placed
+    // right-to-left so the latest band -- the shootout, the climax under
+    // the KEY -- wins the row; each earlier label keeps only if it clears
+    // both the centered title and every label already kept, measured at
+    // this exact width. A label with no honest berth is dropped rather
+    // than painted over (the same degradation the bw >= 44 guard already
+    // applies to narrow bands).
+    let parkedLeftEdge = Infinity;
+    parkedLabels.slice().reverse().forEach((p) => {
+      const sel = axisG.append('text')
+        // Clamp to the region's right edge: on the 390px mobile audit the
+        // shootout band's parked label ended 3px off-screen.
+        .attr('x', Math.min(p.xEnd, view.region.x + view.region.w))
+        .attr('y', axisTitleY)
+        .attr('text-anchor', 'end')
+        .attr('font-family', 'var(--font-apparatus)')
+        .attr('font-size', 'var(--type-micro-size)')
+        .attr('fill', 'var(--ink-low)')
+        .text(p.label);
+      let keep = true;
+      try {
+        const b = sel.node().getBBox();
+        const tb = titleBB || axisTitle.node().getBBox();
+        if (b.x < tb.x + tb.width + 8 && b.x + b.width > tb.x - 8) keep = false;
+        if (b.x + b.width > parkedLeftEdge - 8) keep = false;
+        if (keep) parkedLeftEdge = Math.min(parkedLeftEdge, b.x);
+      } catch (e) { /* unmeasurable: keep, mirroring the legacy path */ }
+      if (!keep) sel.remove();
+    });
 
     // Dual price axes: one per lane, each with its own horizontal title
     // (G3: y titles are never rotated).
@@ -472,7 +700,7 @@ export default {
     // Titles sit 22px (not 10px) below each lane's top so they clear the
     // "REGULATION ·" / "ADVANCE ·" descriptor line 6px above the lane,
     // which the tighter spacing let them run into (perception-brief P4).
-    g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.reg + 22)
+    const regTitle = g.append('text').attr('x', view.region.x - 8).attr('y', laneTop.reg + 22)
       .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
       .attr('fill', 'var(--ink-mid)').text('regulation-market price (cents)');
     g.append('g').attr('transform', `translate(${view.region.x - 8},0)`)
@@ -543,14 +771,46 @@ export default {
       const wx = x(whistleTs);
       whistleG.append('line')
         .attr('x1', wx).attr('x2', wx)
-        .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
+        .attr('y1', view.region.y).attr('y2', plotBottom)
         .attr('stroke', 'var(--ink-hero)').attr('stroke-width', 1.5);
-      whistleG.append('text').attr('x', wx + 6).attr('y', view.region.y + 12)
+      const wLabelMain = whistleG.append('text').attr('x', wx + 6).attr('y', view.region.y + 12)
         .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-annotation-size)')
         .attr('fill', 'var(--ink-hero)').text('final whistle of regulation');
-      whistleG.append('text').attr('x', wx + 6).attr('y', view.region.y + 27)
+      const wLabelSub = whistleG.append('text').attr('x', wx + 6).attr('y', view.region.y + 27)
         .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
         .attr('fill', 'var(--ink-mid)').text('(with stoppage)');
+      // Mobile lift (2026-07 390x844 DOM-geometry audit): the narrow
+      // stage puts the whistle line only ~29% into the region, so this
+      // label pair rendered straight through the regulation lane's
+      // y-title (88px of x-overlap on both lines). Measured
+      // box-against-box with the same hitsZone the band ladder uses:
+      // when either label intersects the title's box, the pair drops as
+      // a unit to just below the title's measured bottom edge (keeping
+      // its own row spacing), landing in the dead stretch of the
+      // regulation lane right of the whistle -- the leg is settled
+      // there, and the decay card sits lower still at laneH * 0.4. No
+      // width-tuned mobile y; a stage where the title and the whistle
+      // labels never meet keeps the desktop rows untouched. whistleG is
+      // display:none until the scrub reveals it, and a hidden SVG node
+      // has no box to measure, so the guard unhides for the measurement
+      // and re-hides after (synchronous, so nothing paints in between).
+      if (view.mobile) {
+        whistleG.style('display', null);
+        try {
+          const tb = regTitle.node().getBBox();
+          const tz = { x0: tb.x, x1: tb.x + tb.width, y0: tb.y, y1: tb.y + tb.height };
+          const mainBB = wLabelMain.node().getBBox();
+          const subBB = wLabelSub.node().getBBox();
+          if (hitsZone(mainBB, tz, 4) || hitsZone(subBB, tz, 4)) {
+            const dy = (tb.y + tb.height + titleGap) - Math.min(mainBB.y, subBB.y);
+            if (dy > 0) {
+              wLabelMain.attr('y', +wLabelMain.attr('y') + dy);
+              wLabelSub.attr('y', +wLabelSub.attr('y') + dy);
+            }
+          }
+        } catch (e) { /* unmeasurable: keep the desktop rows */ }
+        whistleG.style('display', 'none');
+      }
       // Design-review MINOR (c): the regulation leg's terminal pin reads
       // as a detached dash at the bottom of the lane; name it so the
       // fragment is claimed. The figure is the STORE's own settlement
@@ -587,7 +847,17 @@ export default {
       // keeps drawing, so it gets the same getBBox()-measured scrim other
       // scenes use for a label that cannot be guaranteed a clear patch of
       // canvas (see s10.js's scrimmedLabel()).
-      const labelY = laneTop.adv + 120;
+      // Mobile re-verify (2026-07 blind round, LOW): with scrub-deep now
+      // sliding the KEY away past 60% and the lanes shrunk for the axis
+      // band, this label's reveal moment (cutoff >= peak_ts, ~t 0.66+)
+      // lands in open advance-lane air at 390x844 (row ~419, kick-strip
+      // top ~471, sheet top ~523). The min() clamp only engages on lanes
+      // short enough (laneH < 164) that a fixed 120 would run the label
+      // into the kick strip and the deciding-kick callout row at
+      // laneH - 30; desktop (laneH >= 164 at every stage size) keeps the
+      // original 120 row untouched.
+      const labelY = laneTop.adv
+        + (view.mobile ? Math.min(120, Math.round(laneH - 44)) : 120);
       spikeG.append('line')
         .attr('x1', sx).attr('x2', sx)
         .attr('y1', sy + 5).attr('y2', labelY - 16)
@@ -691,17 +961,54 @@ export default {
       view.region.x + view.region.w,
     ) - 12;
     const capMaxWPx = Math.max(120, Math.round(capRightEdge - capLeft));
+    // Blind mobile-review fix (2026-07 round, MEDIUM): at phone width the
+    // full two-line plate wrapped tall enough to overrun its shortened
+    // lane -- it occluded the "settles 1c" pin label and clipped the
+    // "ADVANCE ·" lane descriptor. Mobile keeps the amber headline line
+    // only (the second line's goal-move figures stay in the beat prose a
+    // reader has just scrolled past, and check_figure_sync.py's
+    // s08-goal-move-*-sync slots guard that prose copy against the same
+    // R4_* constants this template reads). Both lines still read the R4_*
+    // constants live -- nothing here is hand-typed.
+    const capTopY = laneTop.reg + laneH * 0.4;
     const decayCaption = pinnedCaption(
       container,
       '',
       's08-decay-caption',
-    ).style('left', `${capLeft}px`).style('top', `${laneTop.reg + laneH * 0.4}px`)
+    ).style('left', `${capLeft}px`).style('top', `${capTopY}px`)
       .style('max-width', `min(46ch, ${capMaxWPx}px)`)
       .style('background', 'color-mix(in srgb, var(--bg-card) 85%, transparent)')
       .html(
         `<div style="color:var(--accent-annotation)">settling out: never faster than ${R4_DECAY_MAX_C_PER_MIN} cents a minute</div>`
-        + `<div style="color:var(--ink-mid); margin-top:4px">a real goal moves ${R4_GOAL_MOVE_LO_C} to ${R4_GOAL_MOVE_HI_C} cents in ${R4_GOAL_MOVE_WINDOW_S} seconds</div>`,
+        + (view.mobile ? ''
+          : `<div style="color:var(--ink-mid); margin-top:4px">a real goal moves ${R4_GOAL_MOVE_LO_C} to ${R4_GOAL_MOVE_HI_C} cents in ${R4_GOAL_MOVE_WINDOW_S} seconds</div>`),
       );
+    // Measured mobile placement guard (same MEDIUM item): even the
+    // one-line plate can wrap on the narrowest stages (capMaxWPx tracks
+    // the whistle position), so the rendered plate is measured -- unhidden
+    // invisibly, synchronously, the whistleG trick above -- and shifted up
+    // if its bottom would cross the settlement-pin label's top
+    // (yReg(price_at_whistle_c) - 16 ~= baseline minus micro ascent) or
+    // the ADVANCE descriptor's top (laneTop.adv - 15), with 4px standoff.
+    // The floor keeps it below the regulation y-title row. Desktop never
+    // enters this branch.
+    if (view.mobile) {
+      const capNode = decayCaption.node();
+      capNode.style.visibility = 'hidden';
+      capNode.style.display = 'block';
+      const plateH = capNode.offsetHeight || 0;
+      capNode.style.display = 'none';
+      capNode.style.visibility = '';
+      const settlePinC = data.scene && data.scene.price_at_whistle_c;
+      const clearBottom = Math.min(
+        settlePinC != null ? yReg(settlePinC) - 16 : Infinity,
+        laneTop.adv - 15,
+      ) - 4;
+      if (plateH && capTopY + plateH > clearBottom) {
+        decayCaption.style('top',
+          `${Math.max(laneTop.reg + 30, clearBottom - plateH)}px`);
+      }
+    }
 
     // One continuous scrub track (storyboard's single Beat/Scroll spec),
     // annotations gated per-moment (design-review MAJOR-2): the old

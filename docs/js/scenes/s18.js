@@ -549,18 +549,50 @@ export default {
       .attr('x2', exemplar.x + 32).attr('y2', exemplar.y)
       .style('stroke', view.css('accent-annotation'))
       .style('stroke-width', view.tokens.layout['annotation-leader-weight-px']);
+    const singletonLabelX = exemplar.x + 38;
     const singletonLabel = singleton.append('text').attr('class', 'label')
-      .attr('x', exemplar.x + 38).attr('y', exemplar.y).attr('dy', '0.32em')
+      .attr('x', singletonLabelX).attr('y', exemplar.y)
       .style('fill', view.css('accent-annotation'))
       .style('font-family', view.css('font-apparatus'))
-      .style('font-size', view.css('type-annotation-size'))
-      .text('still open — explore it below');
-    const singletonBB = singletonLabel.node().getBBox();
-    singleton.insert('rect', 'text.label').attr('class', 'label-scrim')
-      .attr('x', singletonBB.x - 6).attr('y', singletonBB.y - 4)
-      .attr('width', singletonBB.width + 12).attr('height', singletonBB.height + 8)
-      .attr('rx', 3)
-      .style('fill', view.css('bg-card-composite-cap')).style('opacity', 0.85);
+      .style('font-size', view.css('type-annotation-size'));
+    // Mobile (2026-07 390x844 DOM-geometry audit): the one-line label ran
+    // 41px past the viewport's right edge (start-anchored at W*0.52 + 38,
+    // ~190px of 15px Inter against a 390px viewport). Wrap at its own
+    // em dash into two tspans on the same anchor — the s01
+    // pretitle-caption pattern — so the longest line ("explore it below")
+    // ends well inside view.region; desktop keeps the one-line lane.
+    if (view.mobile) {
+      singletonLabel.append('tspan')
+        .attr('x', singletonLabelX).attr('dy', '-0.26em').text('still open —');
+      singletonLabel.append('tspan')
+        .attr('x', singletonLabelX).attr('dy', '1.15em').text('explore it below');
+    } else {
+      singletonLabel.attr('dy', '0.32em').text('still open — explore it below');
+    }
+    // Measured clamp (s08 parked-label pattern): if the label block still
+    // crosses the stage region's right edge at some other width, shift it
+    // left by the measured overflow — floored at the halo's own edge so
+    // the label can never back over the dot it names. Runs before the
+    // scrim bbox is taken, so the scrim tracks the final placement.
+    let singletonBB = null;
+    try { singletonBB = singletonLabel.node().getBBox(); } catch (e) { singletonBB = null; }
+    if (singletonBB) {
+      const regionRight = view.region.x + view.region.w;
+      const overflow = singletonBB.x + singletonBB.width - regionRight;
+      const maxShift = singletonLabelX
+        - (exemplar.x + view.tokens.dot['radius-annotated-halo-px']);
+      const dx = Math.min(Math.max(overflow, 0), Math.max(maxShift, 0));
+      if (dx > 0) {
+        singletonLabel.attr('x', singletonLabelX - dx);
+        singletonLabel.selectAll('tspan').attr('x', singletonLabelX - dx);
+        try { singletonBB = singletonLabel.node().getBBox(); } catch (e) { /* keep prior bbox */ }
+      }
+      singleton.insert('rect', 'text.label').attr('class', 'label-scrim')
+        .attr('x', singletonBB.x - 6).attr('y', singletonBB.y - 4)
+        .attr('width', singletonBB.width + 12).attr('height', singletonBB.height + 8)
+        .attr('rx', 3)
+        .style('fill', view.css('bg-card-composite-cap')).style('opacity', 0.85);
+    }
 
     /* -------- Fade-up entry (design-system.md §9 S18: 800ms) -------- */
     function reveal() {

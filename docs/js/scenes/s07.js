@@ -309,19 +309,58 @@ export default {
     // Shared clock axis (the anti-race guarantee lives in the glyphs and
     // the pinned caption below, NOT in de-aligning the lanes -- the
     // suspend-and-repost story needs one time base).
+    //
+    // Layout-audit fix (1280x800 + 1512x945, every s07 stop): the old
+    // fixed `y = 28` BASELINE put this axis title's rendered box 4px into
+    // the "+800s"/"+1000s" tick labels' boxes. Same defect class s01.js's
+    // placeClockTitle() already closed, so this reuses its idiom -- the
+    // title's TOP edge derives from the axis group's own rendered bbox
+    // plus the standard annotation standoff token, so the two boxes
+    // cannot intersect at any viewport width and no width-specific
+    // constant is needed. One extra constraint s01 does not have:
+    // mechanismCaption's Zone F slot top sits at region bottom + 44
+    // (below) and shares this title's x-range at narrow desktop widths,
+    // so the title cannot simply drop into the freed space. Instead the
+    // axis group moves up (+8 -> +4) and the tick glyphs shrink
+    // (tickSize 4 / tickPadding 2) so the full standoff fits INSIDE the
+    // caption slot's own 44px budget, clear on both sides.
+    const axisOriginY = view.region.y + view.region.h + 4;
     const axisG = g.append('g')
-      .attr('transform', `translate(0,${view.region.y + view.region.h + 8})`)
+      .attr('transform', `translate(0,${axisOriginY})`)
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-micro-size)')
-      .call(d3.axisBottom(x).ticks(8).tickFormat((d) => `${d >= 0 ? '+' : ''}${d}s`));
-    axisG.append('text')
+      .call(d3.axisBottom(x).ticks(8).tickSize(4).tickPadding(2)
+        .tickFormat((d) => `${d >= 0 ? '+' : ''}${d}s`));
+    const titleStandoff = tokens.layout['annotation-leader-standoff-px'];
+    // Fallback = the depth this axis draws by construction (tick line 4 +
+    // padding 2 + d3's 0.71em shift of 12px micro text), used only if the
+    // svg were detached and getBBox could not measure -- not a live path:
+    // the overlay svg is always rendered when overlay() runs (same note
+    // as s01.js's placeClockTitle()).
+    let axisDepth = 15;
+    try {
+      const abb = axisG.node().getBBox();
+      if (abb && abb.height > 0) axisDepth = abb.y + abb.height;
+    } catch (e) { /* keep fallback */ }
+    const axisTitle = g.append('text').attr('class', 'axis-title')
       .attr('x', view.region.x + view.region.w / 2)
-      .attr('y', 28)
+      .attr('y', 0)
       .attr('text-anchor', 'middle')
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-caption-size)')
       .attr('fill', 'var(--ink-mid)')
       .text('seconds after the goal');
+    // Placed by the title's own measured box, keeping the alphabetic
+    // baseline (no dominant-baseline:hanging, whose per-font offset
+    // varies enough to reopen the same graze): with y=0 the bbox top is
+    // -ascent, so baseline = top-target + ascent puts the measured TOP
+    // edge exactly axisDepth + standoff below the axis origin.
+    let titleAscent = 11; // caption-size ink ascent, fallback only
+    try {
+      const tbb = axisTitle.node().getBBox();
+      if (tbb && tbb.height > 0) titleAscent = -tbb.y;
+    } catch (e) { /* keep fallback */ }
+    axisTitle.attr('y', axisOriginY + axisDepth + titleStandoff + titleAscent);
 
     // FIX #3: a labeled 0-100c price axis per lane (same d3.axisLeft-in-the-
     // left-margin idiom s08.js already ships), so "plus or minus 2 cents"
@@ -642,13 +681,38 @@ export default {
             .attr('height', Math.max(1, yK(Math.max(0, win.level - band)) - yK(Math.min(100, win.level + band))))
             .attr('fill', 'none')
             .attr('stroke', 'var(--accent-annotation)').attr('stroke-width', 1);
-          bandG.append('text')
-            .attr('x', bx1 - 6).attr('y', yK(win.level) - 6)
+          // MOBILE-AUDIT FIX (390x844 DOM-geometry round): end-anchored at
+          // bx1 - 6, this label's ~200px box ran 96px past the viewport's
+          // LEFT edge -- the band's right edge sits at x~113 on a 390px
+          // stage, and left of it is the screen edge, not canvas. Nor can
+          // the label sit to the band's right at band height: the NOR
+          // line's 63c->78c drift (the very escape the band-end rule
+          // marks) crosses exactly that corridor, so any same-row
+          // placement strikes text through the price line. On mobile the
+          // label takes the one slot this audit itself proved clean at
+          // this width: the right-anchored row (region right - 12,
+          // laneH * 0.55) held by the "spike" message below, whose
+          // strictly WIDER box measured collision-free (no pair, no edge)
+          // in the same capture -- that message is mobile-dropped in its
+          // own fix just after, so the row is free. Amber still binds
+          // label to band: nothing else in the lane carries
+          // accent-annotation once b2 demotes the goal halo to ink-mid.
+          // Desktop placement is untouched.
+          const frictionLabel = bandG.append('text')
             .attr('text-anchor', 'end')
             .attr('font-family', 'var(--font-apparatus)')
             .attr('font-size', 'var(--type-annotation-size)')
             .attr('fill', 'var(--accent-annotation)')
             .text('plus or minus 2 cents: friction');
+          if (view.mobile) {
+            frictionLabel
+              .attr('x', view.region.x + view.region.w - 12)
+              .attr('y', laneTop.K + laneH * 0.55);
+          } else {
+            frictionLabel
+              .attr('x', bx1 - 6)
+              .attr('y', yK(win.level) - 6);
+          }
           if (win.breakoutS !== null) {
             const cliffX = x(win.breakoutS);
             bandG.append('line')
@@ -666,14 +730,26 @@ export default {
         // FIX #4 continued: the fade message renders in the K lane's own
         // open canvas (far right, clear of the line/band/cliff marker)
         // instead of a third pinned caption -- see the note above bandG.
-        bandG.append('text')
-          .attr('x', view.region.x + view.region.w - 12)
-          .attr('y', laneTop.K + laneH * 0.55)
-          .attr('text-anchor', 'end')
-          .attr('font-family', 'var(--font-apparatus)')
-          .attr('font-size', 'var(--type-annotation-size)')
-          .attr('fill', 'var(--ink-hi)')
-          .text('The spike is the price. Nothing to fade.');
+        //
+        // MOBILE-AUDIT FIX, continued: desktop-only. At 390px the lane
+        // cannot hold two right-anchored sentences without stacking their
+        // boxes ~8px apart, and this is the one canvas text b4's own
+        // prose already states verbatim ("The spike is the price.
+        // Remember that..."), so the work order's judgment rule applies:
+        // the duplicated commentary yields its measured-clean slot to the
+        // friction label above (the band's referent, which prose cites --
+        // "held within about two cents" -- but does not restate).
+        // Desktop keeps both texts exactly as blind-reviewed.
+        if (!view.mobile) {
+          bandG.append('text')
+            .attr('x', view.region.x + view.region.w - 12)
+            .attr('y', laneTop.K + laneH * 0.55)
+            .attr('text-anchor', 'end')
+            .attr('font-family', 'var(--font-apparatus)')
+            .attr('font-size', 'var(--type-annotation-size)')
+            .attr('fill', 'var(--ink-hi)')
+            .text('The spike is the price. Nothing to fade.');
+        }
         fadeIn(bandG);
         tweenStyle(mechanismCaption, 'color', 'var(--ink-low)');
       }
