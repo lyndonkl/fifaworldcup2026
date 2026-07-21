@@ -103,8 +103,22 @@ function computeView() {
   const mobile = W < 900;
   // Stage rect per design-system §4: desktop right ~64% with 8% margins
   // (the left rail owns 480px + 48px inset); mobile top ~62vh.
+  // Mobile floors (final-polish layout audit at 390x844): a bare 6%
+  // margin put region.x at 23px, so every scene's left-of-axis tick
+  // labels ("100¢", axis titles) rendered up to 25px off-screen left --
+  // 48px clears the widest live label ("100¢" was still 4px out at 44).
+  // Same story vertically: region.y at 50px sat scene kickers, axis
+  // titles, and s08's period-band row underneath the fixed grain plate
+  // (measured bottom ~64px on the two-line mobile clamp, grazes seen up
+  // to 15px deep at a 96px floor); 108px clears every measured row. The
+  // region BOTTOM stays exactly where it was (62vh, the prose sheet's
+  // top edge), so only the stage's own height absorbs the shift.
   const region = mobile
-    ? { x: W * 0.06, y: H * 0.06, w: W * 0.88, h: H * 0.56 }
+    ? (() => {
+        const mx = Math.max(W * 0.06, 48);
+        const my = Math.max(H * 0.06, 108);
+        return { x: mx, y: my, w: W - mx - W * 0.06, h: H * 0.62 - my };
+      })()
     : { x: W * 0.36 + W * 0.64 * 0.08, y: H * 0.08, w: W * 0.64 * 0.84, h: H * 0.84 };
   view = {
     W, H,
@@ -508,6 +522,42 @@ function buildRail() {
     }
     railEl.appendChild(section);
   }
+  watchMobileCardSpotlight();
+}
+
+/* Mobile card spotlight (final-polish reader feedback): on the phone the
+ * bottom-sheet card sits directly over the full-viewport particle field,
+ * and the two fight for attention. While any STEP-beat card is on screen
+ * the stage fades down and the card gets the light; scroll the card out
+ * and the stage comes back up for the animation between cards. The CSS
+ * side lives in index.html under the max-width:900px block
+ * (body.mobile-card-lit #stage). Scrub-track cards are deliberately
+ * excluded: their card stays pinned for the whole tick-level zoom, and
+ * dimming the tape for the entire scrub would kill the very scenes the
+ * piece zooms in for -- readability there is carried by the sheet's own
+ * near-opaque mobile background instead. Reduced-motion keeps the
+ * opacity crossfade (the piece's allowed transition class). */
+let spotlightIO = null;
+function watchMobileCardSpotlight() {
+  const mq = window.matchMedia('(max-width: 900px)');
+  const visible = new Set();
+  const apply = () => {
+    document.body.classList.toggle(
+      'mobile-card-lit', mq.matches && visible.size > 0);
+  };
+  if (spotlightIO) spotlightIO.disconnect();
+  spotlightIO = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) visible.add(e.target);
+      else visible.delete(e.target);
+    }
+    apply();
+  }, { threshold: 0.05 });
+  for (const entry of BEAT_INDEX) {
+    if (!entry.scrub) spotlightIO.observe(entry.card);
+  }
+  // Crossing the breakpoint either way re-evaluates without a scroll.
+  mq.addEventListener('change', apply);
 }
 
 /* ---------------------------------------------------------------- */
@@ -599,6 +649,9 @@ function activateBeat(entry) {
   const key = `${entry.scene.id}/${entry.beat.id}`;
   if (key === activeBeatKey) return;
   activeBeatKey = key;
+  // Leaving a scrub track for a step beat brings the mobile KEY back
+  // (see driveScrub's scrub-deep retreat).
+  if (!entry.scrub) document.body.classList.remove('scrub-deep');
   enterScene(entry.scene);
   const beat = entry.beat;
 
@@ -689,6 +742,19 @@ function driveScrub(entry) {
   const r = el.getBoundingClientRect();
   const total = el.offsetHeight - window.innerHeight;
   const raw = total > 0 ? Math.min(Math.max(-r.top / total, 0), 1) : 1;
+
+  // Mobile scrub-deep KEY retreat (final-polish blind mobile round): on a
+  // phone the KEY panel floats over the stage band where the scrub scenes'
+  // late-tape climaxes land (s02's June-11 wall + you-are-here + axis
+  // tail; s08's Tah spike label, deciding-kick callout, and kick strip
+  // were all painting behind it). By 60% of a scrub track the palette has
+  // been on screen the whole time; the panel slides away so the climax
+  // annotations own that band, and slides back on scroll-up or at the
+  // next step beat (activateBeat clears the class). Desktop is untouched,
+  // and the CSS transition is an allowed transform crossfade. Placed
+  // before the reduced-motion early return so both paths get it, keyed
+  // on raw (the honest scroll position, not the smoothed lerp).
+  document.body.classList.toggle('scrub-deep', view.mobile && raw > 0.6);
 
   if (reducedMotion) {
     // Stepped keyframe crossfades: snap to the nearest keyframe end state.
