@@ -484,6 +484,25 @@ def main():
 
     shots = []
     failures = []
+    # --keep-existing kept the PNGs but write_index() then rewrote index.json
+    # from this empty list, silently dropping every other scene's rows (bitten
+    # in the Gate-5 fix round: an s08-only re-capture emptied s09-s14 from the
+    # index while their PNGs sat on disk). Seed from the existing index, minus
+    # the scenes this run will re-shoot, so a partial run merges instead of
+    # truncating.
+    if args.keep_existing and INDEX_PATH.exists():
+        recapturing = ({s.strip() for s in args.scenes.split(",") if s.strip()}
+                       if args.scenes else None)
+        try:
+            prior = json.loads(INDEX_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            prior = []
+        if isinstance(prior, list) and recapturing is not None:
+            # Only merge for a --scenes partial run; a full keep-existing walk
+            # re-shoots everything, so prior rows would just duplicate.
+            shots = [row for row in prior
+                     if row.get("scene") not in recapturing]
+            log(f"--keep-existing: carried {len(shots)} prior index rows forward")
 
     def cleanup():
         chrome.stop()
