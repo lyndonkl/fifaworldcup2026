@@ -1,0 +1,1260 @@
+[
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 0,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "title"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 2700,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "s01/b1@0.5"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 4140,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "s01/b1@0.9"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 6300,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "s02/b1@0.5"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 7020,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 1, continued \u2014 a price needs a crowdThis m\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s02/b1@0.9"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 8603,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2 of 5 \u2014 what volume meansThe tournament k\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 26
+      }
+    ],
+    "stop": "s03/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 9827,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2 of 5 \u2014 what volume meansMatch markets ar\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2 of 5 \u2014 what volume meansThe counter just\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s03/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 11051,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2 of 5 \u2014 what volume meansThe counter just\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s03/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 12275,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 the volume trapThe market's\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 11
+      }
+    ],
+    "stop": "s04/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 13499,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 the volume trapThe market g\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 the volume trapAn American \u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s04/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 14723,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 the volume trapAn American \u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s04/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 15947,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 depth decides trustKalshi i\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s05/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 17171,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 depth decides trustA market\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 depth decides trustThe loud\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s05/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 18395,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued \u2014 depth decides trustThe loud\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 2, continued: the tape\u2019s limitThe biggest \u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s05/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 20691,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "s06/b1@0.5"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 21951,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "s06/b1@0.9"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 23669,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = 1 trade \u00b7 showing every 134th of 32,744 \u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3 of 5: reading a live matchThree differen\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3 of 5: reading a live matchA sportsbook s\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s07/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 24893,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = 1 trade \u00b7 showing every 134th of 32,744 \u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3 of 5: reading a live matchA sportsbook s\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3 of 5: reading a live matchA price never \u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s07/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 26117,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = 1 trade \u00b7 showing every 134th of 32,744 \u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3 of 5: reading a live matchA price never \u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s07/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 27341,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = 1 trade \u00b7 showing every 134th of 32,744 \u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s07/b4"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 30312,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "s08/b1@0.5"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 32112,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "s08/b1@0.9"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 33965,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s09/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 35189,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3, continued: prices watch the road aheadW\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s09/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 36413,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4 of 5: who is behind the numberEvery matc\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s09/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 37637,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"for this scene and the next, the dots rest; one \u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4 of 5: who is behind the numberEvery matc\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s10/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 38861,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4 of 5: who is behind the numberSixteen ti\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s10/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 40085,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"for this scene and the next, the dots rest; one \u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4 of 5: who is behind the numberSixteen ti\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4, continued: the pros tied, and the trapA\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s10/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 41309,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"the dots rest \u00b7 each column is an accuracy score\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4, continued: the pros tied, and the trapA\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4, continued: the pros tied, and the trapT\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s11/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 42533,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"the dots rest \u00b7 each column is an accuracy score\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4, continued: the pros tied, and the trapT\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4, continued: the pros tied, and the trapT\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 28
+      }
+    ],
+    "stop": "s11/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 43757,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"the dots rest \u00b7 each column is an accuracy score\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 4, continued: the pros tied, and the trapT\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s11/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 44981,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5 of 5 \u2014 its fake flaws, and its real ones\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5 of 5 \u2014 its fake flaws, and its real ones\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s12/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 46205,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5 of 5 \u2014 its fake flaws, and its real ones\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s12/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 47429,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s13/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 48653,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s13/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 49877,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s13/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 51101,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the flaw that is realThe ch\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s14/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 52325,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s14/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 53549,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the flaw that is realCount \u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s14/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 54773,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued \u2014 the flaw that is realCount \u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s14/b4"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 55997,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s15/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 57356,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 21
+      }
+    ],
+    "stop": "s15/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 58715,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "div#chip \"Key grey = settled to zero, dead moneyred = Spai\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"July 14 \u00b7 settled\"",
+        "bKind": "svgtext",
+        "ix": 133,
+        "iy": 15
+      }
+    ],
+    "stop": "s15/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 60074,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"The exam, part one: your five skillsHere are you\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s16/l1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 61298,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"The exam, part one: your five skillsSecond tonig\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s16/l2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 62522,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"The exam, part one: your five skillsThird tonigh\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s16/l3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 63746,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"The exam, part one: your five skillsFourth tonig\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s16/l4"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 64970,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"The exam, part one: your five skillsFifth tonigh\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "div.card \"The exam, part two: your readThis is where the p\u2026\"",
+        "bKind": "card",
+        "ix": 99,
+        "iy": 30
+      }
+    ],
+    "stop": "s16/l5"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 66194,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"dots at rest \u00b7 the lit dots underline tonight\u2019s \u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"The exam, part two: your readThis is where the p\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 39
+      }
+    ],
+    "stop": "s17/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 67958,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"The epilogue \u2014 the market, gradedThis morning, b\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s19/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 69308,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"The epilogue \u2014 the market, gradedNinety minutes \u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s19/b2"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 70658,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"The epilogue \u2014 the market, gradedNow grade the d\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s19/b3"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 72008,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 traded again \u00b7 this is the whole\u2026\"",
+        "aKind": "chrome",
+        "b": "div.card \"The epilogue \u2014 the market, gradedAbout eleven mi\u2026\"",
+        "bKind": "card",
+        "ix": 438,
+        "iy": 61
+      }
+    ],
+    "stop": "s19/b4"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 73358,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [
+      {
+        "a": "div#grain-plate \"1 dot = $75,000 of real money traded\"",
+        "aKind": "chrome",
+        "b": "div.card \"The labThe story is told. Every dot above is sti\u2026\"",
+        "bKind": "card",
+        "ix": 302,
+        "iy": 39
+      }
+    ],
+    "stop": "s18/b1"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 74079,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "coda"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 74962,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "methods"
+  },
+  {
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    },
+    "scrollY": 76279,
+    "pageOverflowPx": 0,
+    "overflowCulprits": [],
+    "edge": [],
+    "overlaps": [],
+    "stop": "bottom"
+  }
+]
