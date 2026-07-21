@@ -68,6 +68,13 @@ CHROME_BIN = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 VIEWPORT_W = 1440
 VIEWPORT_H = 900
+# When True, the CDP device-metrics override reports a mobile device and
+# touch emulation is enabled, so BOTH of the piece's mobile switches
+# engage: main.js's layout branch (window.innerWidth < 900) and its
+# engine-tier probe (`(pointer: coarse)` + small viewport -> the mobile
+# population tile). Set via --mobile; --viewport alone only changes size,
+# which exercises the layout branch but not the tier probe.
+MOBILE_EMULATION = False
 
 MIN_PNG_BYTES = 20_000
 FLAT_COLOR_FRACTION = 0.99
@@ -210,8 +217,13 @@ class Chrome:
         self.send("Page.enable")
         self.send("Emulation.setDeviceMetricsOverride", {
             "width": VIEWPORT_W, "height": VIEWPORT_H,
-            "deviceScaleFactor": 1, "mobile": False,
+            "deviceScaleFactor": 1, "mobile": MOBILE_EMULATION,
         })
+        if MOBILE_EMULATION:
+            # Touch emulation flips the `(pointer: coarse)` media query,
+            # which deviceTier() in main.js requires for the mobile tier.
+            self.send("Emulation.setTouchEmulationEnabled",
+                      {"enabled": True, "maxTouchPoints": 5})
 
     def send(self, method, params=None, timeout=60):
         self._id += 1
@@ -464,11 +476,37 @@ def parse_args():
                          "combine with --keep-existing to re-capture fixed scenes only")
     p.add_argument("--keep-existing", action="store_true",
                     help="don't clear OUT_DIR/index.json before running")
+    p.add_argument("--viewport", type=str, default=None, metavar="WxH",
+                    help="viewport size override, e.g. 390x844 (default 1440x900)")
+    p.add_argument("--mobile", action="store_true",
+                    help="emulate a mobile device (touch + mobile device metrics), "
+                         "engaging both the layout branch and the engine tier probe; "
+                         "implies --viewport 390x844 unless --viewport is given")
+    p.add_argument("--out-dir", type=str, default=None,
+                    help="write PNGs + index.json to this directory instead of "
+                         "research/design-review/screens (use a separate dir for "
+                         "mobile captures so the canonical desktop set is never "
+                         "clobbered — protocol-v2 lesson)")
     return p.parse_args()
 
 
 def main():
+    global VIEWPORT_W, VIEWPORT_H, MOBILE_EMULATION, OUT_DIR, INDEX_PATH
     args = parse_args()
+    if args.mobile:
+        MOBILE_EMULATION = True
+        VIEWPORT_W, VIEWPORT_H = 390, 844
+    if args.viewport:
+        try:
+            w, h = args.viewport.lower().split("x")
+            VIEWPORT_W, VIEWPORT_H = int(w), int(h)
+        except ValueError:
+            sys.exit(f"bad --viewport {args.viewport!r}; expected WxH like 390x844")
+    if args.out_dir:
+        # resolve(): the index rows store paths via relative_to(REPO_ROOT),
+        # which raises on an already-relative Path.
+        OUT_DIR = Path(args.out_dir).resolve()
+        INDEX_PATH = OUT_DIR / "index.json"
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if not args.keep_existing:
         for p in OUT_DIR.glob("*.png"):
