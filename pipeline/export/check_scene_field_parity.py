@@ -59,12 +59,20 @@ SCENE_READ_SETS = {
     "s07": ["event.goal_ts", "event.label", "friction_band_c",
             "pinnacle.quotes[]", "pinnacle.suspend_start_s", "pinnacle.suspend_end_s",
             "polymarket.blocks[]"],
-    "s08": ["window.whistle_ts"],
-    "s09": ["shocks[]", "annotations[]"],
+    "s08": ["window.whistle_ts", "window.kickoff_ts", "period_bands[]",
+            "shootout_kicks[]", "et_spike.peak_ts", "et_spike.peak_price_c"],
+    # Gate-5 item 10 rebuild: three small multiples now read shock_series[]
+    # directly (real t_iso points + baseline_c per team), the mirror inset
+    # reads mirror.{nor[],arg[],egypt_leading[],kickoff_ts}, and the tiny
+    # road diagram reads road.{team,slots[]}.
+    "s09": ["shocks[]", "annotations[]", "shock_series[]",
+            "mirror.nor[]", "mirror.arg[]", "mirror.egypt_leading[]", "mirror.kickoff_ts",
+            "road.team", "road.slots[]"],
     "s10": ["knockout_window.start", "knockout_window.end",
             "gap_summary.mean_1min_gap_pts",
             "braid.t[]", "braid.kalshi_pts[]", "braid.polymarket_pts[]", "braid.pinnacle_pts[]",
             "goal_spikes[]", "pinnacle_terminations[]"],
+    "s11": ["scores[]", "n_legs", "effective_n"],
     "s12": ["date_range.start_s", "date_range.end_s", "players[]",
             "annotations.july7_8_level.day_s_start",
             "annotations.kane_halving.after_day_s",
@@ -97,6 +105,10 @@ ROW_SUBFIELDS = {
     "s12": [("players", ["key", "label", "reference", "market_indices"])],
     "s14": [("buckets", ["label", "lo_c", "hi_c", "mean_price_c", "win_rate_pct"])],
     "s15": [("stages", ["id", "label", "window", "opta_pct", "gap_pp"])],
+    "s09": [
+        ("shock_series", ["team", "shock_ts", "baseline_c", "points"]),
+        ("road.slots", ["stage", "pre", "post"]),
+    ],
     "s19": [
         ("exam_restated.legs", ["label", "price_c", "devig_pct"]),
         ("tie_climb.points", ["minute", "tie_price_c"]),

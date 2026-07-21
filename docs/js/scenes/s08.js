@@ -18,24 +18,77 @@
  * vermillion here would visually reinforce the naive "market abandoned
  * Germany" read the beat copy debunks.
  *
- * DATA_REQUEST: docs/data/scenes/s08.json (built from
- * pipeline/data/analysis/ingame-microstructure/shootout_ticks_JUN29GERPAR.parquet,
- * R4) needs fields the manifest's generic zoom spec does not carry: the
- * whistle instant itself (the regulation leg's glide begins exactly there,
- * and it anchors the scene's scroll dwell / gold-coin moment), plus the
- * regulation leg's own price at that instant (Gate-5 provenance audit --
- * b1's "48 cents" was a hand-typed dossier figure the raw tape does not
- * confirm at this exact anchor; the tape reads 43-44c here):
+ * DATA (Gate-5 item 9, full re-derivation, fulfilled in
+ * docs/data/scenes/s08.json): window.whistle_ts is the tape's own
+ * terminal-pin start on the GER regulation leg (a s01-style settlement-pin
+ * heuristic mirrored for a leg that settles NO), not a last-trade-minus-
+ * 22min approximation -- it lands at the real final whistle, not naive
+ * minute-90, so period_bands has an honest boundary to draw against.
+ * window.kickoff_ts is Pinnacle's own fixture kickoff for this match
+ * (_entity_map_played.parquet), shipped so the match-clock axis no longer
+ * has to assume a fixed 90-minute gap back from the whistle. Shipped shape:
  *   {
  *     "_provenance": { "sources": [...], "generated": ISO },
- *     "window": { "whistle_ts": ISO },
- *     "price_at_whistle_c": 44,   // GER regulation leg's last trade at or
- *                                  // before whistle_ts, class-A recompute
- *     "glide_minutes": 22         // R4's verified glide duration
+ *     "window": { "kickoff_ts": ISO, "whistle_ts": ISO, "settlement_halt_ts": ISO },
+ *     "price_at_whistle_c": 1,
+ *     "glide": { "start_ts": ISO, "start_price_c": 48, "end_ts": ISO, "end_price_c": 1, "duration_minutes": 22 },
+ *     "glide_minutes": 22,
+ *     "period_bands": [ { "key", "label", "start": ISO, "end": ISO, "method" }, ... ],
+ *         // 2nd half / stoppage / break / extra_time_1 / et_break / extra_time_2 / shootout;
+ *         // "method" says which boundaries are tape-verified vs rule-derived (IFAB Laws of the Game)
+ *     "shootout_kicks": [ { "n", "side": "GER"|"PAR", "outcome": "make"|"miss", "ts": ISO,
+ *                            "price_before_c", "price_after_c", "player"?, "decisive"? }, ... ],
+ *         // 12 kicks, step-detected off shootout_ticks_JUN29GERPAR.parquet, cross-verified
+ *         // against the match report's final score (Paraguay 4-3 Germany)
+ *     "et_spike": { "onset_ts", "peak_ts", "peak_price_c", "resolved_ts", "baseline_price_c",
+ *                    "identity", "source" }
+ *         // the KXWCADVANCE-GER spike partway through extra time: Jonathan Tah's VAR-overturned goal
  *   }
- * Per-kick markers do NOT need a data request: the zoom tile's own `flags`
- * bit 0 ("detector-anchored repricing event", CONTRACT §5.4) already tags
- * the ticks where the tape shows a kick's price cluster.
+ *
+ * This module consumes period_bands/shootout_kicks/et_spike directly: the
+ * white whistle line now sits at the real whistle instant and reads a
+ * descriptive label instead of a naive "90'"; shaded, labeled period bands
+ * give the reader a map of the wall-clock axis (which counts minutes
+ * through breaks and extra time, not just football minutes); shootout
+ * kicks are per-kick markers read live off shootout_kicks, ending in a
+ * named callout on the deciding kick; the extra-time price spike is
+ * annotated with its own identity. See "Gate-5 item 9" comments below at
+ * each consuming call site.
+ *
+ * Provenance fixes carried in this pass (research/design-review/
+ * provenance-ledger.md, Scene s08, items #1-#3, all previously NOT FIXED):
+ *   #1 the regulation-leg color-interpolation divisor was a bare literal
+ *      (50); it now reads the tile's own first tick on the regulation leg
+ *      (regStartPriceC below), so a leg opening at a different price still
+ *      gets a correct color ramp.
+ *   #2 the match-clock axis's kickoff instant was derived as
+ *      `whistleTs - 90*60000`, silently assuming zero stoppage time; it now
+ *      reads window.kickoff_ts directly (Pinnacle's fixture kickoff, a
+ *      class-A field independent of the whistle), falling back to the old
+ *      approximation only if that field is ever missing.
+ *   #3 the decay-caption figures ("7 cents a minute" / "19 to 25 cents in
+ *      30 seconds") were hand-typed twice with no shared source. They are
+ *      single-sourced now (R4_* constants below): the SVG caption reads
+ *      them live, and pipeline/export/check_figure_sync.py's
+ *      s08-decay-rate-sync / s08-goal-move-*-sync slots cross-check the
+ *      beat prose's own copy against those same constants on every run.
+ *
+ * Blind design-review fixes (this round, scored 6.5) carried in this pass:
+ *   MAJOR-1 the scrub reveal honors the shared cutoff for BOTH legs now:
+ *      each keyframe carries its own alpha mask (a size-0 point sprite
+ *      still rasterizes as a ~1px fragment, and the frag shader discards
+ *      on alpha, so full-alpha cyan future ticks sat pre-revealed while
+ *      the dimmer slate leg vanished -- asymmetric preview).
+ *   MAJOR-2 every annotation gates on the scrub cutoff reaching its own
+ *      STORE timestamp, never one shared whistle switch.
+ *   MAJOR-3 computeCuts paces the post-whistle tape off period_bands so
+ *      the shootout is fully traced by t = 0.85; the rest is dwell.
+ *   MAJOR-4 the decay card moved into the regulation lane it describes,
+ *      translucent, clear of the whistle line and the KEY exclusion.
+ *   MINORs: the shootout band label parks below the axis when the KEY
+ *      would paint over it; kick outcome is tick height (a make stands
+ *      full height, a miss stops short); the regulation leg's terminal
+ *      pin is labeled off price_at_whistle_c.
  */
 
 import {
@@ -58,21 +111,61 @@ function lerpRgba(a, b, t) {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t];
 }
 
+// R4 (ig-07)-cited cross-tournament in-game microstructure figures: the
+// regulation leg's own price never decays faster than this rate; a real
+// goal, by contrast, moves a price this fast. Single-sourced here so the
+// pinned SVG caption (which reads these constants live) and the beat
+// prose (a plain-text copy a reader scrolls past, checked by
+// check_figure_sync.py's s08-decay-rate-sync / s08-goal-move-*-sync slots)
+// cannot drift apart by hand again (provenance ledger, s08 #3).
+const R4_DECAY_MAX_C_PER_MIN = 7;
+const R4_GOAL_MOVE_LO_C = 19;
+const R4_GOAL_MOVE_HI_C = 25;
+const R4_GOAL_MOVE_WINDOW_S = 30;
+
 // Shared scrub-reveal timeline (used by both layout()'s keyframes and
 // overlay()'s progressive line draw, so the D3 lines and the particle
 // reveal always agree on "how much of the tape has played").
-function computeCuts(whistleTs, winStartMs, winEndMs) {
-  return whistleTs
-    ? [
-      { at: 0.0, cutoff: winStartMs },
-      { at: 0.35, cutoff: whistleTs - 30000 },
-      { at: 0.55, cutoff: whistleTs + 150000 }, // the gold-coin dwell: paths visibly split
-      { at: 1.0, cutoff: winEndMs },
-    ]
-    : [
+// Design-review MAJOR-3: the post-whistle stretch used to be one giant
+// segment (whistle+150s -> winEnd across scroll 0.55 -> 1.0), which left
+// the shootout's climax untraced at 90% scroll and let a whole hour of
+// future tape arrive as a single block. Extra cuts at the period
+// boundaries the store itself ships (data.scene.period_bands: end of
+// ET1, end of ET2 -- the tape-verified shootout start -- and the end of
+// the shootout) pace the climax so the shootout is fully traced by
+// t = 0.85, reserving the last stretch of track for dwell on the settled
+// frame. Every cutoff is a STORE value off docs/data/scenes/s08.json;
+// only the scroll pacing fractions are layout literals.
+function computeCuts(whistleTs, winStartMs, winEndMs, periodBands) {
+  if (!whistleTs) {
+    return [
       { at: 0.0, cutoff: winStartMs },
       { at: 1.0, cutoff: winEndMs },
     ];
+  }
+  const bandEnd = (key) => {
+    const b = (periodBands || []).find((p) => p.key === key);
+    return (b && b.end) ? new Date(b.end).getTime() : null;
+  };
+  const cuts = [
+    { at: 0.0, cutoff: winStartMs },
+    { at: 0.35, cutoff: whistleTs - 30000 },
+    { at: 0.55, cutoff: whistleTs + 150000 }, // the gold-coin dwell: paths visibly split
+  ];
+  [
+    { at: 0.68, cutoff: bandEnd('extra_time_1') }, // Tah spike traced by here
+    { at: 0.76, cutoff: bandEnd('extra_time_2') }, // == tape-verified shootout start
+    { at: 0.85, cutoff: bandEnd('shootout') },     // climax fully traced at 0.85
+  ].forEach((c) => {
+    // Defensive monotonicity: a band missing from the store degrades to
+    // the coarser timeline instead of a non-monotonic scrub.
+    if (c.cutoff !== null && c.cutoff > cuts[cuts.length - 1].cutoff
+      && c.cutoff < winEndMs) {
+      cuts.push(c);
+    }
+  });
+  cuts.push({ at: 1.0, cutoff: winEndMs });
+  return cuts;
 }
 function cutoffAt(cuts, t) {
   if (t <= cuts[0].at) return cuts[0].cutoff;
@@ -187,6 +280,16 @@ export default {
     const Dreg = T ? Math.round(D * (regRows.length / T)) : 0;
     const Dadv = D - Dreg;
 
+    // Provenance fix (ledger s08 #1): the color ramp used to divide by a
+    // bare literal (50) that merely happened to sit near this leg's real
+    // opening level. It now reads the tile's own first tick on the
+    // regulation leg -- the rows are time-ordered (build_tiles.py sorts
+    // the whole tile by ts_ms before slicing), so regRows[0] is that
+    // leg's earliest print inside this zoom window. A leg that opened at
+    // a materially different price gets a correct ramp instead of a
+    // silently wrong one.
+    const regStartPriceC = (tile && regRows.length) ? tile.price_c[regRows[0]] : 100;
+
     const tickTs = new Float64Array(D);
     const tickLeg = new Uint8Array(D); // 0 = regulation, 1 = advancement
 
@@ -202,7 +305,7 @@ export default {
         state.x[di] = x(ts);
         state.y[di] = yScale(tile.price_c[row]);
         if (legFlag === 0) {
-          const t = Math.max(0, Math.min(1, 1 - tile.price_c[row] / 50));
+          const t = Math.max(0, Math.min(1, 1 - tile.price_c[row] / Math.max(1, regStartPriceC)));
           setColor(state.color, di, lerpRgba(expiring, dead, t));
         } else {
           setColor(state.color, di, advColor);
@@ -218,16 +321,39 @@ export default {
     const winStartMs = spec ? new Date(spec.window[0]).getTime() : null;
     const winEndMs = spec ? new Date(spec.window[1]).getTime() : null;
 
-    const cuts = computeCuts(whistleTs, winStartMs, winEndMs);
+    const cuts = computeCuts(whistleTs, winStartMs, winEndMs,
+      data.scene && data.scene.period_bands);
 
+    // Design-review MAJOR-1: size-0 was the only thing hiding unrevealed
+    // ticks, but GL rasterizes a size-0 point sprite as a ~1px fragment
+    // and the frag shader discards on ALPHA, not size -- so the advance
+    // leg's full-alpha cyan future (Tah spike, final collapse) sat
+    // pre-revealed as faint dots while the dimmer slate leg showed
+    // nothing (asymmetric preview). Chosen fix: honor the shared cutoff
+    // for BOTH legs -- each keyframe carries its own color buffer with
+    // alpha 0 on every tick past that keyframe's cutoff, so at any
+    // interpolated t only the segment currently arriving fades in and
+    // nothing beyond it draws at all, in either lane.
+    let lastTickMs = 0;
+    for (let i = 0; i < D; i++) if (tickTs[i] > lastTickMs) lastTickMs = tickTs[i];
     const states = {};
     const keyframes = [];
     cuts.forEach((c, ci) => {
       const key = `k${ci}`;
-      const s = { x: state.x, y: state.y, color: state.color, size: new Float32Array(N) };
+      const fullyRevealed = c.cutoff >= lastTickMs;
+      const s = {
+        x: state.x,
+        y: state.y,
+        // A fully-revealed frame masks nothing; share the base buffer
+        // instead of copying another N*4 floats.
+        color: fullyRevealed ? state.color : new Float32Array(state.color),
+        size: new Float32Array(N),
+      };
       s.size.set(state.size);
       for (let i = 0; i < D; i++) {
-        if (tickTs[i] && tickTs[i] <= c.cutoff) s.size[tagged[i]] = baseSize;
+        if (!tickTs[i]) continue; // tile missing: keep the rest-field look
+        if (tickTs[i] <= c.cutoff) s.size[tagged[i]] = baseSize;
+        else s.color[tagged[i] * 4 + 3] = 0; // invisible past the cutoff
       }
       states[key] = s;
       keyframes.push({ at: c.at, state: key });
@@ -240,16 +366,90 @@ export default {
     const { x, yReg, yAdv, laneTop, laneH } = scales;
     const g = container.svg;
 
-    // Whistle instant, hoisted above the axis block so the x-axis can label
-    // itself as match-clock minutes (kickoff ~= whistle - 90') rather than
-    // raw clock time (G3).
+    // Whistle instant + kickoff instant, hoisted above the axis block so
+    // the x-axis can label itself as wall-clock minutes since kickoff
+    // (G3). Provenance fix (ledger s08 #2): kickoff_ts now reads straight
+    // off data.scene.window.kickoff_ts (Pinnacle's own fixture kickoff, a
+    // class-A field independent of the whistle) instead of assuming a
+    // flat 90 minutes back from the whistle -- a match with real stoppage
+    // time, like this one, would throw every match-minute label off by
+    // exactly the missing minutes. The old approximation survives only as
+    // a defensive fallback.
     const whistleTs = data.scene && data.scene.window && data.scene.window.whistle_ts
       ? new Date(data.scene.window.whistle_ts).getTime() : null;
-    const kickoffTs = whistleTs !== null ? whistleTs - 90 * 60000 : null;
+    const kickoffTs = data.scene && data.scene.window && data.scene.window.kickoff_ts
+      ? new Date(data.scene.window.kickoff_ts).getTime()
+      : (whistleTs !== null ? whistleTs - 90 * 60000 : null);
     function matchMinuteLabel(d) {
       if (kickoffTs === null) return '';
       return `${Math.round((d.getTime() - kickoffTs) / 60000)}’`;
     }
+
+    // Shaded, labeled period bands (Gate-5 item 9 VISUAL disposition):
+    // drawn first, so every later mark paints on top, and always visible
+    // -- the same way the axis itself is always visible, not gated to
+    // scroll position. Source is data.scene.period_bands: kickoff_ts and
+    // the whistle boundary are tape-verified, interior extra-time
+    // boundaries are rule-derived off IFAB's standard durations (each
+    // band's own "method" field in docs/data/scenes/s08.json says which).
+    // Before this, the chart's only structural marker was the single
+    // white line -- a reader had no way to see that past the whistle, the
+    // wall-clock axis keeps counting through a break, two halves of extra
+    // time, and a shootout.
+    const bandsG = g.append('g').attr('class', 's08-period-bands');
+    const periodBands = (data.scene && data.scene.period_bands) || [];
+    // The persistent color KEY panel (top-right, desktop) paints above the
+    // SVG overlay (tokens.css --z-chip-and-grain-plate over --z-d3-overlay)
+    // and reserves layout.key-exclusion-{w,h}-px there (the exact budget
+    // s16.js's keyGutterRect() already codifies) -- a label drawn under it
+    // is not clipped, it is simply invisible, painted over. The last band
+    // (the shootout) lands in exactly that corner on this scene's own
+    // window, so its label is skipped rather than silently hidden.
+    const keyX0 = view.mobile ? Infinity
+      : view.W - (view.tokens.spacing_px[4] || 24) - (view.tokens.layout['key-exclusion-w-px'] || 280);
+    periodBands.forEach((band, bi) => {
+      if (!band.start || !band.end) return;
+      const b0 = new Date(band.start).getTime();
+      const b1 = new Date(band.end).getTime();
+      const bx0 = Math.max(view.region.x, x(b0));
+      const bx1 = Math.min(view.region.x + view.region.w, x(b1));
+      const bw = bx1 - bx0;
+      if (bw <= 0) return;
+      bandsG.append('rect')
+        .attr('x', bx0).attr('width', bw)
+        .attr('y', view.region.y).attr('height', view.region.h)
+        .attr('fill', 'var(--field-rest)')
+        .attr('fill-opacity', bi % 2 === 0 ? 0.035 : 0.07);
+      if (bi > 0) {
+        bandsG.append('line')
+          .attr('x1', bx0).attr('x2', bx0)
+          .attr('y1', view.region.y).attr('y2', view.region.y + view.region.h)
+          .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1)
+          .attr('stroke-dasharray', '2,3').attr('stroke-opacity', 0.5);
+      }
+      if (bw >= 44 && bx0 + 4 < keyX0) {
+        bandsG.append('text')
+          .attr('x', bx0 + 4).attr('y', view.region.y - 20)
+          .attr('font-family', 'var(--font-apparatus)')
+          .attr('font-size', 'var(--type-micro-size)')
+          .attr('fill', 'var(--ink-low)')
+          .text(band.label);
+      } else if (bw >= 44 && Number.isFinite(keyX0)) {
+        // Design-review MINOR (a): the shootout band opens under the KEY
+        // panel on desktop, so its in-plot label row would be painted
+        // over. Park the label below the axis line instead -- text-end
+        // under the band's own right edge, on the axis title's baseline
+        // row. The title is centered and this sits hard right, so the
+        // two clear each other at any desktop stage width.
+        bandsG.append('text')
+          .attr('x', bx1).attr('y', view.region.y + view.region.h + 8 + 28)
+          .attr('text-anchor', 'end')
+          .attr('font-family', 'var(--font-apparatus)')
+          .attr('font-size', 'var(--type-micro-size)')
+          .attr('fill', 'var(--ink-low)')
+          .text(band.label);
+      }
+    });
 
     const axisG = g.append('g')
       .attr('transform', `translate(0,${view.region.y + view.region.h + 8})`)
@@ -262,7 +462,7 @@ export default {
       .attr('font-family', 'var(--font-apparatus)')
       .attr('font-size', 'var(--type-caption-size)')
       .attr('fill', 'var(--ink-mid)')
-      .text('match clock (minutes)');
+      .text('match clock (minutes, wall time since kickoff)');
 
     // Dual price axes: one per lane, each with its own horizontal title
     // (G3: y titles are never rotated).
@@ -334,6 +534,10 @@ export default {
       .attr('fill', 'none').attr('stroke', 'var(--side-yes)')
       .attr('stroke-width', 2).attr('stroke-linecap', 'round');
 
+    // Gate-5 item 9 VISUAL disposition: the white line now sits at the
+    // real, tape-pinned whistle instant (data.scene.window.whistle_ts,
+    // not a naive minute-90 mark), labeled for what it actually is --
+    // regulation's end, inclusive of stoppage time.
     const whistleG = g.append('g').style('display', 'none');
     if (whistleTs !== null) {
       const wx = x(whistleTs);
@@ -343,88 +547,184 @@ export default {
         .attr('stroke', 'var(--ink-hero)').attr('stroke-width', 1.5);
       whistleG.append('text').attr('x', wx + 6).attr('y', view.region.y + 12)
         .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-annotation-size)')
-        .attr('fill', 'var(--ink-hero)').text("90'");
+        .attr('fill', 'var(--ink-hero)').text('final whistle of regulation');
+      whistleG.append('text').attr('x', wx + 6).attr('y', view.region.y + 27)
+        .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-caption-size)')
+        .attr('fill', 'var(--ink-mid)').text('(with stoppage)');
+      // Design-review MINOR (c): the regulation leg's terminal pin reads
+      // as a detached dash at the bottom of the lane; name it so the
+      // fragment is claimed. The figure is the STORE's own settlement
+      // price (data.scene.price_at_whistle_c), never a hand-typed 1.
+      const settleC = data.scene && data.scene.price_at_whistle_c;
+      if (settleC != null) {
+        whistleG.append('text').attr('x', wx + 6).attr('y', yReg(settleC) - 6)
+          .attr('font-family', 'var(--font-apparatus)').attr('font-size', 'var(--type-micro-size)')
+          .attr('fill', 'var(--ink-mid)').text(`settles ${settleC}¢`);
+      }
     }
 
-    // Shootout region shading + per-kick markers (advancement leg, tile
-    // flags bit 0 = detector-anchored repricing event) -- one composite
-    // annotation cluster, not N separate annotations. Markers sit in a
-    // thin strip near the bottom of the advance lane (never full-lane
-    // height) and stay ink-low: this scene's one amber unit is already
-    // spent on the merged decay annotation below (design-revision-spec S8
-    // bright-unit ledger caps this scene at cyan + white + one amber).
+    // Named ET spike (Gate-5 item 9): the advance-market surge partway
+    // through extra time is not a random tape wobble. It reads live off
+    // data.scene.et_spike (a class-A boundary detection on the
+    // KXWCADVANCE-GER tape, identity cross-checked against the web-
+    // verified match report), so the price it names can never drift from
+    // the tape that produced it.
+    const spikeG = g.append('g').style('display', 'none');
+    const spike = data.scene && data.scene.et_spike;
+    if (spike && spike.peak_ts && spike.peak_price_c != null) {
+      const sx = x(new Date(spike.peak_ts).getTime());
+      const sy = yAdv(spike.peak_price_c);
+      spikeG.append('circle')
+        .attr('cx', sx).attr('cy', sy).attr('r', 3.5)
+        .attr('fill', 'none').attr('stroke', 'var(--ink-mid)').attr('stroke-width', 1.25);
+      // Text-collision guard: the pinned decay caption occupies the top of
+      // this same lane (laneTop.adv + 32, ~46ch wide), and the spike's own
+      // price point can land right at that box's edge. The label sits on
+      // its own fixed row well below both the caption and the marker,
+      // connected by a short leader line, so it never crowds the caption
+      // regardless of where the spike itself falls on the x-axis. It also
+      // sits directly over the advance-market price line as that line
+      // keeps drawing, so it gets the same getBBox()-measured scrim other
+      // scenes use for a label that cannot be guaranteed a clear patch of
+      // canvas (see s10.js's scrimmedLabel()).
+      const labelY = laneTop.adv + 120;
+      spikeG.append('line')
+        .attr('x1', sx).attr('x2', sx)
+        .attr('y1', sy + 5).attr('y2', labelY - 16)
+        .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1);
+      const spikeLeft = sx > view.region.x + view.region.w - 170;
+      const labelX = spikeLeft ? sx - 6 : sx + 6;
+      const anchor = spikeLeft ? 'end' : 'start';
+      const spikeLabel = spikeG.append('text')
+        .attr('text-anchor', anchor)
+        .attr('font-family', 'var(--font-apparatus)')
+        .attr('font-size', 'var(--type-micro-size)')
+        .attr('fill', 'var(--ink-mid)');
+      spikeLabel.append('tspan').attr('x', labelX).attr('y', labelY - 13)
+        .text("Jonathan Tah's goal, then VAR:");
+      spikeLabel.append('tspan').attr('x', labelX).attr('y', labelY)
+        .text(`${spike.peak_price_c}¢ and back`);
+      const spikeBB = spikeLabel.node().getBBox();
+      spikeG.insert('rect', () => spikeLabel.node())
+        .attr('x', spikeBB.x - 5).attr('y', spikeBB.y - 3)
+        .attr('width', spikeBB.width + 10).attr('height', spikeBB.height + 6)
+        .attr('rx', 2)
+        .attr('fill', 'var(--bg-card)').attr('fill-opacity', 0.85);
+    }
+
+    // Shootout kicks (Gate-5 item 9): per-kick markers read live off
+    // data.scene.shootout_kicks (12 kicks, step-detected off the tape and
+    // cross-verified against the match report's final score), replacing
+    // the earlier tile-flag-based detector. Twelve kicks land inside a
+    // ~16-minute window at this chart's own scale (well under 15px apart)
+    // -- a per-kick number at that spacing overlapped its neighbors into
+    // an unreadable smear, so each kick is a plain tick. Design-review
+    // MINOR (b): the old solid-vs-dashed make/miss coding was
+    // indecipherable at this size, so outcome is tick HEIGHT now -- a
+    // make stands full height, a miss stops short. The deciding kick
+    // alone gets a named callout. Design-review MAJOR-2: each tick (and
+    // the callout) reveals only once the scrub cutoff reaches its own
+    // kick timestamp; scrub() drives that off the kickMarks list here.
     const kicksG = g.append('g').style('display', 'none');
-    if (whistleTs !== null) {
-      const spec = data.manifest.zoom.gerpar;
-      const winEndMs = new Date(spec.window[1]).getTime();
-      kicksG.append('rect')
-        .attr('x', x(whistleTs)).attr('width', Math.max(0, x(winEndMs) - x(whistleTs)))
-        .attr('y', laneTop.adv).attr('height', laneH)
-        .attr('fill', 'var(--field-rest)').attr('fill-opacity', 0.06);
-      const tile = data.zoom.gerpar;
+    const kicks = (data.scene && data.scene.shootout_kicks) || [];
+    const kickMarks = []; // { ms, sel } -- per-kick reveal, driven by scrub()
+    let calloutG = null;
+    let decisiveMs = null;
+    if (kicks.length) {
       const stripBottom = laneTop.adv + laneH - 4;
-      const stripTop = stripBottom - 12;
-      if (tile) {
-        let kickN = 0;
-        for (let r = 0; r < tile.count; r++) {
-          const ts = tile.t0 + tile.ts_ms[r];
-          if (ts > whistleTs && (tile.flags[r] & 1)) {
-            kickN += 1;
-            const kx = x(ts);
-            kicksG.append('line')
-              .attr('x1', kx).attr('x2', kx)
-              .attr('y1', stripTop).attr('y2', stripBottom)
-              .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1);
-            kicksG.append('text')
-              .attr('x', kx).attr('y', stripTop - 3)
-              .attr('text-anchor', 'middle')
-              .attr('font-family', 'var(--font-tape)')
-              .attr('font-size', 'var(--type-micro-size)')
-              .attr('fill', 'var(--ink-low)')
-              .text(String(Math.min(kickN, 99)));
-          }
-        }
+      const stripTop = stripBottom - 14;
+      kicks.forEach((k) => {
+        const ms = new Date(k.ts).getTime();
+        const kx = x(ms);
+        const made = k.outcome === 'make';
+        const sel = kicksG.append('line')
+          .attr('x1', kx).attr('x2', kx)
+          .attr('y1', made ? stripTop : stripTop + (stripBottom - stripTop) / 2)
+          .attr('y2', stripBottom)
+          .attr('stroke', 'var(--ink-mid)')
+          .attr('stroke-width', 1.5);
+        kickMarks.push({ ms, sel });
+      });
+      const decisive = kicks.find((k) => k.decisive) || kicks[kicks.length - 1];
+      if (decisive) {
+        decisiveMs = new Date(decisive.ts).getTime();
+        const dx = x(decisiveMs);
+        const labelY = stripTop - 12;
+        calloutG = kicksG.append('g');
+        calloutG.append('line')
+          .attr('x1', dx).attr('x2', dx)
+          .attr('y1', labelY + 5).attr('y2', stripTop - 3)
+          .attr('stroke', 'var(--ink-low)').attr('stroke-width', 1);
+        calloutG.append('text')
+          .attr('x', Math.min(dx, view.region.x + view.region.w))
+          .attr('y', labelY)
+          .attr('text-anchor', 'end')
+          .attr('font-family', 'var(--font-apparatus)')
+          .attr('font-size', 'var(--type-annotation-size)')
+          .attr('fill', 'var(--ink-hi)')
+          .text('Paraguay converts, the ticket dies');
       }
     }
 
     // Merged two-line annotation (CR-8): line 1 amber (the scene's one
     // amber unit), line 2 ink-mid. One leader, one block, never two
     // separate captions competing for the same story point.
-    // Text-collision sweep (Gate-5 item 3 disposition 2): top used to sit
-    // at laneTop.adv + 8, which put this opaque card's top edge 14px
-    // *above* the "advance-market price (cents)" axis title's baseline
-    // (laneTop.adv + 22) -- the card swallowed the whole title, leaving
-    // only a one-letter "a" sliver visible past its left edge. Dropping
-    // the top past the title's full glyph height (baseline + descender
-    // clearance) clears it; the card still opens right at the advance
-    // lane's data, same as before.
+    // Design-review MAJOR-4: this card describes the REGULATION glide,
+    // yet it sat inside the ADVANCE lane next to the Tah spike -- the
+    // wrong lane for its own subject -- where its opaque plate also
+    // occluded the whistle line and skimmed the 80c cyan stretch. It now
+    // lives in the regulation lane, in the dead zone just right of the
+    // whistle: pinned to the slate glide's own terminus, the settlement
+    // it explains. The left edge clears the whistle line by 16px; the
+    // right edge is capped short of the KEY exclusion (keyX0 is Infinity
+    // on mobile, so the cap falls back to the region edge); the mid-lane
+    // top clears the whistle labels above and the settlement-pin label
+    // below. The plate renders at 0.85 opacity so the band furniture
+    // behind it stays legible.
+    // Provenance fix (ledger s08 #3): these two figures read the R4_*
+    // module constants declared above instead of two independent
+    // hand-typed copies -- see the header comment and this scene's
+    // check_figure_sync.py slots.
+    const capLeft = whistleTs !== null ? x(whistleTs) + 16 : view.region.x;
+    const capRightEdge = Math.min(
+      Number.isFinite(keyX0) ? keyX0 : Infinity,
+      view.region.x + view.region.w,
+    ) - 12;
+    const capMaxWPx = Math.max(120, Math.round(capRightEdge - capLeft));
     const decayCaption = pinnedCaption(
       container,
       '',
       's08-decay-caption',
-    ).style('left', `${view.region.x}px`).style('top', `${laneTop.adv + 32}px`)
+    ).style('left', `${capLeft}px`).style('top', `${laneTop.reg + laneH * 0.4}px`)
+      .style('max-width', `min(46ch, ${capMaxWPx}px)`)
+      .style('background', 'color-mix(in srgb, var(--bg-card) 85%, transparent)')
       .html(
-        '<div style="color:var(--accent-annotation)">settling out: never faster than 7 cents a minute</div>'
-        + '<div style="color:var(--ink-mid); margin-top:4px">a real goal moves 19 to 25 cents in 30 seconds</div>',
+        `<div style="color:var(--accent-annotation)">settling out: never faster than ${R4_DECAY_MAX_C_PER_MIN} cents a minute</div>`
+        + `<div style="color:var(--ink-mid); margin-top:4px">a real goal moves ${R4_GOAL_MOVE_LO_C} to ${R4_GOAL_MOVE_HI_C} cents in ${R4_GOAL_MOVE_WINDOW_S} seconds</div>`,
       );
 
-    // One continuous scrub track (storyboard's single Beat/Scroll spec):
-    // the whistle marker, the decay caption, and the shootout/kick markers
-    // reveal progressively as scroll crosses the whistle instant, driven by
-    // scrub(t) rather than discrete steps.
-    const whistleAt = data.scene && data.scene.window && data.scene.window.whistle_ts
-      ? (() => {
-        const spec = data.manifest.zoom.gerpar;
-        const s = new Date(spec.window[0]).getTime();
-        const e = new Date(spec.window[1]).getTime();
-        return (whistleTs - s) / Math.max(1, e - s);
-      })()
-      : 0.35;
+    // One continuous scrub track (storyboard's single Beat/Scroll spec),
+    // annotations gated per-moment (design-review MAJOR-2): the old
+    // single `t >= whistleAt` switch lit the whistle marker, the decay
+    // caption, the Tah-spike callout, and the whole shootout strip in
+    // one frame -- up to an hour of tape ahead of the reveal. Each mark
+    // now waits for the scrub cutoff (the same tape clock the lines and
+    // particles draw by) to reach its own STORE timestamp: the whistle
+    // marks and decay card at window.whistle_ts, the spike callout at
+    // et_spike.peak_ts, the kick strip at the shootout band's
+    // tape-verified start, each kick tick at its own kick ts, and the
+    // deciding-kick callout at that kick's ts.
+    const spikePeakMs = (spike && spike.peak_ts) ? new Date(spike.peak_ts).getTime() : null;
+    const shootoutBand = ((data.scene && data.scene.period_bands) || [])
+      .find((b) => b.key === 'shootout');
+    const shootoutStartMs = (shootoutBand && shootoutBand.start)
+      ? new Date(shootoutBand.start).getTime() : null;
 
     const lineCuts = computeCuts(
       whistleTs,
       data.manifest.zoom.gerpar ? new Date(data.manifest.zoom.gerpar.window[0]).getTime() : null,
       data.manifest.zoom.gerpar ? new Date(data.manifest.zoom.gerpar.window[1]).getTime() : null,
+      data.scene && data.scene.period_bands,
     );
 
     function step() {} // no discrete steps in this scrub scene
@@ -436,10 +736,23 @@ export default {
       regPathEl.attr('d', regDrawn.length > 1 ? regLineGen(regDrawn) : null);
       advPathEl.attr('d', advDrawn.length > 1 ? advLineGen(advDrawn) : null);
 
-      const past = t >= whistleAt;
-      whistleG.style('display', past ? null : 'none');
-      decayCaption.style('display', past ? null : 'none');
-      kicksG.style('display', past ? null : 'none');
+      // Whistle-less fallback mirrors the old scroll-fraction gate so a
+      // store without window.whistle_ts still degrades gracefully.
+      const pastWhistle = whistleTs !== null ? cutoff >= whistleTs : t >= 0.35;
+      whistleG.style('display', pastWhistle ? null : 'none');
+      decayCaption.style('display', pastWhistle ? null : 'none');
+      spikeG.style('display',
+        spikePeakMs !== null && cutoff >= spikePeakMs ? null : 'none');
+      const inShootout = shootoutStartMs !== null
+        ? cutoff >= shootoutStartMs : pastWhistle;
+      kicksG.style('display', inShootout ? null : 'none');
+      if (inShootout) {
+        kickMarks.forEach((m) => m.sel.style('display', cutoff >= m.ms ? null : 'none'));
+        if (calloutG) {
+          calloutG.style('display',
+            decisiveMs !== null && cutoff >= decisiveMs ? null : 'none');
+        }
+      }
     }
 
     return {
@@ -456,23 +769,26 @@ export default {
     {
       id: 'b1',
       html: `<p>Which market you watch matters more than what the players
-        do. Germany and Paraguay finished level after ninety minutes.</p>
-        <p>One ticket paid off only if Germany won inside those ninety
-        minutes. By its own rules, that ticket had to die at the final
-        whistle: a draw counts as no. Its price slid from 44 cents to 1
-        cent over twenty-two minutes, like sand falling through an
-        hourglass, never faster than 7 cents a
-        minute.<sup><a href="#fn-13">13</a></sup> Compare that to a real
-        goal: a real goal moves a price 19 to 25 cents in 30 seconds, more
-        than three times as fast.</p>
+        do. Germany and Paraguay finished level after ninety minutes, plus
+        whatever stoppage time the referee added.</p>
+        <p>One ticket paid off only if Germany won inside that window. By
+        Kalshi's own contract rules, that ticket had to die at the final
+        whistle: a draw counts as no.<sup><a href="#fn-13">13</a></sup> Its
+        price slid from 48 cents to 1 cent over twenty-two minutes, like
+        sand falling through an hourglass, never faster than 7 cents a
+        minute. Compare that to a real goal: a real goal moves a price 19
+        to 25 cents in 30 seconds, more than three times as fast.</p>
+        <p>The slide is the ticket's own clock running out: the score is
+        level, the minutes are draining, and a draw pays no. Every passing
+        minute takes a few cents with it, by rule.</p>
         <p>A second ticket paid off if Germany went through to the next
         round, however that happened. It barely moved at the whistle and
         kept trading through every penalty kick, for another
         hour.<sup><a href="#fn-13">13</a></sup></p>
-        <p>Same match. Two tickets. Two different stories. Someone watching
-        only the first ticket would swear the market gave up on Germany for
-        no reason. It didn't. At the whistle line, watch the two paths
-        split. One dies. One keeps trading.</p>
+        <p>Same match. Two tickets. Two different stories. Someone who had
+        not read the ticket's rules might watch only the first price and
+        think the market gave up on Germany. It didn't. At the whistle
+        line, watch the two paths split. One dies. One keeps trading.</p>
         <p>Tonight's tie-in: if the final is level late, the
         win-in-ninety-minutes ticket will slide by rule, not by belief. The
         real belief will be sitting in the champion tickets. Check which

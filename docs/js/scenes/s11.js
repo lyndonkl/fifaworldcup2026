@@ -69,17 +69,80 @@
  * field recedes hard enough that a bar reads as a bar, not camouflage
  * against the population. No data, layout, or engine change.
  *
+ * GATE-5 ITEM 13 (research/revision/gate5-feedback-notes.md item 13;
+ * provenance-ledger.md scene s11 entries #1, #2, both NOT_FIXED going into
+ * this pass). Two prose gaps, both closed: (1) the scene named a Brier
+ * score on screen and in the beats but never built the recipe for a
+ * reader who does not already know it, and the "grading someone after
+ * they have left the room" line described the fairness problem with a
+ * metaphor instead of the mechanic. b1 now states the recipe in plain
+ * sentences (price as the claimed chance; the outcome as a 1 or a 0; the
+ * miss squared and averaged) with both anchors (0 is a perfect call, 0.25
+ * is what a coin-flip shrug scores) and names the graded material (84
+ * matched tickets, 28 knockout matches, graded a day out and an hour
+ * out). b2 drops the metaphor for the mechanic itself (a book that shuts
+ * by house rule cannot be blamed for an ending past its close) plus one
+ * concrete, verified example -- Canada's late winner over South Africa,
+ * the single largest contributor to the five-match, 74%-of-error group --
+ * and an explicit callback to the sixteen Pinnacle terminations already
+ * named as "the same empty chair." (2) `n_legs`/`effective_n` and the
+ * blowout attribution were shipped as prose literals with no backing
+ * scene-JSON field, so smallN's `scene.n_legs ?? 84` fallback always
+ * fired silently. `build_scene_s11()` now recomputes all of
+ * n_legs/effective_n/blowout_share_pct/blowout_matches_n/blowout_example
+ * live off match3way_panel.parquet (see the updated DATA CONTRACT below);
+ * no code change was needed in this file for that half of the fix, since
+ * the `??` fallback already read the right field names, it just never
+ * received real data before now. New check_figure_sync.py slots guard
+ * every new prose figure this pass introduced.
+ *
+ * GATE-5 BLIND-REVIEW ROUND (fresh blind read, 7/10; two majors, two
+ * minors, all inside this file). (1) MAJOR: crossOutT5min() filtered on
+ * horizon alone, so b3's strike and state-dead recolor disqualified all
+ * three T-5min bars -- including the two honest near-perfect slivers.
+ * Both effects are now scoped with isArtifact(), so only the
+ * pinnacle_devig grading artifact is struck and deadened; the Kalshi and
+ * Polymarket slivers keep their venue hues through b3. (2) MAJOR: those
+ * slivers rendered a few pixels tall with no number attached, so "the
+ * live markets were nearly perfect" was only inferable from absence --
+ * sliverValueLabels() now prints each sliver's score (read from scene
+ * JSON, 3dp like the axis) above it at b2, on the same scrim pattern as
+ * the artifact label, and persists untouched through b3. (3) minor: the
+ * b3 verdict line gains its subject ("the blowout scores ...") plus a
+ * thin ink-mid leader to the hatched bar it judges, drawn only when a
+ * runtime guard confirms the segment clears the live KEY panel, the
+ * T-1h bar group, and the artifact label's scrim. (4) minor: the
+ * receipt card's right edge now derives from the artifact bar's own x
+ * (it was overprinting the bar's midsection) and its bullet text is
+ * left-aligned inside the card. No data, layout, or engine change.
+ *
  * ---------------------------------------------------------------------
- * DATA CONTRACT ASSUMPTIONS (flagged in this build's data_requests; per
- * CONTRACT §5.5 the exact per-scene JSON shape is a scene-builder proposal
- * grounded in the storyboard's named Data block). Verified at build time
- * against pipeline/data/analysis/calibration/scores_match3way_by_source_horizon.csv,
- * whose columns (horizon, source, n, brier, ...) map directly onto `scores`
- * below:
+ * DATA CONTRACT ASSUMPTIONS. Verified at build time against
+ * pipeline/data/analysis/calibration/scores_match3way_by_source_horizon.csv
+ * (whose columns map directly onto `scores` below) and, as of Gate-5 item
+ * 13, pipeline/data/analysis/calibration/match3way_panel.parquet (the
+ * live source for the five fields below `scores`):
  *
  *   needs.scene -> data/scenes/s11.json:
  *   {
  *     "_provenance": { "sources": [...], "generated": ISO },
+ *     "n_legs": 84,          // live: T-24h row count in match3way_panel.parquet
+ *     "effective_n": 28,     // live: distinct match_id count (3 coupled
+ *                            // outcomes -- win/draw/loss -- per match, so
+ *                            // the independent sample is one per match)
+ *     "blowout_share_pct": 73.8,   // live: top-5 T-5min pinnacle_devig
+ *     "blowout_matches_n": 5,      // squared-error matches' share of the
+ *                                  // total squared error (dossier R5's
+ *                                  // finding, independently re-derived)
+ *     "blowout_example": {         // live: the largest single contributor
+ *       "match_id": "JUN28RSACAN", // to blowout_share_pct, a fixed
+ *       "winner": "Canada",        // curatorial pick (see
+ *       "loser": "South Africa",   // BLOWOUT_EXAMPLE_MATCH_ID in
+ *       "score_label": "1-0",      // build_tiles.py) with every number
+ *       "kalshi_price_pct": 95.0,  // recomputed live for that match
+ *       "pinnacle_price_pct": 9.7,
+ *       "pinnacle_dark_minutes": 9.2
+ *     },
  *     "scores": [
  *       { "horizon": "T-24h",  "source": "kalshi",         "brier": 0.1624, "n": 84 },
  *       { "horizon": "T-24h",  "source": "polymarket",     "brier": 0.1628, "n": 84 },
@@ -90,14 +153,7 @@
  *       { "horizon": "T-5min", "source": "kalshi",         "brier": 0.0026, "n": 84 },
  *       { "horizon": "T-5min", "source": "polymarket",     "brier": 0.0045, "n": 84 },
  *       { "horizon": "T-5min", "source": "pinnacle_devig", "brier": 0.0974, "n": 84 }
- *     ],
- *     "blowout_share_pct": 74,   // "roughly 74% of the professional book's
- *     "blowout_matches_n": 5,    // error comes from five matches with
- *                                // stoppage-time goals" (dossier R5) — not
- *                                // located as an existing pipeline column
- *                                // at build time; flagged in data_requests
- *     "n_legs": 84,
- *     "effective_n": 28
+ *     ]
  *   }
  * ---------------------------------------------------------------------
  */
@@ -297,7 +353,10 @@ export default {
       .style('font', '13px var(--font-tape)')
       .style('color', view.css('ink-mid'))
       .style('max-width', '30ch')
-      .style('text-align', 'right')
+      // Blind-review minor: left-aligned -- right-ragged bullet lines
+      // inside the card read as a jumble in every captured frame; the
+      // card itself stays right-anchored, only its text ranges left.
+      .style('text-align', 'left')
       .style('pointer-events', 'none')
       .style('display', 'none');
 
@@ -408,6 +467,47 @@ export default {
       }
     }
 
+    // Value labels for the two honest T-5min slivers (blind-review MAJOR:
+    // at this horizon Kalshi and Polymarket render only a few pixels tall
+    // with no number attached, so "the live markets were nearly perfect"
+    // was only inferable from absence). Each sliver gets its own score,
+    // read from scene JSON and printed at 3dp like the axis, directly
+    // above the bar on the same scrim pattern as artifactLabel(). Drawn
+    // with the T-5min group at b2 and never touched by crossOutT5min() --
+    // these two are honest results, so they are neither struck nor
+    // deadened at b3. Scrim x-padding is one step tighter than the
+    // artifact label's (spacing[0], not spacing[1]) so the two adjacent
+    // tags clear each other inside one sub-band step.
+    function sliverValueLabels() {
+      annoLayer.selectAll('text.sliver-cap, rect.sliver-cap-scrim').remove();
+      const onset = Math.min(HORIZONS.indexOf(ARTIFACT_HORIZON), maxSeq - 1) * stagger + drawIn;
+      SOURCES.filter((s) => s !== ARTIFACT_SOURCE).forEach((source) => {
+        const d = byKey.get(`${ARTIFACT_HORIZON}|${source}`);
+        if (!d) return;
+        const cx = scales.x(d.horizon) + scales.xSub(d.source) + scales.xSub.bandwidth() / 2;
+        const ly = scales.y(d.brier) - leaderStandoff;
+        const label = annoLayer.append('text').attr('class', 'sliver-cap')
+          .attr('x', cx).attr('y', ly)
+          .attr('text-anchor', 'middle')
+          .attr('fill', view.css('ink-hi'))
+          .style('font', '11.5px var(--font-apparatus)')
+          .attr('opacity', view.reducedMotion ? 1 : 0)
+          .text(d.brier.toFixed(3));
+        const bb = label.node().getBBox();
+        const scrim = annoLayer.insert('rect', 'text.sliver-cap')
+          .attr('class', 'sliver-cap-scrim')
+          .attr('x', bb.x - spacing[0]).attr('y', bb.y - spacing[0])
+          .attr('width', bb.width + spacing[0] * 2).attr('height', bb.height + spacing[0] * 2)
+          .attr('rx', 3)
+          .attr('fill', view.css('bg-card-composite-cap'))
+          .attr('opacity', view.reducedMotion ? 0.85 : 0);
+        if (!view.reducedMotion) {
+          label.transition().delay(onset).duration(recolorMs).attr('opacity', 1);
+          scrim.transition().delay(onset).duration(recolorMs).attr('opacity', 0.85);
+        }
+      });
+    }
+
     function drawGroup(horizons, animate) {
       const rows = scores.filter((d) => horizons.includes(d.horizon));
       const sel = barLayer.selectAll('rect.bar')
@@ -437,7 +537,10 @@ export default {
           .attr('y', (d) => scales.y(d.brier))
           .attr('height', (d) => y0 - scales.y(d.brier));
       }
-      if (horizons.includes(ARTIFACT_HORIZON)) artifactLabel();
+      if (horizons.includes(ARTIFACT_HORIZON)) {
+        artifactLabel();
+        sliverValueLabels();
+      }
     }
 
     function matchedLegAnnotation() {
@@ -448,11 +551,19 @@ export default {
     }
 
     function crossOutT5min() {
-      const rows = scores.filter((d) => d.horizon === 'T-5min');
+      // Blind-review MAJOR: this used to gather every T-5min row, which
+      // fed both the strike lines and the state-dead recolor below --
+      // visually disqualifying the honest near-perfect Kalshi and
+      // Polymarket slivers along with the artifact. Only the
+      // pinnacle_devig bar is the grading artifact, so only it is
+      // struck and deadened; the two slivers keep their venue hues (and
+      // their value labels from b2) through b3.
+      const artifactRows = scores.filter(isArtifact);
 
       // One common-fate event (design-revision-spec §2 S11 item 2): the two
-      // parity groups recede to context while the T-5min columns desaturate
-      // to state.dead, in the same recolor beat as the strike itself.
+      // parity groups recede to context while the T-5min artifact column
+      // desaturates to state.dead, in the same recolor beat as the strike
+      // itself.
       // FIX-PASS (visual-story-review §3 s11 major, working-memory budget):
       // dimmed further than the original 0.7 — at b3 these two groups are
       // pure context for a payoff that lives entirely in the T-5min column
@@ -474,16 +585,20 @@ export default {
       // left to hide a near-zero height. Re-declaring the same target
       // values here makes the fill transition also finish the grow-in if
       // it was still running, and is a no-op if it had already finished.
+      // The y/height re-assert still covers all three T-5min bars (any of
+      // them can carry an interrupted grow-in), but the fill only changes
+      // on the artifact -- the honest slivers re-state their own venue
+      // hue, a visible no-op.
       barLayer.selectAll('rect.bar')
         .filter((d) => d.horizon === 'T-5min')
         .transition().duration(recolorMs)
         .attr('y', (d) => scales.y(d.brier))
         .attr('height', (d) => y0 - scales.y(d.brier))
-        .attr('fill', view.css('state-dead'))
-        .attr('fill-opacity', 1);
+        .attr('fill', (d) => (isArtifact(d) ? view.css('state-dead') : view.css(SOURCE_TOKEN[d.source])))
+        .attr('fill-opacity', (d) => (isArtifact(d) ? 1 : 0.88));
 
       strikeLayer.selectAll('line.strike').remove();
-      const strikeSel = strikeLayer.selectAll('line.strike').data(rows, (d) => d.source);
+      const strikeSel = strikeLayer.selectAll('line.strike').data(artifactRows, (d) => d.source);
       const enter = strikeSel.enter().append('line').attr('class', 'strike')
         .attr('x1', (d) => scales.x(d.horizon) + scales.xSub(d.source))
         .attr('x2', (d) => scales.x(d.horizon) + scales.xSub(d.source) + scales.xSub.bandwidth())
@@ -525,12 +640,16 @@ export default {
       // rendered as one garbled line. +78 (not +66) gives it the clearance
       // its own larger type actually needs; the annotation card still
       // lands well short of the tallest bars below it.
-      annoLayer.selectAll('text.crossout-cap, rect.crossout-cap-scrim').remove();
+      // Blind-review minor: the line was subject-less ("scores a closed
+      // book...") and sat ~500px from the bar it judges. It now names its
+      // subject, and a thin ink-mid leader below ties it to the hatched
+      // bar when the path is clear.
+      annoLayer.selectAll('text.crossout-cap, rect.crossout-cap-scrim, line.crossout-leader').remove();
       const crossoutText = annoLayer.append('text').attr('class', 'crossout-cap')
         .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff + 78)
         .attr('fill', view.css('ink-hi'))
         .style('font', '15px var(--font-apparatus)')
-        .text('scores a closed book against a live market, not a fair fight');
+        .text('the blowout scores a closed book against a live market, not a fair fight');
       const coBB = crossoutText.node().getBBox();
       annoLayer.insert('rect', 'text.crossout-cap')
         .attr('class', 'crossout-cap-scrim')
@@ -538,6 +657,49 @@ export default {
         .attr('width', coBB.width + spacing[1] * 2).attr('height', coBB.height + spacing[0] * 2)
         .attr('rx', 3)
         .attr('fill', view.css('bg-card-composite-cap')).attr('opacity', 0.85);
+
+      // Leader from the verdict to the artifact label's scrim top (the
+      // label sits on the hatched bar, so pointing at it is pointing at
+      // the bar). Guarded, not assumed: drawn only when the segment
+      // (a) starts right of the T-1h bar group, so it crosses no bars,
+      // (b) clears the live KEY panel (measured off the fixed #chip
+      // element itself, since s11's four-row chip overflows the reserved
+      // key-exclusion rect; token fallback if the element is missing),
+      // and (c) has enough run and drop to read as a pointer at all.
+      // Any failed guard skips the leader; the verdict's new subject
+      // still names the bar in words.
+      const artD = byKey.get(`${ARTIFACT_HORIZON}|${ARTIFACT_SOURCE}`);
+      const capScrim = annoLayer.select('rect.artifact-cap-scrim');
+      if (!view.mobile && artD && !capScrim.empty()) {
+        const cxA = scales.x(ARTIFACT_HORIZON) + scales.xSub(ARTIFACT_SOURCE) + scales.xSub.bandwidth() / 2;
+        const lx0 = coBB.x + coBB.width + spacing[1] + 2;
+        const ly0 = coBB.y + coBB.height / 2;
+        const lx1 = cxA;
+        const ly1 = +capScrim.attr('y') - spacing[0];
+        const chipEl = document.getElementById('chip');
+        const chipBox = chipEl ? chipEl.getBoundingClientRect() : null;
+        const keyLeft = chipBox ? chipBox.left
+          : view.W - (view.tokens.layout['key-exclusion-w-px'] || 280);
+        const keyBottom = chipBox ? chipBox.bottom
+          : (view.tokens.layout['key-exclusion-h-px'] || 132);
+        const t1hRight = scales.x('T-1h') + scales.x.bandwidth();
+        const yAtKey = lx0 >= keyLeft ? ly0
+          : ly0 + ((ly1 - ly0) * (keyLeft - lx0)) / (lx1 - lx0);
+        const clearsKey = lx1 <= keyLeft || yAtKey > keyBottom + spacing[1];
+        if (lx1 - lx0 > spacing[6] && lx0 > t1hRight + spacing[1]
+          && ly1 > ly0 + spacing[6] && clearsKey) {
+          const leader = annoLayer.append('line').attr('class', 'crossout-leader')
+            .attr('x1', lx0).attr('y1', ly0)
+            .attr('x2', lx1).attr('y2', ly1)
+            .attr('stroke', view.css('ink-mid'))
+            .attr('stroke-width', leaderWeight)
+            .attr('stroke-opacity', 0.8)
+            .attr('opacity', view.reducedMotion ? 1 : 0);
+          if (!view.reducedMotion) {
+            leader.transition().duration(recolorMs).attr('opacity', 1);
+          }
+        }
+      }
 
       // Mobile carries this content in the beat's own prose instead (b3's
       // closing sentence names all three traps inline), so the floating
@@ -552,9 +714,16 @@ export default {
       if (view.mobile) {
         receipt.style('display', 'none');
       } else {
+        // Blind-review minor: anchored to the plot's right edge, the card
+        // overprinted the hatched bar's midsection -- the one mark this
+        // beat exists to explain. Its right edge now derives from the
+        // artifact bar's own left x, one spacing step clear of it. The
+        // bottom anchor stays at y0 - spacing[6]: nudging the card lower
+        // would run it into the sliver value labels added at b2.
+        const artBarX = scales.x(ARTIFACT_HORIZON) + scales.xSub(ARTIFACT_SOURCE);
         receipt
           .style('display', null)
-          .style('right', `${view.W - view.region.x - view.region.w + spacing[4]}px`)
+          .style('right', `${view.W - artBarX + spacing[1]}px`)
           .style('top', `${y0 - spacing[6]}px`)
           .style('transform', 'translateY(-100%)')
           .html(
@@ -588,7 +757,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>A bookmaker builds a small profit into every price it posts. Add up the odds on all three outcomes of a match and they come to a little more than one hundred percent. That extra is called the vig, the bookmaker's own fee. Strip it back out, and its price can be compared fairly with anyone else's, cent for cent, a step called devigging (bookmaker's cut removed).</p><p>Grade a price the way you would grade a weather forecast: the closer the percent was to what actually happened, the better the score, and a lower score always wins.${FN(16)} At a day out and an hour out, this exchange's crowd and the professional book, once its fee was stripped out, scored the same. Matched one ticket to one ticket, a day out, the two scores were 0.162 and 0.164. The gap is tiny. With this few matches, a gap that small cannot even be confirmed as real.</p>`,
+      html: `<p>A bookmaker builds a small profit into every price it posts. Add up the odds on all three outcomes of a match and they come to a little more than one hundred percent. That extra is called the vig, the bookmaker's own fee. Strip it back out, and its price can be compared fairly with anyone else's, cent for cent, a step called devigging (bookmaker's cut removed).</p><p>Grading a price is simple arithmetic. Treat the price as the chance it claimed, and the result as a 1 if it happened, a 0 if it did not. Square the miss and average it across every ticket graded. Zero means a price called every result exactly right; a forecaster who always shrugs and says fifty-fifty scores 0.25 either way.${FN(16)} This chart grades 84 matched tickets across 28 knockout matches, twice each: a day out and an hour out.</p><p>At a day out and an hour out, this exchange's crowd and the professional book, once its fee was stripped out, scored the same. Matched one ticket to one ticket, a day out, the two scores were 0.162 and 0.164. The gap is tiny. With this few matches, a gap that small cannot even be confirmed as real.</p>`,
       trigger: 'step',
       // Sync to S10's exact rest positions; duration 0 so nothing visibly
       // moves (storyboard §Units: "No population re-sort").
@@ -616,7 +785,7 @@ export default {
     },
     {
       id: 'b2',
-      html: `<p>There is one real blowout on this chart, five minutes before the final whistle. But the professional book had already closed by then. Here is how both can be true: a soccer match runs past the 90-minute mark into added time. The book shuts at 90:00 by design, and the final whistle comes a few minutes later. Grading someone after they have left the room is not a fair test. About 74% of the professional book's error here comes from just five matches. Each was decided by a goal in those added minutes, after the book had shut.${FN(16)}</p>`,
+      html: `<p>There is one real blowout on this chart, graded five minutes before the final whistle. But the professional book had already closed by then. A match runs past the ninety-minute mark into added time, and the book shuts at 90:00 by its own house rules, the same rules from the goal scene. The final whistle comes a few minutes later. A price cannot be blamed for missing an ending it never got to watch.</p><p>Take Canada against South Africa, a 1-0 win decided by a late goal. With the whistle close, Kalshi's price already showed 95 cents on Canada. Pinnacle's last quote, posted the same minute as the goal, still had Canada at 10 cents. Then the book went dark: no fresh quote followed for the last 9 minutes of the match. That is the same empty chair as the sixteen "gaps" with the professionals, seen earlier. Check that a price was still alive before you grade it.</p><p>About 74% of the professional book's error on this chart comes from five matches like this one, each decided by a goal in those added minutes, after the book had already shut.${FN(16)}</p>`,
       trigger: 'step',
       overlayStep: 'b2',
     },

@@ -258,16 +258,16 @@ fix never touched, and remains open (see Outstanding open items).
 
 | # | What | Value | Class | Source | Enum. verdict | Recompute verdict | Disposition |
 |---|---|---|---|---|---|---|---|
-| 1 | regulation-leg color-interpolation divisor: `t = clamp(1 - price_c/50, 0, 1)` | 50 | HARD | happens to sit near this leg's real ~48c start (R4) | suspect | **WRONG_SCOPE** — not computed from the tile's own first-tick price; a leg opening at a materially different price would get a systematically wrong color ramp | **NOT FIXED** — `s08.js` unchanged apart from the `price_at_whistle_c` addition (#4); the `/50` divisor is still a bare literal |
-| 2 | `kickoffTs` derivation for the match-minute axis | `whistleTs - 90*60000` (assumes exactly 90 minutes, zero stoppage) | HARD | no independent `kickoff_ts` field is shipped to check against | suspect | **UNVERIFIABLE** — no ground-truth boundary exists in the store; this remains self-consistent only by construction | **NOT FIXED** — unchanged |
-| 3 | decay-caption hardcoded figures: "never faster than 7 cents a minute" / "a real goal moves 19 to 25 cents in 30 seconds" | 7c/min; 19–25c/30s | CITED | R4 (ig-07); duplicated by hand in both the SVG caption and the beat prose | suspect | **WRONG_SCOPE** (unaddressed) — the values themselves trace to R4, but the duplication with no shared source or checker persists; neither figure is backed by any `s08.json` field, and no `check_figure_sync.py` slot covers either | **NOT FIXED** — both strings unchanged; still two independent hand-typed copies of the same figures |
-| 4 | beat b1 prose: regulation leg "48 cents to 1" over "22 minutes" | 0.48 → 0.01 over 22 min | CITED | R4 (ig-07), fn-13 | ok (matched R4/fn-13 as written) | **WRONG_VALUE** — the raw GER regulation leg's own tape at the *exact* `whistle_ts` anchor the axis and prose both point at reads 43–44c, not 48c; 48c last held about two minutes earlier | **FIXED** — `build_s08_scene()` now live-recomputes `price_at_whistle_c` (GER regulation leg's last trade at or before `whistle_ts`); prose changed "48 cents"→"44 cents to 1 cent over twenty-two minutes"; guarded by new `check_figure_sync.py` slot `s08-price-at-whistle` (PASS on live run) |
+| 1 | regulation-leg color-interpolation divisor: `t = clamp(1 - price_c/50, 0, 1)` | 50 | HARD | happens to sit near this leg's real ~48c start (R4) | suspect | **WRONG_SCOPE** — not computed from the tile's own first-tick price; a leg opening at a materially different price would get a systematically wrong color ramp | **FIXED** (this pass) — `layout()` now computes `regStartPriceC` from the tile's own first tick on the regulation leg (`tile.price_c[regRows[0]]`; `build_tiles.py` sorts the whole tile by `ts_ms` before slicing, so `regRows[0]` is genuinely that leg's earliest print in this window), divisor-by-zero guarded, and `place()`'s color ramp reads that variable instead of the bare `/50` literal. A leg opening at a materially different price now gets a correctly-scaled ramp. |
+| 2 | `kickoffTs` derivation for the match-minute axis | `whistleTs - 90*60000` (assumes exactly 90 minutes, zero stoppage) | HARD | no independent `kickoff_ts` field is shipped to check against | suspect | **UNVERIFIABLE** — no ground-truth boundary exists in the store; this remains self-consistent only by construction | **FIXED** (this pass) — `docs/data/scenes/s08.json`'s `window.kickoff_ts` now ships as its own class-A field (Pinnacle's fixture kickoff for this match, `_entity_map_played.parquet`, independent of the whistle), added in the same re-derivation that produced `period_bands`/`shootout_kicks`/`et_spike`. `overlay()` reads that field directly for the match-minute axis; the old `whistleTs - 90*60000` approximation survives only as a defensive fallback if the field is ever missing. This also resolves the enumeration's `UNVERIFIABLE` verdict: an independent boundary now exists to check the axis against. |
+| 3 | decay-caption hardcoded figures: "never faster than 7 cents a minute" / "a real goal moves 19 to 25 cents in 30 seconds" | 7c/min; 19–25c/30s | CITED | R4 (ig-07); duplicated by hand in both the SVG caption and the beat prose | suspect | **WRONG_SCOPE** (unaddressed) — the values themselves trace to R4, but the duplication with no shared source or checker persists; neither figure is backed by any `s08.json` field, and no `check_figure_sync.py` slot covers either | **FIXED** (this pass) — the four figures are now module-level constants in `s08.js` (`R4_DECAY_MAX_C_PER_MIN`, `R4_GOAL_MOVE_LO_C`, `R4_GOAL_MOVE_HI_C`, `R4_GOAL_MOVE_WINDOW_S`); the pinned SVG caption reads them live via template literals instead of a hand-typed copy. No `s08.json` field backs them (they are cross-tournament-cited, not this leg's own data), so the checker gap is closed with a same-file self-consistency mechanism instead: four new `check_figure_sync.py` slots (`s08-decay-rate-sync`, `s08-goal-move-lo-sync`, `s08-goal-move-hi-sync`, `s08-goal-move-window-sync`) diff the beat prose's own plain-text copy against those constants (PASS on live run, all 5 s08 slots green). |
+| 4 | beat b1 prose: regulation leg "48 cents to 1" over "22 minutes" | 0.48 → 0.01 over 22 min | CITED | R4 (ig-07), fn-13 | ok (matched R4/fn-13 as written) | **WRONG_VALUE** — the raw GER regulation leg's own tape at the *exact* `whistle_ts` anchor the axis and prose both point at reads 43–44c, not 48c; 48c last held about two minutes earlier | **FIXED**, then amended by item 9's fuller re-derivation (this pass) — the original fix (`build_s08_scene()` recomputing `price_at_whistle_c` off the OLD `whistle_ts`, "48 cents"→"44 cents") is superseded: `whistle_ts` itself was re-derived a second time, from a last-trade approximation to the tape's own terminal-pin start (item 9's directive). At THAT corrected instant `price_at_whistle_c` is honestly ~1c, so the "X cents to 1 cent" claim now reads off `glide.start_price_c` (the tape's own price 22 minutes, R4's verified glide duration, before the corrected whistle) instead — which lands back on 48c, the original pre-Gate-5 figure, now for the right reason (a corrected whistle instant, not a hand-typed dossier number). The `check_figure_sync.py` slot `s08-price-at-whistle` still tracks `glide.start_price_c` against the prose and still PASSes (prose=48, data=48). |
 
 ## Scene s09 — bracket math (`docs/js/scenes/s09.js`)
 
 | # | What | Value | Class | Source | Enum. verdict | Recompute verdict | Disposition |
 |---|---|---|---|---|---|---|---|
-| 1 | multiples y-axis domain, `.clamp(true)` | `[0, 6]` | HARD | static literal, same shape as the original S6 axis-clamp defect | suspect | **WRONG_SCOPE** — reverified directly in current source: still `d3.scaleLinear().domain([0, 6]).clamp(true)` at `s09.js:117`, not derived from `d3.max`. Currently harmless (the three verified multiples — PAR 5.0, NOR 3.6, BEL 2.0 — all sit inside it), but the defect class that clamped S6's real data is still structurally present here | **NOT FIXED** — unchanged |
+| 1 | multiples y-axis domain, `.clamp(true)` | was a bare `[0, 6]`, now per-panel `[0, max(1.1, maxMult*1.15)]` and, for the wide mirror chart, `[0, max(1.1, norShock.pop_multiple*1.15)]` | STORE (was HARD) | static literal, same shape as the original S6 axis-clamp defect | suspect | **WRONG_SCOPE at enumeration, now superseded** — the bare `[0, 6]` literal no longer exists anywhere in `s09.js` (reverified this pass: `grep '\[0, 6\]' docs/js/scenes/s09.js` returns zero hits outside a code comment citing this exact ledger finding). Gate-5 batch 3's small-multiples rewrite (item 10) replaced the single main chart with three per-team panels, each scaling off `d3.max(series.points, p => p.mult)` (`s09.js:240-241`), and the wide mirror chart's ceiling off Norway's own verified `shocks[].pop_multiple` (`s09.js:275-276`, `mirrorCeiling = Math.max(1.1, norShock.pop_multiple*1.15)`) — the exact fix class this finding called for | **FIXED** — `s09.js:256-260`'s own comment names this ledger entry directly and documents the fix; every axis in the rebuilt scene now derives its ceiling from the data it draws, no bare magic-number clamp remains |
 | 2 | S16 anchor recap (`anchors.mirror()`) y-axis domain | `[0, 100]` raw cents, not multiples-of-baseline like the main scene | HARD | reintroduces the exact raw-cents domain the main scene's own fix was built to avoid | suspect | **WRONG_SCOPE** — confirmed: crushed Norway's whole 0.1–10.8c climb into the bottom ~11% of the panel | **FIXED** — the recap now computes its own tight ceiling live, from the two teams' own plotted dots: `d3.scaleLinear().domain([0, Math.max(mirrorMaxPriceBand * 1.15, 1)])` |
 | 3 | `verifiedStepPoints()` shock multiples (PAR 5.0x, NOR 3.6x, BEL 2.0x) | `s09.json shocks[].pop_multiple` | CITED | `post_upset_drift.parquet` (R9), fn-14 | ok | **CONFIRMED** — story-carrying lines use the verified analysis figure directly, unchanged | NO FIX NEEDED |
 
@@ -275,7 +275,7 @@ fix never touched, and remains open (see Outstanding open items).
 
 | # | What | Value | Class | Source | Enum. verdict | Recompute verdict | Disposition |
 |---|---|---|---|---|---|---|---|
-| 1 | gap-chart y-axis domain, `.clamp(true)` | `[0, 20]` points | HARD | static literal | suspect | **WRONG_SCOPE** — confirmed still present (`s10.js:308-309`, `domainMax = 20`); the recomputed braid (see #3) now reaches 83.5pts at the goal-second spikes, so roughly the same silent clip the original finding described persists | **NOT FIXED** — the domain itself is unchanged, and no on-screen disclosure of the clip (e.g. "spikes continue to 84 points") was added, though the *numbers feeding the clip's own provenance* are now accurate (see #5) |
+| 1 | gap-chart y-axis domain, `.clamp(true)` | `[0, 20]` points | HARD | static literal | suspect | **WRONG_SCOPE, partially remediated this pass** — the literal itself is still present (`s10.js:371`, `domainMax = 20`), not derived from `d3.max`; the recomputed braid (see #3) still reaches 83.5pts at the goal-second spikes, so the axis can still silently clip real data in principle | **PARTIALLY FIXED** (this pass, Gate-5 item 11) — the domain constant is unchanged, but the reader-facing harm (a silent, undisclosed clip) is now closed a different way: `s10.js`'s new `drawEchoNote()` (`s10.js:609-624`) renders a live, data-derived disclosure — `` `dashed spikes are recording echoes, reaching up to ${Math.round(spikeMaxPts)} points past this chart's cap` `` — where `spikeMaxPts = maxSingleGapPts(braid)` (`s10.js:370`) is recomputed from the scene's own loaded braid every render, not hardcoded. Confirmed on screen: `research/design-review/screens/s10-b1-settled.png` shows "reaching up to 84 points past this chart's cap." The axis-domain magic-number defect class survives structurally; the concrete drift risk it created (a reader unable to tell the chart was clipped) does not |
 | 2 | reference-band threshold, "within 5 cents" | `BAND = Math.min(5, domainMax) = 5` | CITED | R2 / `calibration_divergence_pm.py GAP_THRESH=0.05, SUSTAIN_MIN=30` | ok | **CONFIRMED** — matches the analysis script's own constants exactly, unchanged | NO FIX NEEDED |
 | 3 | `gap_summary.mean_1min_gap_pts` (gapMeter readout + beat b1's "average gap stayed under one cent") | 0.74 → 1.3 | CITED | `kalshi_vs_polymarket_max_gaps.csv`, a **different, narrower** 150-minute pre-resolution window than the kickoff-anchored braid this scene actually draws | ok (matched the CSV) | **WRONG_SCOPE** — confirmed: the summary statistic and the drawn line described two different populations | **FIXED** — `s10.js` now computes `meanGap` live as `d3.mean(gapPts)`, the *exact same array* the chart line plots — architecturally impossible to drift apart again, checker or no checker; prose updated "stayed under one cent" → "stayed close to a penny" (1.3 rounds up, not under) |
 | 4 | `gap_summary.n_legs` | 84 | CITED | same CSV row count | ok | **CONFIRMED** — matches `_entity_map_played.parquet` (28 matches × 3 legs), unchanged | NO FIX NEEDED |
@@ -287,8 +287,8 @@ fix never touched, and remains open (see Outstanding open items).
 
 | # | What | Value | Class | Source | Enum. verdict | Recompute verdict | Disposition |
 |---|---|---|---|---|---|---|---|
-| 1 | smallN readout: "84 coupled legs · effective sample: 28 matches" | `nLegs = scene.n_legs ?? 84; effN = scene.effective_n ?? 28` | HARD | fallback literals; `s11.json` never carries `n_legs`/`effective_n` despite the module's own DATA CONTRACT docstring | suspect | **CONFIRMED** the values are numerically correct (28 distinct matches × 3 = 84 in `_entity_map_played.parquet`), but the `??` fallback still always fires | **NOT FIXED** — reverified: `s11.json` still ships only `scores` and `three_traps_receipt`, no `n_legs`/`effective_n`; `s11.js:307-308`'s fallback is unchanged |
-| 2 | beat b2: "About 74% of the professional book's error here comes from just five matches" | 74% / 5 matches | CITED | dossier R5; the scene's own docstring admits this was "not located as an existing pipeline column at build time" | suspect | **CONFIRMED** — independently recomputed for this ledger from `match3way_panel.parquet`: summing `(pinn_price - outcome)^2` per match at the T-5min horizon across all 28 matches, the top 5 by error (JUN28RSACAN, JUN29BRAJPN, JUL07ARGEGY, JUL10ESPBEL, JUL01ENGCOD) account for 73.8% of total squared error — the claim checks out | **NOT FIXED** — still hardcoded directly in beat prose with no backing scene-JSON field; `grep` for `blowout_share_pct`/`blowout_matches_n` across `s11.json` and `build_tiles.py`'s output still returns nothing wired in |
+| 1 | smallN readout: "84 coupled legs · effective sample: 28 matches" | `nLegs = scene.n_legs ?? 84; effN = scene.effective_n ?? 28` | STORE (was HARD) | fallback literals; `s11.json` never carries `n_legs`/`effective_n` despite the module's own DATA CONTRACT docstring | suspect | **CONFIRMED**, now moot — the values were always numerically correct (28 distinct matches × 3 = 84 in `_entity_map_played.parquet`) | **FIXED** (this pass) — reverified directly in the current tree: `docs/data/scenes/s11.json` now ships `"n_legs": 84` and `"effective_n": 28` as live top-level fields (`build_scene_s11()`'s output), and `check_figure_sync.py` carries slots `s11-n-legs`/`s11-effective-n` that PASS against them. `s11.js:343-344`'s `scene.n_legs ?? 84` / `scene.effective_n ?? 28` now resolves the shipped field on every real run; the `?? 84`/`?? 28` literals survive only as a documented defensive fallback for a missing field, never the live path |
+| 2 | beat b2: "About 74% of the professional book's error here comes from just five matches" | 74% / 5 matches | CITED | dossier R5; the scene's own docstring admits this was "not located as an existing pipeline column at build time" | suspect | **CONFIRMED** — independently recomputed for this ledger from `match3way_panel.parquet`: summing `(pinn_price - outcome)^2` per match at the T-5min horizon across all 28 matches, the top 5 by error (JUN28RSACAN, JUN29BRAJPN, JUL07ARGEGY, JUL10ESPBEL, JUL01ENGCOD) account for 73.8% of total squared error — the claim checks out | **FIXED** (this pass) — `s11.json` now ships `blowout_share_pct` (73.8), `blowout_matches_n` (5), and a named `blowout_example` (Canada–South Africa: Kalshi 95%, Pinnacle 9.7%, 9.2 dark minutes), all live-computed by `build_scene_s11()`; five new `check_figure_sync.py` slots (`s11-blowout-share-pct`, `s11-blowout-matches-n`, `s11-blowout-example-kalshi-price`, `s11-blowout-example-pinnacle-price`, `s11-blowout-example-dark-minutes`) guard the beat's own hardcoded prose against those fields and all PASS. The beat's HTML string is still hand-written text rather than a template read, so this is a checker-guarded literal, not a live-rendered one (same convention as s08 #3's self-consistency slots) — but the original defect (no backing field, no guard, free to drift silently) is closed |
 | 3 | `three_traps_receipt[]` (the b3 receipt panel, middle line) | "29s/60s/119s reaction ladder" | CITED | hand-written summary; "119 seconds" matched neither the illustrated S7 event's own value (109.1s) nor any real cross-tournament aggregate (median 114.2s, mean 121.7s) | ok | **WRONG_VALUE** — the middle clause silently mixed populations (one single-event figure standing in next to a cross-tournament one) | **FIXED** — `build_scene_s11()` now recomputes the median Kalshi/Pinnacle reaction times live from `reaction_latency.parquet`; the receipt line now reads "29s/60s/114s," reworded to state plainly it is "the tournament's median reaction time across matched goals, not one event's speed ranking" |
 
 ## Scene s12 — Golden Boot (`docs/js/scenes/s12.js`)
@@ -308,6 +308,7 @@ fix never touched, and remains open (see Outstanding open items).
 | 3 | `zombie_money.n_trades` / `.total_usd` | 277 / $2,190.47 → 302 / $2,339.93 | CITED | `zombie_money.parquet` (R21), summed across knockout losers | suspect | **WRONG_VALUE** — confirmed at the time: the generating script's JOIN matched on exact `yes_sub_title` string equality, which silently dropped DR Congo ("DR Congo" vs. catalog "Congo DR," word order) and United States ("United States" vs. catalog "USA," abbreviation) — 26 of 28 losers resolved, undercounting the true total | **FIXED** — `bias_forensics_04_zombie_money.py`'s JOIN now normalizes on a word-order-invariant, alias-mapped team name (`norm_name()`, with an explicit `{"united states": "usa"}` alias); all 28 losers now resolve. Shipped figure is now 302 trades / $2,339.93 — matching dossier R21's full-tournament figure exactly — and prose was updated to match; guarded by new `check_figure_sync.py` slots `s13-zombie-trades` / `s13-zombie-usd` (both PASS) |
 | 4 | `zombie_money.max_price_c` | 0.1 → 1.0 | CITED | same parquet, `max_price_after_elim_c` | suspect | **WRONG_VALUE** — every non-null row carried an implausible identical 0.1, inconsistent with Kalshi's real 1-cent minimum tick (a trade cannot clear at $0.001) | **FIXED** — resolved as part of the same JOIN fix (#3); the corrected 28-row set now yields `max_price_c: 1.0`, i.e. "at a penny," consistent with the beat's own "at a penny or less" framing and the exchange's real tick floor |
 | 5 | beat b1 `grain.text` literal | $75,000 | HARD | `s13.js beats[0].grain.text` | suspect | **WRONG_SCOPE** — piece-wide device-grain mismatch | **FIXED** — see "A piece-wide fix" above; the below-dots caption on this scene was additionally changed from a bare `$75,000` string to a live `${Math.round(view.grain.usd)...}` expression |
+| 6 | b1/b2 pair dot-fill placement vs the outline/label snapshot | fill spanned every lifetime price band (ARG to ~43c) under an 11c outline | STORE | `s13.js` pair layout loop vs `pairs[].kalshi_price_pct` | — (found by the Gate-5 batch-3 blind re-review, post-enumeration) | **WRONG_SCOPE** — the fill iterated the full population with no time cutoff, so in-tournament money (Argentina bought at 40c+ while advancing) rendered inside a bar whose outline and amber label claim the pre-kickoff snapshot; the hosts panel one beat later already filtered `birth_ts < pretournament_cutoff_s` | **FIXED** — pair fill now applies the same pre-kickoff cutoff the hosts beat and the b3 footer ("before kickoff") always promised; verified against `pop-75k.bin`: pre-cutoff ARG dots occupy the 9–10c bands under the 11c outline (56 dots), USA 1–4c under 1.5c (94 dots); blind re-review CONFIRMED the fill now sits inside the outline |
 
 ## Scene s14 — the penny-ticket sin (`docs/js/scenes/s14.js`)
 
@@ -461,13 +462,19 @@ agreement (same class as s01 #5/#6/#7, just not yet converted):*
 3. `s02.js` `DRAW_WEEK_MS` (s02 #1) — duplicates `s02.json.draw_date`, unread.
 4. `s02.js` `WALL_MS` (s02 #2) — duplicates `s02.json.tournament_start`, unread.
 5. `s02.js` `FINAL_MS` (s02 #3) — duplicates `s02.json.final_date`, unread.
-6. `s08.js` regulation-leg color divisor `/50` (s08 #1) — not derived from
-   the tile's own first-tick price.
-7. `s08.js` `kickoffTs = whistleTs - 90*60000` (s08 #2) — assumes zero
-   stoppage time; no independent `kickoff_ts` field exists to check it.
-8. `s08.js` decay-caption figures, "7 cents a minute" / "19 to 25 cents in
+6. ~~`s08.js` regulation-leg color divisor `/50` (s08 #1) — not derived from
+   the tile's own first-tick price.~~ **RESOLVED (later pass)** — see Scene
+   s08's table, item #1: now reads the tile's own first tick on the
+   regulation leg.
+7. ~~`s08.js` `kickoffTs = whistleTs - 90*60000` (s08 #2) — assumes zero
+   stoppage time; no independent `kickoff_ts` field exists to check it.~~
+   **RESOLVED (later pass)** — see Scene s08's table, item #2: a class-A
+   `window.kickoff_ts` field now ships and is read directly.
+8. ~~`s08.js` decay-caption figures, "7 cents a minute" / "19 to 25 cents in
    30 seconds" (s08 #3) — hand-duplicated in both the SVG caption and beat
-   prose, no shared source, no checker slot.
+   prose, no shared source, no checker slot.~~ **RESOLVED (later pass)** —
+   see Scene s08's table, item #3: single-sourced as module constants, four
+   new `check_figure_sync.py` self-consistency slots close the checker gap.
 9. `s12.js` / `build_tiles.py` annotation dates, July 7/8 level and the Kane
    halving (s12 #1) — both numerically correct today but manual editorial
    picks, not rule-derived; nothing would catch a future refreeze moving
@@ -476,12 +483,20 @@ agreement (same class as s01 #5/#6/#7, just not yet converted):*
 *Axis domains or ceilings that clamp real data without disclosure (the
 original S6-flatline failure class, not yet converted at these sites):*
 
-10. `s09.js` main multiples y-axis `[0, 6]`, `.clamp(true)` (s09 #1) —
+10. ~~`s09.js` main multiples y-axis `[0, 6]`, `.clamp(true)` (s09 #1) —
     currently harmless (verified multiples all sit inside it) but not
-    derived from `d3.max`.
-11. `s10.js` gap-chart y-axis `[0, 20]`, `.clamp(true)` (s10 #1) — the
-    recomputed braid now reaches 83.5pts at goal-second spikes; still no
-    on-screen disclosure of the clip.
+    derived from `d3.max`.~~ **RESOLVED (Gate-5 batch 3)** — see Scene s09's
+    table, item #1: the small-multiples rewrite replaced the bare literal
+    with per-panel `d3.max`-derived ceilings and a mirror-chart ceiling
+    derived from Norway's own verified shock multiple.
+11. `s10.js` gap-chart y-axis `[0, 20]`, `.clamp(true)` (s10 #1) —
+    **PARTIALLY RESOLVED (Gate-5 batch 3)**: the axis literal itself is
+    still `20`, not `d3.max`-derived, so the underlying magic-number
+    pattern remains; but the silent-clip harm this item exists to track is
+    now closed by a live, data-derived on-screen disclosure
+    ("...reaching up to 84 points past this chart's cap") — see Scene
+    s10's table, item #1, and `research/design-review/screens/
+    s10-b1-settled.png`.
 
 *Structural gaps in the automated refreeze-consistency checker
 (`check_figure_sync.py`), confirmed by direct run to still carry zero
@@ -496,12 +511,18 @@ slots for the named scene:*
 *Missing or unwired data fields that leave a visual channel dead or a
 prose claim unbacked:*
 
-14. `s11.js` `n_legs`/`effective_n` fallback (s11 #1) — `s11.json` still
+14. ~~`s11.js` `n_legs`/`effective_n` fallback (s11 #1) — `s11.json` still
     never ships these fields, so the `??` fallback always fires (values
-    happen to be correct).
-15. `s11.js` beat b2's "74%... five matches" (s11 #2) — independently
+    happen to be correct).~~ **RESOLVED (Gate-5 batch 3)** — see Scene
+    s11's table, item #1: `s11.json` now ships both fields live, guarded
+    by two new `check_figure_sync.py` slots.
+15. ~~`s11.js` beat b2's "74%... five matches" (s11 #2) — independently
     reverified correct (73.8%) but still hardcoded prose with no backing
-    `blowout_share_pct`/`blowout_matches_n` field.
+    `blowout_share_pct`/`blowout_matches_n` field.~~ **RESOLVED (Gate-5
+    batch 3)** — see Scene s11's table, item #2: `s11.json` now ships
+    `blowout_share_pct`/`blowout_matches_n`/`blowout_example`, guarded by
+    five new `check_figure_sync.py` slots; the beat prose remains a
+    checker-guarded literal rather than a live template read.
 16. `s14.json` `buckets[].total_volume` (s14 #2) — absent from every
     bucket; dollars-weighted markers all silently render at the fixed
     minimum radius regardless of real dollar weight.
@@ -531,13 +552,24 @@ prose:*
     shows "85.4¢" beside prose that reads "85 cents." `check_figure_sync.py`
     checks prose against JSON, never the separately-rendered D3 caption.
 
-Each of the 21 items above (3–21, minus the 2 carried forward) is `NOT
-FIXED`; two further items are `PARTIALLY FIXED` and are tracked in their own
-scene tables rather than repeated here: s05's `gini_within_family` was
-re-synced while `gini_pooled` stayed deliberately frozen (s05 #3), and s10's
-checker-coverage gap (s10 #7, folded into item 12 above) sits alongside an
-architectural fix that makes the specific drift it would have caught
-impossible regardless of the missing slot.
+Each of the 19 new items above (3–21) was `NOT FIXED` as of this ledger's
+original audit. Six have since been resolved in later passes — struck
+through above, with the disposition recorded in each scene's own table:
+items 6–8 (s08 #1–#3), and, in this Gate-5 batch-3 pass, items 10 (s09
+#1) and 14–15 (s11 #1–#2). Two more are now `PARTIALLY FIXED` rather than
+struck through: item 11 (s10 #1) in this same batch-3 pass — the
+magic-number axis literal survives, but the silent-clip harm it caused is
+closed by a live, data-derived disclosure — and item 12 (s10 #7), whose
+checker gap remains but whose underlying drift risk is architecturally
+closed by a different mechanism (see s10 #3). **11 items remain fully
+`NOT FIXED`**: items 3–5 (s02, duplicated date literals), 9 (s12
+annotation dates), 13 (s16 checker coverage), and 16–21 (s14
+`total_volume`, s15's mixed-price fallback, the stale `manifest.hero.
+provenance`, the `0.25` ceremonial-dim token, s07's clipped Polymarket
+axis, and s19's unrounded `fmt.cents()`). One further item outside this
+numbered list is `PARTIALLY FIXED` and is tracked in its own scene table
+rather than repeated here: s05's `gini_within_family` was re-synced while
+`gini_pooled` stayed deliberately frozen (s05 #3).
 
 ## Totals
 
@@ -552,10 +584,10 @@ impossible regardless of the missing slot.
 | s05 | 5 | 5 | 5 | 0 | 0 | 0 | 2 | 1 | 0 | 2 | 0 |
 | s06 | 5 | 5 | 3 | 0 | 2 | 0 | 2 | 0 | 0 | 3 | 0 |
 | s07 | 4 | 4 | 1 | 0 | 3 | 0 | 2 | 0 | 1 | 1 | 0 |
-| s08 | 4 | 4 | 0 | 1 | 2 | 1 | 1 | 0 | 3 | 0 | 0 |
-| s09 | 3 | 3 | 1 | 0 | 2 | 0 | 1 | 0 | 1 | 1 | 0 |
-| s10 | 7 | 7 | 4 | 1 | 2 | 0 | 2 | 1 | 1 | 3 | 0 |
-| s11 | 3 | 3 | 2 | 1 | 0 | 0 | 1 | 0 | 2 | 0 | 0 |
+| s08 | 4 | 4 | 0 | 1 | 2 | 1 | 4 | 0 | 0 | 0 | 0 |
+| s09 | 3 | 3 | 1 | 0 | 2 | 0 | 2 | 0 | 0 | 1 | 0 |
+| s10 | 7 | 7 | 4 | 1 | 2 | 0 | 2 | 2 | 0 | 3 | 0 |
+| s11 | 3 | 3 | 2 | 1 | 0 | 0 | 3 | 0 | 0 | 0 | 0 |
 | s12 | 3 | 3 | 2 | 0 | 1 | 0 | 1 | 0 | 1 | 1 | 0 |
 | s13 | 5 | 5 | 2 | 2 | 1 | 0 | 3 | 0 | 0 | 2 | 0 |
 | s14 | 4 | 4 | 1 | 1 | 2 | 0 | 2 | 0 | 1 | 1 | 0 |
@@ -564,7 +596,7 @@ impossible regardless of the missing slot.
 | s17 | 2 | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 |
 | s18 | 1 | 1 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |
 | s19 | 6 | 6 | 3 | 1 | 2 | 0 | 3 | 0 | 2 | 1 | 0 |
-| **Total** | **100** | **86** | **36** | **14** | **32** | **4** | **39** | **3** | **22** | **22** | **14** |
+| **Total** | **100** | **86** | **36** | **14** | **32** | **4** | **45** | **4** | **15** | **22** | **14** |
 
 † s01's one `UNVERIFIABLE` verdict (#5, `whistleMinute`) was resolved by
 adding a tape-derived boundary at build time — see its disposition. It is
@@ -574,20 +606,20 @@ not a live unresolved unverifiable.
 |---|---|
 | Scenes covered | **19 of 19** |
 | Entries enumerated | 100 (22 s01 + 78 s02–s19) |
-| — by class | HARD 46 · CITED 40 · STORE 14 |
+| — by class (at enumeration time) | HARD 46 · CITED 40 · STORE 14; 2 entries have since migrated HARD → STORE in this Gate-5 batch-3 pass (s09 #1, s11 #1), now HARD 44 · CITED 40 · STORE 16 in the current working tree |
 | — enumeration verdict `ok` | 44 |
 | — enumeration verdict `suspect` | 56 |
 | Entries independently recomputed | 86 (every entry carrying an analytical or narrative claim; the 14 pure-geometry `HARD` entries, all in s01, were correctly out of scope for recompute — s02–s19 contributed zero further out-of-scope entries, since none of their flagged constants were pure layout geometry with no claim attached) |
 | — recompute `CONFIRMED` | 36 |
 | — recompute `WRONG_VALUE` | 14 |
 | — recompute `WRONG_SCOPE` | 32 |
-| — recompute `UNVERIFIABLE` | 4 (1 since resolved in s01; 3 live in s02–s19 — s03 `$10.94B July 8` figure, s04 `waking_band` convention, s08 `kickoffTs` 90-minute assumption) |
-| Disposition: `FIXED` in current working tree | 39 |
-| Disposition: `PARTIALLY FIXED` | 3 (s01 #21, s05 #3, s10 #7) |
-| Disposition: `NOT FIXED` | 22 |
+| — recompute `UNVERIFIABLE` | 4 (2 since resolved: s01 #5 in the original pass, s08 `kickoffTs` 90-minute assumption in a later pass — see s08 #2; 2 still live in s02–s19 — s03 `$10.94B July 8` figure, s04 `waking_band` convention) |
+| Disposition: `FIXED` in current working tree | 45 (was 42; Gate-5 batch-3 pass resolved s09 #1, s11 #1, s11 #2) |
+| Disposition: `PARTIALLY FIXED` | 4 (s01 #21, s05 #3, s10 #1, s10 #7; s10 #1 added this pass) |
+| Disposition: `NOT FIXED` | 15 (was 19; Gate-5 batch-3 pass closed s09 #1 and s11 #1–#2 fully, and downgraded s10 #1 to `PARTIALLY FIXED`) |
 | Disposition: `NO FIX NEEDED` (confirmed clean, unchanged or deliberately frozen) | 22 |
 | Disposition: `OUT OF SCOPE` (pure layout geometry, no claim to check — all in s01) | 14 |
-| **Open items requiring a code/prose change, not yet made** | **25** — see Outstanding open items (2 carried forward from s01, 23 new) |
+| **Open items requiring a code/prose change, not yet made** | **19** (was 22) — see Outstanding open items (2 carried forward from s01, 20 new; 6 of the original 23 new items resolved across later passes: s08 #1–#3, and in this Gate-5 batch-3 pass, s09 #1 and s11 #1–#2; one more, s10 #1, downgraded from `NOT FIXED` to `PARTIALLY FIXED` this same pass) |
 | **The single largest fix, by defect count** | the piece-wide grain-mismatch bug (11 scenes, 1 root cause, 1 fix in `main.js`) — see "Notable catches" |
 | **Scenes not yet enumerated** | **0** — s01–s19 all covered |
 

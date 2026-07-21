@@ -90,6 +90,34 @@
  * renders it as its own mark set; those moments are already honest in the
  * gap line's own dim ground pass.
  *
+ * GATE-5 ITEMS 11 + 12 (research/revision/gate5-feedback-notes.md; closes
+ * provenance-ledger.md's s10 #1, NOT_FIXED). Item 11: the ROUND-4 ground
+ * pass was honest data but unreadable as a category — a reader saw "bold
+ * and thin white lines" and could not tell a baseline from an artifact,
+ * and the [0,20] axis clipped spike tops with no on-screen sign a cap even
+ * existed. Four fixes, all in this file: (1) the ground pass now draws
+ * dashed and a shade dimmer, reading as "not a primary series" on sight;
+ * (2) a new maxSingleGapPts() helper recomputes the true peak straight off
+ * this scene's own loaded braid (same discipline as meanGap above, not a
+ * read of the separately-sourced gap_summary.goal_second_spike_pts field)
+ * and a new echo note (drawGapLine's sibling drawEchoNote(), painted in a
+ * new noteLayer above lineLayer) names the mechanic and discloses that
+ * peak; (3) the y-axis's top tick now reads "20+" and the axis title
+ * states the cap in words; (4) b1's prose gains an up-front "this line is
+ * a distance, not a price" sentence (the beat's own "one cent of price"
+ * had invited the opposite reading) and two sentences teaching the echo
+ * mechanic (both venues stamp trades once a minute, so a goal at that
+ * instant can straddle the two records differently, closing again within
+ * seconds). Item 12: b3's "the professionals had left the room" was a
+ * metaphor with no stated mechanism and no stated stakes. Replaced with
+ * the plain policy tie (Pinnacle's in-game book closes at the ninety-
+ * minute mark by its own house rules, the same rules named in the goal
+ * scene) and the payoff the metaphor skipped — a gap against a book that
+ * stopped quoting is not a disagreement, it is an empty chair, the same
+ * mistake this project's own first analysis pass made before checking
+ * whether Pinnacle was still quoting (the killed 14-2 "Kalshi beats the
+ * pros" finding named in findings-dossier.md's killed-findings list).
+ *
  * ---------------------------------------------------------------------
  * DATA CONTRACT ASSUMPTIONS (flagged in this build's data_requests — the
  * exact internal shape of a per-scene JSON file is left to the tile
@@ -269,6 +297,36 @@ function toGapSeries(braid) {
   return out;
 }
 
+/* Gate-5 item 11: the single largest goal-minute recording echo, read
+ * straight off this scene's own loaded braid arrays -- the largest
+ * |kalshi_pts - polymarket_pts| across every row, BEFORE toGapSeries's
+ * per-minute, three-leg averaging smooths it down. This is the number the
+ * chart's spike-disclosure annotation reports: how far one ticket's paper
+ * gap reached at its worst, which the axis-capped, averaged line can never
+ * show at full height (provenance-ledger.md s10 #1, NOT_FIXED -- the axis
+ * clipped silently with no on-screen disclosure of what it clipped).
+ * Deliberately recomputed here rather than read from
+ * scene.gap_summary.goal_second_spike_pts, matching why meanGap moved off
+ * gap_summary.mean_1min_gap_pts above: one array, one source of truth, no
+ * separately-windowed field free to drift against it. (The two happen to
+ * agree today -- both 83.5 -- because the JSON field was itself corrected
+ * to recompute off this same braid; this function makes that agreement
+ * structural instead of coincidental.) */
+function maxSingleGapPts(braid) {
+  const k = braid.kalshi_pts || [];
+  const p = braid.polymarket_pts || [];
+  let max = 0;
+  for (let i = 0; i < k.length; i++) {
+    const kv = k[i];
+    const pv = p[i];
+    if (kv === null || kv === undefined || Number.isNaN(kv)) continue;
+    if (pv === null || pv === undefined || Number.isNaN(pv)) continue;
+    const gap = Math.abs(kv - pv);
+    if (gap > max) max = gap;
+  }
+  return max;
+}
+
 export default {
   id: 's10',
   act: 3,
@@ -302,16 +360,23 @@ export default {
     // spike to the plot's top edge rather than letting the path escape the
     // chart box; a spike flattening against the ceiling still reads as
     // "this one blew past normal," the honest shape of a same-magnitude
-    // but off-the-chart event.
+    // but off-the-chart event. Gate-5 item 11 / provenance-ledger.md s10 #1
+    // (NOT_FIXED): the flattened shape alone never told a reader HOW FAR
+    // past normal, so the top axis tick now reads "20+" and one on-chart
+    // annotation states the true peak in points (spikeMaxPts below, from
+    // maxSingleGapPts() -- see overlay()'s echo note).
     const braid = scene.braid || {};
     const gapPts = toGapSeries(braid);
+    const spikeMaxPts = maxSingleGapPts(braid);
     const domainMax = 20;
     const gap = d3.scaleLinear().domain([0, domainMax]).clamp(true)
       .range([view.region.y + view.region.h, view.region.y]);
 
     registry.register('s10.time', time);
     registry.register('s10.gap', gap);
-    return { time, gap, gapPts };
+    return {
+      time, gap, gapPts, spikeMaxPts,
+    };
   },
 
   layout(data, view) {
@@ -346,6 +411,11 @@ export default {
     const bandLayer = g.append('g').attr('class', 's10-band');
     const axisLayer = g.append('g').attr('class', 's10-axes');
     const lineLayer = g.append('g').attr('class', 's10-line');
+    // Gate-5 item 11: the spike-disclosure note lives ABOVE lineLayer in
+    // paint order (not in bandLayer, where the band/zero labels live) so
+    // it stays legible even on the rare minute its own fixed position
+    // falls under a flattened, clipped-to-ceiling spike.
+    const noteLayer = g.append('g').attr('class', 's10-note');
     const termLayer = g.append('g').attr('class', 's10-terms');
 
     const captionDiv = zoneK(
@@ -406,6 +476,10 @@ export default {
     const BAND = Math.min(5, domainMax);
     const yTop = scales.gap(BAND);
     const y0 = scales.gap(0);
+    // Gate-5 item 11 / provenance-ledger.md s10 #1: the true peak of a
+    // goal-minute recording echo, from maxSingleGapPts() above -- what the
+    // axis's "20+" top tick and the echo note both disclose.
+    const spikeMaxPts = scales.spikeMaxPts || 0;
 
     const lineGen = d3.line()
       .x((d) => scales.time(d.t))
@@ -425,17 +499,23 @@ export default {
         .call(timeAxisGen),
       view.css('ink-mid'),
     );
+    // Gate-5 item 11 / provenance-ledger.md s10 #1 (NOT_FIXED): the domain
+    // silently clipped spike tops with no on-screen sign that a cap even
+    // existed. The top tick now reads "20+" -- d3's own nice-number ticks
+    // for a [0,20] domain land exactly on 20, so this never misses -- and
+    // the axis title states the cap in words too.
     styleAxis(
       axisLayer.append('g')
         .attr('transform', `translate(${view.region.x},0)`)
-        .call(d3.axisLeft(scales.gap).ticks(5)),
+        .call(d3.axisLeft(scales.gap).ticks(5)
+          .tickFormat((d) => (d === domainMax ? `${d}+` : d))),
       view.css('ink-mid'),
     );
     axisLayer.append('text')
       .attr('x', view.region.x).attr('y', view.region.y - leaderStandoff)
       .attr('fill', view.css('ink-mid'))
       .style('font', '12px var(--font-apparatus)')
-      .text('gap between Kalshi and Polymarket (points)');
+      .text('gap between Kalshi and Polymarket (points, capped at 20)');
     // Text-collision sweep (Gate-5 item 3 disposition 2): centered under
     // the axis, this title's row sat right on top of Zone F's gap-meter
     // card (region.y + region.h + footer-slot-offset-px, spec'd in
@@ -467,6 +547,29 @@ export default {
       .attr('x', view.region.x).attr('width', view.region.w)
       .attr('y', yTop).attr('height', Math.max(0, y0 - yTop));
 
+    // Shared by every scrimmed on-chart label below (the s04.js getBBox()
+    // pattern): the gap line's own spikes can land anywhere along the
+    // timeline, this scene's whole point, so no fixed label position is
+    // guaranteed clear of one. A scrim makes the guarantee instead of a
+    // guess at placement. Takes the target layer as a parameter (Gate-5
+    // item 11: the echo note below needs to paint in noteLayer, ABOVE
+    // lineLayer, not in bandLayer underneath it, so it stays legible even
+    // if a clipped spike's flat top passes behind it).
+    function scrimmedLabel(layer, x, y, anchor, color, text) {
+      const t = layer.append('text')
+        .attr('x', x).attr('y', y).attr('text-anchor', anchor)
+        .attr('fill', color).attr('opacity', 0)
+        .style('font', '12px var(--font-apparatus)')
+        .text(text);
+      const bb = t.node().getBBox();
+      const scrim = layer.insert('rect', () => t.node())
+        .attr('x', bb.x - spacing[0]).attr('y', bb.y - spacing[0] / 2)
+        .attr('width', bb.width + spacing[0] * 2).attr('height', bb.height + spacing[0])
+        .attr('rx', 2)
+        .attr('fill', view.css('bg-card-composite-cap')).attr('opacity', 0);
+      return [t, scrim];
+    }
+
     // The shaded 0-5-point reference band and the zero-floor label —
     // drawn once, persistent through every beat, and now b1's one
     // announced onset (visual-story-review M3: b1 previously had no
@@ -481,31 +584,12 @@ export default {
         .attr('y', yTop).attr('height', Math.max(0, y0 - yTop))
         .attr('fill', view.css('ink-low')).attr('stroke', 'none')
         .attr('fill-opacity', 0);
-      // Both labels get a small scrim (the s04.js getBBox() pattern): the
-      // gap line's own spikes can land anywhere along the timeline, this
-      // scene's whole point, so no fixed x position for these two context
-      // labels is guaranteed clear of one. A scrim makes the guarantee
-      // instead of a guess at placement.
-      function scrimmedLabel(x, y, anchor, color, text) {
-        const t = bandLayer.append('text')
-          .attr('x', x).attr('y', y).attr('text-anchor', anchor)
-          .attr('fill', color).attr('opacity', 0)
-          .style('font', '12px var(--font-apparatus)')
-          .text(text);
-        const bb = t.node().getBBox();
-        const scrim = bandLayer.insert('rect', () => t.node())
-          .attr('x', bb.x - spacing[0]).attr('y', bb.y - spacing[0] / 2)
-          .attr('width', bb.width + spacing[0] * 2).attr('height', bb.height + spacing[0])
-          .attr('rx', 2)
-          .attr('fill', view.css('bg-card-composite-cap')).attr('opacity', 0);
-        return [t, scrim];
-      }
       const [zeroLabel, zeroScrim] = scrimmedLabel(
-        view.region.x + view.region.w - spacing[1], y0 - spacing[0], 'end',
+        bandLayer, view.region.x + view.region.w - spacing[1], y0 - spacing[0], 'end',
         view.css('ink-hi'), 'same price',
       );
       const [bandLabel, bandScrim] = scrimmedLabel(
-        view.region.x + spacing[1], yTop - spacing[0], 'start',
+        bandLayer, view.region.x + spacing[1], yTop - spacing[0], 'start',
         view.css('ink-mid'), `within ${BAND} cents`,
       );
       if (!view.reducedMotion) {
@@ -523,31 +607,58 @@ export default {
       }
     }
 
+    // Gate-5 item 11 / provenance-ledger.md s10 #1 (NOT_FIXED): names the
+    // spikes as a mechanic (a "recording echo," not a second price series)
+    // and discloses the true peak the axis cap hides. Drawn once, alongside
+    // the band and zero labels, in noteLayer so it always paints above the
+    // line itself.
+    function drawEchoNote() {
+      noteLayer.selectAll('*').remove();
+      const [noteLabel, noteScrim] = scrimmedLabel(
+        noteLayer, view.region.x + spacing[1], view.region.y + spacing[2], 'start',
+        view.css('ink-mid'),
+        `dashed spikes are recording echoes, reaching up to ${Math.round(spikeMaxPts)} points past this chart's cap`,
+      );
+      if (!view.reducedMotion) {
+        noteScrim.transition().delay(stagger * 2).duration(drawIn).attr('opacity', 0.8);
+        noteLabel.transition().delay(stagger * 2).duration(drawIn).attr('opacity', 1);
+      } else {
+        noteScrim.attr('opacity', 0.8);
+        noteLabel.attr('opacity', 1);
+      }
+    }
+
     // The one figure: how close Kalshi and Polymarket traded, minute by
     // minute — rendered as TWO passes of the same honest data (nothing
-    // invented, nothing hidden). A dim, thin "ground" pass carries the
-    // full shape, spikes included, so a reader can still see they happen.
-    // A bright, thick "figure" pass draws the IDENTICAL line but clipped
-    // to the within-band zone, so the near-zero baseline — where the line
-    // sits ~97% of the time — is the one bright shape on screen, not the
-    // rare excursions above it (visual-story-review C1). ink-hi, not
-    // ink-hero (design-system.md §2 reserves pure white for S17 alone).
+    // invented, nothing hidden). A dim, thin, DASHED "ground" pass carries
+    // the full shape, spikes included, so a reader can still see they
+    // happen — the dashing marks that shape as an artifact (Gate-5 item 11:
+    // the author read two solid white lines as two competing price series,
+    // not one line's baseline plus its own recording-echo spikes; a dashed
+    // stroke reads as "not a primary series" on sight, without a legend
+    // lookup). A bright, thick, SOLID "figure" pass draws the IDENTICAL
+    // line but clipped to the within-band zone, so the near-zero baseline
+    // — where the line sits ~97% of the time — is the one bright shape on
+    // screen, not the rare excursions above it (visual-story-review C1).
+    // ink-hi, not ink-hero (design-system.md §2 reserves pure white for
+    // S17 alone).
     function drawGapLine() {
       lineLayer.selectAll('*').remove();
       const groundWidth = Math.max(1, leaderWeight - 0.5);
       const figureWidth = leaderWeight + 1.5;
       const ground = lineLayer.append('path').datum(gapPts).attr('class', 'gap-line-ground')
         .attr('fill', 'none').attr('stroke', view.css('field-rest'))
-        .attr('stroke-width', groundWidth).attr('stroke-opacity', 0).attr('d', lineGen);
+        .attr('stroke-width', groundWidth).attr('stroke-dasharray', '3,3')
+        .attr('stroke-opacity', 0).attr('d', lineGen);
       const figure = lineLayer.append('path').datum(gapPts).attr('class', 'gap-line-figure')
         .attr('fill', 'none').attr('stroke', view.css('ink-hi'))
         .attr('stroke-width', figureWidth).attr('clip-path', `url(#${clipId})`)
         .attr('stroke-opacity', 0).attr('d', lineGen);
       if (!view.reducedMotion) {
-        ground.transition().duration(drawIn).attr('stroke-opacity', 0.35);
+        ground.transition().duration(drawIn).attr('stroke-opacity', 0.28);
         figure.transition().delay(drawIn * 0.2).duration(drawIn).attr('stroke-opacity', 1);
       } else {
-        ground.attr('stroke-opacity', 0.35);
+        ground.attr('stroke-opacity', 0.28);
         figure.attr('stroke-opacity', 1);
       }
     }
@@ -656,6 +767,7 @@ export default {
         if (beatId === 'b1') {
           drawBandAndZero();
           drawGapLine();
+          drawEchoNote();
           captionDiv.text('The dots rest here. One mark is one minute of matched price.');
           gapMeter.text('');
           countChip.text('');
@@ -678,7 +790,7 @@ export default {
   beats: [
     {
       id: 'b1',
-      html: `<p>Every match in the knockout stage has three tickets: one pays out on a home win, one on a draw, one on an away win. Traders call this the three-way. A point on this chart is one cent of price, so a five-point gap is five cents, about five chances out of a hundred.</p><p>Two rival markets priced every one of those tickets, all month: Kalshi, built in the United States, and Polymarket, built offshore. The chart below tracks how far apart the two ran, minute by minute, averaged across all three tickets. The two never sat five points apart for even thirty minutes. Minute by minute, the average gap stayed close to a penny.${FN(15)}</p><p>Here is why the gap almost never opens. When one market prices a ticket a little rich and the other prices it a little cheap, traders buy the cheap ticket and sell the rich one until the two prices meet. That trade is close to free money, so the gap closes fast.</p>`,
+      html: `<p>Every match in the knockout stage has three tickets: one pays out on a home win, one on a draw, one on an away win. Traders call this the three-way. The line on this chart is not a price. It is the distance between the two markets' prices for the same ticket. One point equals one cent of that distance. A five-point gap means the two prices sat five cents apart, about five chances out of a hundred.</p><p>Two rival markets priced every one of those tickets, all month: Kalshi, built in the United States, and Polymarket, built offshore. The chart below tracks how far apart the two ran, minute by minute, averaged across all three tickets. The two never sat five points apart for even thirty minutes. Minute by minute, the average gap stayed close to a penny.${FN(15)} Watch for the faint, dashed spikes at goal minutes: each venue stamps its trades once a minute, so a goal at that instant can land in one venue's record before the other's. The paper gap jumps, then closes within seconds once both catch up, a recording echo rather than a real disagreement.</p><p>Here is why the gap almost never opens. When one market prices a ticket a little rich and the other prices it a little cheap, traders buy the cheap ticket and sell the rich one until the two prices meet. That trade is close to free money, so the gap closes fast.</p>`,
       trigger: 'step',
       state: 'rest',
       kind: 'resort',
@@ -708,7 +820,7 @@ export default {
     },
     {
       id: 'b3',
-      html: `<p>Sixteen times in the knockout stage, Pinnacle stopped quoting a live three-way price. Pinnacle is the professional sportsbook from the goal scene. Each grey line marks that moment. No line shows a fresh quote arriving after it.${FN(15)}</p><p>One cause explains all sixteen: the professionals had left the room.</p>`,
+      html: `<p>Sixteen times in the knockout stage, Pinnacle stopped quoting a live three-way price. Pinnacle is the professional sportsbook from the goal scene. Each grey line marks that moment. No line shows a fresh quote arriving after it.${FN(15)}</p><p>All sixteen have one cause: Pinnacle stopped posting prices. Its in-game book closes as the ninety minutes run out, by its own house rules, the same rules from the goal scene. The feed ends, and no fresh quote ever follows.</p><p>Why this matters: a gap against a book that stopped quoting is not a disagreement. It is an empty chair. Our own first analysis fell for it: it counted sixteen wins for the crowd over the pros before we checked whether the pros were still in the game.</p>`,
       trigger: 'step',
       overlayStep: 'b3',
     },

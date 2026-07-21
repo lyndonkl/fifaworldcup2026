@@ -27,7 +27,16 @@
  *      this module needs each bucket's numeric `lo_c`/`hi_c` shipped
  *      explicitly (it falls back to parsing the label string if absent,
  *      but the tile builder should ship the parsed ints so the browser
- *      never depends on a label format).
+ *      never depends on a label format). `total_volume` specifically is
+ *      still absent from the shipped bucket rows (confirmed still true,
+ *      Gate-5 provenance ledger s14 #2) despite being listed above as a
+ *      source column; this module no longer waits on that pipeline fix —
+ *      layout() now sums each dot's own `pop.dollars` by bucket
+ *      membership and registers the result as `s14.bucketDollars`, and
+ *      overlay()'s dollarRadiusScale reads that live sum (falling back to
+ *      `b.total_volume` first, so a future pipeline fix is picked up for
+ *      free). The pipeline ask stands regardless: a shipped scalar is
+ *      still cheaper than a client-side per-dot pass.
  *   2. `ladder_attribution` (72% of cheap-band observations in ladders of
  *      ten-plus legs, 55% at the 1-2c tick floor) is NOT present in either
  *      bucket table; it is derivable from
@@ -141,6 +150,21 @@ function layout(data, view) {
   const marketsState = makeState(N);
   const dollarsState = makeState(N);
 
+  // Gate-5 provenance ledger (s14 #2, NOT_FIXED at the data layer as of the
+  // last audit): buckets[].total_volume is not shipped by
+  // build_scene_s14_v2(), even though that function's own docstring lists
+  // it as a source column. Left unfixed there, overlay()'s dollarRadiusScale
+  // domain would collapse to 0 and every marker in dollars-weighted mode
+  // would render at the fixed 1.5px minimum regardless of real dollar
+  // weight. Fixed here instead of waiting on a pipeline change: the loop
+  // below already reads each dot's real traded dollars (pop.dollars[i],
+  // the same field the litAlpha heuristic further down trusts) and already
+  // resolves which bucket that dot belongs to, so summing pop.dollars by
+  // bucket membership computes each bucket's true total volume live, off
+  // the loaded population tile itself. One dot is one equal grain of real
+  // money, so this sum IS "total_volume per bucket," not an estimate.
+  const bucketDollarTotals = new Map(buckets.map((b) => [b.label || b.bucket, 0]));
+
   for (let i = 0; i < N; i++) {
     const [fx, fy] = fieldPosition(i, view);
     marketsState.x[i] = fx; marketsState.y[i] = fy;
@@ -179,6 +203,8 @@ function layout(data, view) {
     // money this specific dot actually carries (data.pop.dollars — real,
     // never invented) so "which dots carry emphasis" is legible.
     const dollars = pop.dollars[i];
+    const bucketLabel = bucket.label || bucket.bucket;
+    bucketDollarTotals.set(bucketLabel, (bucketDollarTotals.get(bucketLabel) || 0) + dollars);
     const litAlpha = Math.max(0.3, Math.min(1, 0.3 + 0.7 * (dollars / (grainUsd * 3))));
     const dw = bucket.vol_weighted_win_rate_pct !== undefined ? bucket.vol_weighted_win_rate_pct : bucket.win_rate_pct;
     const dwx = bucket.vol_weighted_price_c !== undefined ? bucket.vol_weighted_price_c : bucket.mean_price_c;
@@ -187,6 +213,8 @@ function layout(data, view) {
     const base = isTail ? tail : neutral;
     setColor(dollarsState.color, i, [base[0], base[1], base[2], base[3] * litAlpha]);
   }
+
+  registry.register('s14.bucketDollars', bucketDollarTotals);
 
   return { states: { 'assemble-markets': marketsState, 'assemble-dollars': dollarsState } };
 }
@@ -281,6 +309,29 @@ function overlay(container, data, view, scalesObj) {
     .style('stroke-dasharray', '4,3')
     .style('opacity', 0);
 
+  // Ghost terminus tag (fresh blind review, minor a): an unlabeled dashed
+  // line invites "what is that?" -- name it at its right end, tiny and
+  // ink-low, with a short swatch in the ghost's own dash style pointing at
+  // the curve. Basis-aware: b3's ghost is the count curve, b4's ghost is
+  // the dollar curve, and the tag must say which one it is.
+  const ghostTag = g.append('g').attr('class', 's14-ghost-tag').style('opacity', 0);
+  // Blind re-read: micro-size ink-low was illegible at capture scale, so
+  // the dashed line stayed "unexplained on-screen". Caption size + ink-mid
+  // on a bg-card scrim (the inset label's own treatment) is the floor for
+  // an annotation that carries a load-bearing meaning.
+  const ghostTagScrim = ghostTag.append('rect')
+    .style('fill', view.css('bg-card'))
+    .style('opacity', 0.85);
+  const ghostTagText = ghostTag.append('text')
+    .attr('text-anchor', 'end')
+    .style('font-family', view.css('font-apparatus'))
+    .style('font-size', view.css('type-caption-size'))
+    .style('fill', view.css('ink-mid'));
+  const ghostTagSwatch = ghostTag.append('line')
+    .style('stroke', view.css('ink-mid'))
+    .style('stroke-width', 1.5)
+    .style('stroke-dasharray', '4,3');
+
   const markerPath = g.append('path')
     .attr('class', 's14-marker-path')
     .style('fill', 'none')
@@ -324,11 +375,24 @@ function overlay(container, data, view, scalesObj) {
   // (major #3: the loud high-price wiggle must visibly belong to
   // near-zero dollar weight, or it reads as "the market got worse"
   // instead of "that bucket barely traded").
+  // s14 provenance ledger #2: buckets[].total_volume is still absent from
+  // the shipped scene JSON (data-layer gap, not fixed there); bucketVolumeOf
+  // reads the live per-bucket dollar sum layout() just computed off the
+  // population tile's own pop.dollars field (registered as
+  // 's14.bucketDollars'), and only falls back to b.total_volume if a future
+  // pipeline pass ever ships it, so this never regresses once the data
+  // layer catches up.
+  const bucketDollars = registry.has('s14.bucketDollars') ? registry.get('s14.bucketDollars') : new Map();
+  function bucketVolumeOf(b) {
+    if (typeof b.total_volume === 'number' && b.total_volume > 0) return b.total_volume;
+    return bucketDollars.get(b.label || b.bucket) || 0;
+  }
+
   const markerRadiusScale = d3.scaleSqrt()
     .domain([0, d3.max(buckets, (b) => b.n_markets || 0) || 1])
     .range([2, 6]).clamp(true);
   const dollarRadiusScale = d3.scaleSqrt()
-    .domain([0, d3.max(buckets, (b) => b.total_volume || 0) || 1])
+    .domain([0, d3.max(buckets, (b) => bucketVolumeOf(b)) || 1])
     .range([1.5, 7]).clamp(true);
 
   function markerData(weighting) {
@@ -337,7 +401,7 @@ function overlay(container, data, view, scalesObj) {
       py: weighting === 'dollars' && b.vol_weighted_win_rate_pct !== undefined ? b.vol_weighted_win_rate_pct : b.win_rate_pct,
       label: b.label || b.bucket,
       n: b.n_markets || 0,
-      vol: b.total_volume || 0,
+      vol: bucketVolumeOf(b),
       cheap: b.hi_c <= 10,
     }));
   }
@@ -375,13 +439,46 @@ function overlay(container, data, view, scalesObj) {
     dots.exit().remove();
   }
 
+  // Once the reader has seen the dollar weighting (b3), the ghost is always
+  // the OTHER basis, so the count/dollar comparison never disappears
+  // mid-argument: b3 shows dollars over a count ghost; b4 flips back to
+  // counting with the dollar curve as the ghost. Before b3 (and again when
+  // a scrub-back lands on b1's clean intro), there is nothing to compare
+  // against and the ghost stays hidden.
+  let dollarsSeen = false;
   function drawMainGhost(weighting) {
     const dur = view.tokens.motion.durations_ms['overlay-draw-in'];
-    if (weighting === 'dollars') {
-      mainGhost.datum(markerData('markets')).attr('d', line)
+    const ghostBasis = weighting === 'dollars'
+      ? 'markets'
+      : (dollarsSeen ? 'dollars' : null);
+    if (ghostBasis) {
+      const pts = markerData(ghostBasis);
+      mainGhost.datum(pts).attr('d', line)
         .transition().duration(dur).style('opacity', 0.6);
+      // Tag anchored to the ghost's low-mid stretch (~22c), not its
+      // terminus: both curves end in the top-right corner, where the b4
+      // callout, the whipsaw buckets, and the KEY already compete -- the
+      // blind re-read could not find the tag there. Below the curve in
+      // the low-mid range is open canvas in both bases.
+      const anchor = pts.reduce((best, p) =>
+        (Math.abs(p.px - 22) < Math.abs(best.px - 22) ? p : best), pts[0]);
+      const tex = x(anchor.px) + 150;
+      const tey = y(anchor.py) + 34;
+      ghostTagText.attr('x', tex).attr('y', tey)
+        .text(ghostBasis === 'markets'
+          ? 'counted equally (before)'
+          : 'weighted by dollars (before)');
+      ghostTagSwatch
+        .attr('x1', tex + 6).attr('y1', tey - 4)
+        .attr('x2', x(anchor.px) + 6).attr('y2', y(anchor.py) + 6);
+      const tb = ghostTagText.node().getBBox();
+      ghostTagScrim
+        .attr('x', tb.x - 5).attr('y', tb.y - 3)
+        .attr('width', tb.width + 10).attr('height', tb.height + 6);
+      ghostTag.transition().duration(dur).style('opacity', 1);
     } else {
       mainGhost.transition().duration(dur).style('opacity', 0);
+      ghostTag.transition().duration(dur).style('opacity', 0);
     }
   }
 
@@ -465,9 +562,21 @@ function overlay(container, data, view, scalesObj) {
     const insetLive = insetG.append('path').attr('class', 's14-inset-live')
       .style('fill', 'none').style('stroke', view.css('ink-hi')).style('stroke-width', 2);
     const insetLiveDots = insetG.append('g').attr('class', 's14-inset-live-dots');
+    // Major #2 (fresh blind review): the payoff number used to sit up-left
+    // of the worst dot, directly on the inset's own diagonal, which struck
+    // the text through. It now sits down-right of the dot (the diagonal
+    // climbs away as x grows, so that quadrant is clear), tied back by a
+    // 1px leader, over a small scrim so neither the diagonal nor the axis
+    // can strike it, at the caption size the rest of the scene uses.
+    const insetPointLeader = insetG.append('line')
+      .style('stroke', view.css('ink-hi'))
+      .style('stroke-width', 1);
+    const insetPointScrim = insetG.append('rect')
+      .style('fill', view.css('bg-card'))
+      .style('fill-opacity', 0.85);
     const insetPointLabel = insetG.append('text')
       .style('font-family', view.css('font-apparatus'))
-      .style('font-size', '10px')
+      .style('font-size', view.css('type-caption-size'))
       .style('fill', view.css('ink-hi'));
 
     drawInset = function drawInset(weighting) {
@@ -484,9 +593,18 @@ function overlay(container, data, view, scalesObj) {
       dots.exit().remove();
       const worst = live[0]; // 1-5c: the deepest part of the sag
       if (worst) {
+        const lx = ix(worst.px) + 14;
+        const ly = iy(worst.py) - 2;
         insetPointLabel
-          .attr('x', ix(worst.px) + 7).attr('y', iy(worst.py) - 6)
+          .attr('x', lx).attr('y', ly)
           .text(`paid ${worst.py.toFixed(1)}%`);
+        insetPointLeader
+          .attr('x1', ix(worst.px) + 3).attr('y1', iy(worst.py) - 1)
+          .attr('x2', lx - 2).attr('y2', ly - 4);
+        const bb = insetPointLabel.node().getBBox();
+        insetPointScrim
+          .attr('x', bb.x - 3).attr('y', bb.y - 2)
+          .attr('width', bb.width + 6).attr('height', bb.height + 4);
       }
     };
   }
@@ -504,22 +622,33 @@ function overlay(container, data, view, scalesObj) {
   const ladderLine1 = ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '0em');
   const ladderLine2 = ladderCaption.append('tspan').attr('x', view.region.x).attr('dy', '1.2em');
 
-  // Tick-floor bracket at 1-2c.
+  // Tick-floor bracket at 1-2c. Fresh blind review, minor b: the bare
+  // 1.5px underline read as a stray mark -- visible end ticks turn it into
+  // a bracket that plainly spans 1c to 2c, and the note lifts from ink-low
+  // to ink-mid so it reads as a real annotation, not furniture.
   const tickFloor = sceneJson.tick_floor || { lo_c: 1, hi_c: 2 };
+  const tickBracketY = view.region.y + view.region.h + 34;
   const tickBracket = g.append('g').attr('class', 's14-tick-bracket').style('opacity', 0);
   tickBracket.append('line')
     .attr('x1', x(tickFloor.lo_c)).attr('x2', x(tickFloor.hi_c))
-    .attr('y1', view.region.y + view.region.h + 34).attr('y2', view.region.y + view.region.h + 34)
-    .style('stroke', view.css('ink-low')).style('stroke-width', 1.5);
+    .attr('y1', tickBracketY).attr('y2', tickBracketY)
+    .style('stroke', view.css('ink-mid')).style('stroke-width', 1.5);
+  [tickFloor.lo_c, tickFloor.hi_c].forEach((c) => {
+    tickBracket.append('line')
+      .attr('x1', x(c)).attr('x2', x(c))
+      .attr('y1', tickBracketY - 5).attr('y2', tickBracketY)
+      .style('stroke', view.css('ink-mid')).style('stroke-width', 1.5);
+  });
   tickBracket.append('text')
     .attr('x', x(tickFloor.lo_c)).attr('y', view.region.y + view.region.h + 48)
     .style('font-family', view.css('font-tape'))
     .style('font-size', view.css('type-tape-size'))
-    .style('fill', view.css('ink-low'))
+    .style('fill', view.css('ink-mid'))
     .text(`${tickFloor.lo_c}-${tickFloor.hi_c} cents: the tick floor`);
 
-  // 90-95c callout: the amber singleton protocol (halo core ring), an
-  // overlay-only highlight independent of the current toggle weighting.
+  // Worst-bucket callout: the amber singleton protocol (halo core ring),
+  // pinned to the active weighting basis's own worst bucket (90-95c on
+  // the count basis, per worst_bucket_label_markets).
   // Major #4: this used to fire from inside setWeighting(), so it appeared
   // one beat early (during b3's reweighting, competing with that beat's
   // own change) and left b4 with nothing new to show. `calloutUnlocked`
@@ -530,7 +659,12 @@ function overlay(container, data, view, scalesObj) {
   const callout = g.append('g').attr('class', 's14-callout').style('opacity', 0);
   function drawCallout(weighting) {
     callout.selectAll('*').remove();
-    if (!calloutUnlocked) return;
+    if (!calloutUnlocked) {
+      // Re-locked (scrub-back to b1's intro): clear instantly so the next
+      // unlock gets its fade-in again.
+      callout.style('opacity', 0);
+      return;
+    }
     // Gate-5 provenance audit (WRONG_SCOPE): the SAME hardcoded "90-95c"
     // used to render under both toggle states, but 90-95c is only the
     // worst bucket on the market-count basis -- under dollar weighting,
@@ -553,19 +687,51 @@ function overlay(container, data, view, scalesObj) {
       .attr('cx', x(px)).attr('cy', y(py))
       .attr('r', view.tokens.dot['radius-annotated-core-px'])
       .style('fill', view.css('accent-annotation'));
-    // Trimmed to the 8-word annotation cap (design-revision-spec CR-14).
-    // The 90-95c bucket sits near the domain's right edge, where a
+    // Fresh blind review, CRITICAL: the halo must carry the pinned bucket's
+    // own numbers, so the annotation and the rail prose visibly agree. On
+    // the count basis those numbers are the favorites_shelf fields the b4
+    // prose quotes (n tickets, claimed_pct, realized_pct); on the dollar
+    // basis they are the bucket row's own dollar-weighted price and rate.
+    // Every value reads from the scene JSON; nothing is hardcoded.
+    const fs = sceneJson.favorites_shelf;
+    const useShelf = weighting !== 'dollars' && fs && typeof fs.n === 'number'
+      && label === (sceneJson.worst_bucket_label_markets || sceneJson.worst_bucket_label);
+    const numsLine = useShelf
+      ? `${fs.n} tickets, average ${(+fs.claimed_pct).toFixed(1)}c, came true ${(+fs.realized_pct).toFixed(1)}%`
+      : `average ${(+px).toFixed(1)}c, came true ${(+py).toFixed(1)}%`;
+    // Headline trimmed to the 8-word annotation cap (design-revision-spec
+    // CR-14); the numbers line below it is apparatus, not prose. The
+    // 90-95c bucket sits near the domain's right edge, where a
     // right-reading label would run past the chart -- mirror left (G5)
     // when that's the case, same as this scene's other at-mark labels.
-    const calloutMirror = x(px) + 14 + 260 > view.region.x + view.region.w;
-    callout.append('text')
-      .attr('x', calloutMirror ? x(px) - 14 : x(px) + 14).attr('y', y(py))
-      .attr('dy', '0.35em')
+    // 300 is the longer numbers line's width, not the old headline's 260.
+    const calloutMirror = x(px) + 14 + 300 > view.region.x + view.region.w;
+    const tx = calloutMirror ? x(px) - 14 : x(px) + 14;
+    // Blind re-read (MEDIUM): the mirrored text lands where the rotated
+    // "perfectly priced" diagonal label and both curves pass, striking
+    // through the numbers line -- the one line proving the prose. Scrim
+    // behind both lines, same treatment as the inset label; drawn first
+    // so it sits under the text, sized from the rendered bbox after.
+    const calloutScrim = callout.append('rect')
+      .style('fill', view.css('bg-card'))
+      .style('opacity', 0.85);
+    const calloutText = callout.append('text')
+      .attr('x', tx).attr('y', y(py))
       .attr('text-anchor', calloutMirror ? 'end' : 'start')
       .style('font-family', view.css('font-apparatus'))
+      .style('fill', view.css('accent-annotation'));
+    calloutText.append('tspan')
+      .attr('x', tx).attr('dy', '0.35em')
       .style('font-size', view.css('type-annotation-size'))
-      .style('fill', view.css('accent-annotation'))
       .text('worst bucket: a favorite, not a longshot');
+    calloutText.append('tspan')
+      .attr('x', tx).attr('dy', '1.35em')
+      .style('font-size', view.css('type-caption-size'))
+      .text(numsLine);
+    const ctb = calloutText.node().getBBox();
+    calloutScrim
+      .attr('x', ctb.x - 6).attr('y', ctb.y - 4)
+      .attr('width', ctb.width + 12).attr('height', ctb.height + 8);
     callout.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
   }
 
@@ -614,6 +780,12 @@ function overlay(container, data, view, scalesObj) {
   function setWeighting(weighting, animate) {
     const changed = weighting !== currentWeighting;
     currentWeighting = weighting;
+    if (weighting === 'dollars') dollarsSeen = true;
+    // aria-checked is the toggle chips' one source of truth for the CSS
+    // active state (index.html's scoped .s14-toggle block styles
+    // [aria-checked="true"] as the amber-active chip). Every beat-driven
+    // weighting change routes through here, so the chips track scrub
+    // direction both ways, including b4's flip back to the count basis.
     buttons.attr('aria-checked', (d) => d.key === weighting);
     drawMarkers(weighting, animate);
     drawInset(weighting);
@@ -633,16 +805,27 @@ function overlay(container, data, view, scalesObj) {
     // Re-light which dots carry emphasis (data request #3): overlay()
     // cannot reach the engine directly per CONTRACT §4; this calls an
     // optional driver-supplied hook and degrades gracefully if absent.
-    if (typeof container.activate === 'function') {
+    // Gated on a genuine change: beats that land on the weighting they
+    // already show (b1's own entry, whose resort main.js has just fired)
+    // must not immediately retarget that tween with a recolor.
+    if (changed && typeof container.activate === 'function') {
       container.activate(weighting === 'dollars' ? 'assemble-dollars' : 'assemble-markets', { kind: 'recolor' });
     }
   }
 
   function step(beatId) {
     if (beatId === 'b1') {
-      drawMarkers('markets', true);
-      drawInset('markets');
+      // Route through setWeighting (not bare drawMarkers) so a scrub-back
+      // from b3/b4 resets the chips' aria-checked state along with the
+      // curve. b1 is the clean intro: no comparison ghost yet, and the b4
+      // callout re-locks so its punchline is not standing during setup.
+      dollarsSeen = false;
+      calloutUnlocked = false;
+      setWeighting('markets', true);
     } else if (beatId === 'b2') {
+      // Same scrub symmetry: b2's captions (72% / 55%) describe the
+      // count basis, so a scrub-back from b3 must land back on it.
+      setWeighting('markets', true);
       const attr = sceneJson.ladder_attribution || {};
       // Critical #2: this annotation previously read "underpriced," which
       // contradicts both the on-screen key ("amber = the overpriced penny
@@ -663,7 +846,16 @@ function overlay(container, data, view, scalesObj) {
       // punchline -- it must be the one perceivable change here, not a
       // repeat of something that already fired during b3's reweighting.
       calloutUnlocked = true;
-      drawCallout(currentWeighting);
+      // CRITICAL (fresh blind review): b4 used to inherit b3's dollar
+      // weighting, so the callout pinned the dollars-basis worst bucket
+      // (worst_bucket_label_dollars, 65-70c) while the rail prose delivered
+      // the count-basis favorites shelf (favorites_shelf: 242 tickets,
+      // 92.4c claimed, 69.4% realized) -- numbers unfindable on the settled
+      // chart. b4 is now basis-explicit: flip back to counting every ticket
+      // equally (the dollar curve stays on as the ghost via drawMainGhost)
+      // so the chip state, the live curve, and the pinned 90-95c bucket all
+      // sit on the basis the prose's numbers live on.
+      setWeighting('markets', true);
     }
   }
 
@@ -720,24 +912,58 @@ const s14 = {
     },
     {
       id: 'b2',
-      html: `<p>A prop is a side bet on something other than who wins,
-        like who scores first or the exact final score. A prop ladder
-        stacks many of these side bets together, rung by rung. The tick is
-        the smallest price step allowed, one cent, and it is the floor
-        these cheap tickets pile up against. 72% of the overpriced penny tickets
-        sit inside prop ladders of ten bets or more. 55% sit right at that
-        one-to-two-cent floor.<sup><a href="#fn-20">20</a></sup> Next,
-        watch the sagging dots. Weighted by dollars, the sag flattens.</p>`,
+      html: `<p>Take one match. Spain 1-0 is a ticket. Spain 2-0 is
+        another. Spain 2-1, another. Line up every possible final score
+        and you have a ladder, one ticket per rung. This is a prop, a
+        side bet on anything other than who wins the match, and the
+        exact-score ladder is only one of dozens like it. The exact-score
+        family alone listed roughly 2,700 tickets across the
+        tournament.<sup><a href="#fn-20">20</a></sup></p>
+        <p>Most rungs on a ladder like that barely trade. The tick, the
+        smallest price step allowed, is one cent, and it sets a floor. A
+        ticket priced for a genuine 1-in-500 shot should trade near a
+        fifth of a cent, but the floor will not let it: it can only
+        trade at five times its true worth, or not trade at all.
+        Correcting that gap would cost more in locked-up money and fees
+        than the fix would ever earn back, so almost nobody tries.
+        Lottery money buys the ticket anyway, drawn by the cheap dream,
+        not the math. The overpricing lands exactly where that chain
+        predicts: 72% of the overpriced penny tickets sit inside prop
+        ladders of ten bets or more, and 55% sit right at that
+        one-to-two-cent floor.<sup><a href="#fn-20">20</a></sup> Skill 2
+        promised that near-empty markets do not earn trust, and that
+        Skill 5 would show exactly how they go wrong. This is that
+        promise, paid in full.</p>`,
       trigger: 'step',
       overlayStep: 'b2',
     },
     {
       id: 'b3',
-      html: `<p>Weigh the same chart by dollars actually traded, and the
-        sag nearly disappears, down to about half a
-        point.<sup><a href="#fn-20">20</a></sup> These sagging dots are the
-        same dots that sat almost empty in the long thin tail three acts
-        ago. Weak prices live where money does not.</p>`,
+      html: `<p>Weigh the same chart by dollars traded instead of
+        markets counted, and the cheap-end sag nearly disappears, down to
+        about half a point.<sup><a href="#fn-20">20</a></sup> Same chart,
+        two different questions. Counting every market equally asks how
+        wrong the average market was. Weighting by dollars asks how wrong
+        the average dollar was. The dollar answer is the one that governs
+        a deep price like tonight's.</p>
+        <p>Here is why the two answers differ. Picture one price bucket
+        near 3 cents. It holds 1,000 thin ladder rungs, ten dollars
+        apiece, each worth a true 1% chance. It also holds 10 deep
+        tickets, ten thousand dollars apiece, each worth a true 3% chance
+        and fairly priced. Count every ticket the same way, and the
+        average sags toward 1%, because the thin rungs outnumber the deep
+        tickets a hundred to one. Weight by the dollars each ticket
+        actually carries, and the average lands near 2.8%, close to the 3
+        cents claimed, because the ten-thousand-dollar tickets carry far
+        more money than the ten-dollar rungs. Weighting changes whose
+        results dominate the average, not what any ticket did.</p>
+        <p>The two countings really only pull apart at the cheap end. The
+        1-to-10-cent range alone holds more than sixteen thousand
+        separate tickets; a mid-priced range like 30-to-35-cents holds
+        about five hundred. That size gap, not the price, is why the sag
+        concentrates where it does. These sagging dots are the same dots
+        that sat almost empty in the long thin tail three acts ago. Weak
+        prices live where money does not.</p>`,
       trigger: 'step',
       state: 'assemble-dollars',
       kind: 'recolor',
@@ -745,13 +971,22 @@ const s14 = {
     },
     {
       id: 'b4',
-      html: `<p>The worst-priced tickets of all were not longshots. They
-        were the 90-to-95-cent favorites.<sup><a href="#fn-20">20</a></sup>
-        That is the same sin seen from its other side. Every overpriced
-        penny ticket has a seller, and that seller holds the favorite side
-        of the very same bet. One lottery premium, showing up at both ends
-        of the price scale. So the old story, that crowds only overpay for
-        longshots, is not even half right.</p>`,
+      html: `<p>Count each ticket equally again, and the worst-priced
+        tickets of all were not longshots. They
+        were the 90-to-95-cent favorites: 242 of them, paying an average
+        of 92.4 cents for a chance that came true only 69.4% of the time,
+        a 23-point miss.<sup><a href="#fn-20">20</a></sup></p>
+        <p>A tempting guess is that the tournament's famous upsets landed
+        there: Germany, Brazil, and France, all dead early while still
+        priced as favorites. The tape says otherwise. Of the 74 losing
+        tickets in that bucket, 0% are a Germany, Brazil, or France
+        match-win or advance bet. Instead, 80% are bets on which named
+        player scores first. A team can be a heavy favorite to win and
+        still field eleven players who might score first; pricing the
+        team's own win chance onto one specific name overstates that
+        one player's odds, favorite or not. The old story, that crowds
+        only overpay for longshots, is not even half right. They overpay
+        for the wrong favorite too.</p>`,
       trigger: 'step',
       overlayStep: 'b4',
     },

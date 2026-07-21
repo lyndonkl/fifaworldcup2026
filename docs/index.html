@@ -494,6 +494,48 @@
     }
     body.no-webgl #stage { display: none; }
 
+    /* ---- S14 weighting toggle (scoped: only docs/js/scenes/s14.js
+       renders .s14-toggle; no other scene may use this class). Design
+       system §9 S14: "amber-active segmented control, keyboard
+       accessible." Fresh blind review major #1: the two role=radio
+       buttons rendered as identical default white buttons -- the
+       brightest objects on canvas -- with no visible checked state.
+       aria-checked is the single source of truth here; s14.js keeps it
+       in sync on clicks AND on beat-driven flips (b1/b2/b3/b4), so the
+       styling tracks scrub direction both ways. ---- */
+    .s14-toggle {
+      display: flex;
+      gap: var(--space-4);
+      padding: var(--space-4);
+      background: var(--bg-card);
+      border: 1px solid rgba(124, 135, 148, 0.25); /* ink-low @ .25, house idiom */
+      border-radius: var(--space-8);
+    }
+    .s14-toggle button {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid rgba(124, 135, 148, 0.25);
+      border-radius: var(--space-4);
+      padding: var(--space-4) var(--space-12);
+      background: transparent;
+      color: var(--ink-low);
+      cursor: pointer;
+    }
+    .s14-toggle button[aria-checked="false"]:hover {
+      color: var(--ink-mid);
+    }
+    .s14-toggle button[aria-checked="true"] {
+      background: var(--accent-annotation);
+      border-color: var(--accent-annotation);
+      color: var(--bg-canvas);
+      font-weight: 600;
+      cursor: default;
+    }
+    .s14-toggle button:focus-visible {
+      outline: 2px solid var(--side-yes);
+      outline-offset: 1px;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       #chip.pulse { animation: none; }
       #chip .key-rows { transition: none; }
@@ -644,7 +686,7 @@
         <li id="fn-10">In-play size and arrival-rate regimes, measured against the leg's own lifetime baseline (R16).</li>
         <li id="fn-11">Post-goal mechanism across venues: Kalshi reaction latency and matched events, with Pinnacle suspension and Polymarket minute-resolution limits (R3). No cross-venue speed ranking is claimed; sub-minute ordering is unresolvable by construction (R23).</li>
         <li id="fn-12">Overreaction and fade: post-jump levels held within the tick-and-fee friction band at a thirty-minute horizon (R20). Whether traders tried to fade the move is a separate question, checked directly against taker-side flow: of the 82 matched goal-reaction events, one round-tripped back to its pre-goal price and was excluded from this measure; across the remaining 81, the share of money in the ten minutes after the goal that bet against the just-made move ran from 27 percent at the 25th percentile to 60 percent at the 75th, with a median of 47 percent.</li>
-        <li id="fn-13">Germany-Paraguay instrument switch: regulation-leg expiry decay against the advancement leg trading on through the shootout (R4).</li>
+        <li id="fn-13">Germany-Paraguay instrument switch: regulation-leg expiry decay against the advancement leg trading on through the shootout (R4). Kalshi's own contract rules settle the regulation ticket "after 90 minutes plus stoppage time (does not include extra time or penalties)"; a level score at that whistle pays the Tie leg and pays no on the win-in-90 leg.</li>
         <li id="fn-14">Post-upset drift: winner-leg repricing for Paraguay, Norway, and Belgium, and the Norway-Argentina mirror (R9).</li>
         <li id="fn-15">Kalshi-Polymarket braid and the Pinnacle terminations, across 84 knockout three-way legs (R2).</li>
         <li id="fn-16">Brier scores by source and horizon on the same 84 legs: Kalshi, Polymarket, and the devigged professional book (R5, R19).</li>

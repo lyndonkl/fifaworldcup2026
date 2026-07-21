@@ -63,6 +63,30 @@
  *      on a real price at all. The dots stay underneath as texture; the
  *      line carries the signal.
  *
+ * RE-BLIND FIX (item 9, this pass): a second blind read caught the cyan
+ * NOR-leg line poking through the amber band's own top edge for the back
+ * half of the drawn window -- the chart visibly contradicted b4's "held
+ * within about two cents" line even after fix #2 above. Diagnosis, checked
+ * directly against the raw NOR-leg tape (leg=1 in zoom/norbra.bin): fix #2's
+ * band-end rule (first single-bucket jump >=8c) is the wrong test for what
+ * the band promises. It correctly catches the ~t0+620s cliff (the matched
+ * tie-leg event at t0+600s, events_matched.parquet -- unchanged, still
+ * marked by its own dashed line and "a second jump follows" label), but it
+ * is blind to a slower, un-jumpy climb that starts at t0+290s: 10s-bucket
+ * medians drift from 63c to 78c between +290s and +610s, never snapping
+ * back, so the line clears the level's +-2c corridor for ~330s before the
+ * cliff ever fires and the old code kept drawing the band across all of it.
+ * The level itself (median in [+120s,+300s] = 62c) was never the problem.
+ * Fix: the band's own right edge is now defined by the one test that cannot
+ * contradict it -- scan every 10s bucket forward from +120s and take the
+ * LAST one still inside [level-2, level+2]; the band ends the very next
+ * bucket (+290s here, not +620s). The +620s cliff marker is untouched and
+ * independent -- the band can honestly end 330 seconds before it, and does.
+ * b4's prose was not the overclaim (it never named a duration on-screen;
+ * footnote 12's own thirty-minute horizon is a separate, dataset-wide
+ * measure, not a claim about this one vehicle's full window) -- the drawn
+ * shape was. See computeFrictionWindow() below.
+ *
  * DATA_REQUEST: docs/data/scenes/s07.json, built from
  * pipeline/data/analysis/ingame-microstructure/reaction_latency.parquet +
  * events_matched.parquet (R3) plus the Pinnacle/Polymarket benchmark pulls
@@ -499,26 +523,37 @@ export default {
     // amber fill wash across three lanes, perception-brief-driven fix).
     const bandG = g.append('g').attr('class', 's07-friction').style('opacity', 0);
 
-    // FIX #1 + #2 (Gate-5 blind-review, both CRITICAL):
-    //   1. The old anchor was the first tick >=+5s after the goal --
-    //      mid-jump, not settled -- so the drawn band contradicted the
-    //      prose's own "held within 2 cents" claim. The level below is the
-    //      median NOR-leg price in [t0+120s, t0+300s], the settled-level
-    //      convention this fix was asked to use.
-    //   2. That settled level does not hold all the way to +1800s: the raw
-    //      NOR-leg tape shows an unmarked second repricing (verified
-    //      directly against the tick data: 10s-bucket medians run 74-78c
-    //      through t=+610s, then jump to 90-97c by t=+620s -- a jump
-    //      several times the size of anything in the settling window
-    //      itself, and it matches a second matched event in
-    //      events_matched.parquet at t0+600s on the draw leg, the same
-    //      episode from a different angle). The band now ends at the first
-    //      bucket-to-bucket jump that large, and that cliff gets a plain,
-    //      cause-agnostic label -- consistent with this scene's own "what
-    //      moved is certain, why it moved is not" rule (b3's insurance
-    //      line): the tape does not say what happened, only that something
-    //      did.
-    function computeFrictionWindow() {
+    // FIX #1 (Gate-5 blind-review, CRITICAL): the old anchor was the first
+    // tick >=+5s after the goal -- mid-jump, not settled -- so the drawn
+    // band contradicted the prose's own "held within 2 cents" claim. The
+    // level below is the median NOR-leg price in [t0+120s, t0+300s], the
+    // settled-level convention this fix was asked to use. Unchanged by the
+    // re-blind fix that follows -- the level was never the defect.
+    //
+    // FIX #2, corrected on re-blind (item 9, this pass): the band's own
+    // right edge must be defined by the same test the band visually makes
+    // ("is the line still inside this corridor?"), not by an unrelated
+    // large-jump heuristic. A single-bucket jump test (kept below as
+    // CLIFF_JUMP_C, now only for the separate cliff marker) correctly
+    // catches the abrupt +-620s repricing but is blind to a slower climb:
+    // the raw tape drifts from 63c to 78c between +290s and +610s, one
+    // bucket at a time, never snapping back inside the corridor again --
+    // exactly the escape a second blind read caught, since the old code
+    // kept the band drawn (and claiming "held") straight through that
+    // drift. Fix: scan every 10s bucket forward from the settle window and
+    // find the LAST one still inside [level-band, level+band]; the band
+    // ends the very next bucket. That definition cannot itself be
+    // contradicted by the line drawn over it, by construction.
+    //
+    // The +620s cliff itself is untouched: still the first bucket-to-bucket
+    // jump too large to be tick noise, still matches the second matched
+    // event in events_matched.parquet at t0+600s on the draw leg (same
+    // episode, different angle), still gets its own dashed line and plain,
+    // cause-agnostic "a second jump follows" label -- consistent with this
+    // scene's own "what moved is certain, why it moved is not" rule (b3's
+    // insurance line). It is simply no longer what decides where the band
+    // stops; the band can honestly end ~330s before the cliff, and does.
+    function computeFrictionWindow(bandC) {
       const tile = data.zoom.norbra;
       if (!tile || norLegIdx < 0) return null;
       const rows = [];
@@ -526,32 +561,52 @@ export default {
         if (tile.leg[r] !== norLegIdx) continue;
         rows.push({ tS: (tile.t0 + tile.ts_ms[r] - goalTs) / 1000, price: tile.price_c[r] });
       }
-      const settleWindow = rows.filter((d) => d.tS >= 120 && d.tS <= 300)
+      const bandStartS = 120;
+      const settleWindow = rows.filter((d) => d.tS >= bandStartS && d.tS <= 300)
         .map((d) => d.price).sort((a, b) => a - b);
       if (!settleWindow.length) return null;
       const level = settleWindow[Math.floor(settleWindow.length / 2)];
 
-      const CLIFF_JUMP_C = 8; // several times the settling window's own end-to-end spread
       const buckets = new Map();
       rows.forEach((d) => {
-        if (d.tS < 120) return;
+        if (d.tS < bandStartS) return;
         const b = Math.floor(d.tS / 10);
         if (!buckets.has(b)) buckets.set(b, []);
         buckets.get(b).push(d.price);
       });
       const bucketKeys = [...buckets.keys()].sort((a, b) => a - b);
-      let breakoutS = null;
+      const medianOf = (b) => {
+        const arr = buckets.get(b).slice().sort((p, q) => p - q);
+        return arr[Math.floor(arr.length / 2)];
+      };
+
+      // Band end: the bucket after the LAST one still inside the corridor,
+      // scanned across the whole tail (not just up to the first excursion)
+      // so a brief blip that later returns inside (there is one, ~+140-165s)
+      // cannot end the band early, and a real, permanent departure (from
+      // +290s on, never inside again before the cliff) cannot be missed.
+      let lastInsideB = null;
+      bucketKeys.forEach((b) => {
+        const med = medianOf(b);
+        if (med >= level - bandC && med <= level + bandC) lastInsideB = b;
+      });
+      const bandEndS = lastInsideB !== null ? (lastInsideB + 1) * 10 : bandStartS;
+
+      // Cliff marker only (FIX #2, original): first single-bucket jump
+      // several times the settling window's own end-to-end spread, checked
+      // only after the settle window closes.
+      const CLIFF_JUMP_C = 8;
+      let cliffS = null;
       let prevMedian = null;
       for (const b of bucketKeys) {
-        const arr = buckets.get(b).slice().sort((p, q) => p - q);
-        const med = arr[Math.floor(arr.length / 2)];
+        const med = medianOf(b);
         if (b * 10 > 300 && prevMedian !== null && Math.abs(med - prevMedian) >= CLIFF_JUMP_C) {
-          breakoutS = b * 10;
+          cliffS = b * 10;
           break;
         }
         prevMedian = med;
       }
-      return { level, bandStartS: 120, bandEndS: breakoutS !== null ? breakoutS : 1800, breakoutS };
+      return { level, bandStartS, bandEndS, breakoutS: cliffS };
     }
 
     function step(beatId) {
@@ -576,7 +631,7 @@ export default {
       }
       if (beatId === 'b4') {
         const band = (data.scene && data.scene.friction_band_c) || 2;
-        const win = computeFrictionWindow();
+        const win = computeFrictionWindow(band);
         bandG.selectAll('*').remove();
         if (win) {
           const bx0 = x(win.bandStartS);

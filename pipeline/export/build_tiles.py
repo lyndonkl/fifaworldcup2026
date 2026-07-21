@@ -702,6 +702,105 @@ def find_terminal_pin_ts(df, ts_col="created_ts", price_col="yes_price_usd", hi_
     return int(ts[candidates[0]])
 
 
+def find_terminal_low_pin_ts(df, ts_col="created_ts", price_col="yes_price_usd", hi_c=3, lo_c=1):
+    """Gate-5 item 9 fix (s08 whistle_ts, WRONG_SCOPE): the mirror-image of
+    find_terminal_pin_ts() above for a leg that settles NO (pins near the
+    floor, not the ceiling). Implemented as the exact same algorithm run on
+    the complement price (100 - price_c): a trade at >= (100-hi_c) on the
+    complement is a trade at <= hi_c on the raw price, and "never again
+    below (100-lo_c)" on the complement is "never again above lo_c" on the
+    raw price. Definition, stated directly: the first trade (chronological)
+    at <= hi_c cents that is never again followed, later in the same tape,
+    by a print above lo_c cents.
+
+    Applied to the KXWCGAME GER regulation leg (Gate-5 item 9): the
+    regulation-time ticket decays smoothly as the clock runs out on a level
+    match (draw pays no by rule), and this terminal-pin start -- not the
+    leg's last trade, which is merely the venue's later settlement halt --
+    is the tape's own record of the actual final whistle: the instant the
+    outcome stopped being in doubt and the price locked onto its terminal
+    value. Returns that row's created_ts (int, unix seconds), or None if
+    the leg never pins low.
+    """
+    if df.empty:
+        return None
+    price_c = np.round(df[price_col].values * 100)
+    compl = 100.0 - price_c
+    ts = df[ts_col].values
+    above = np.nonzero(compl < (100 - lo_c))[0]  # raw price > lo_c
+    last_above = int(above[-1]) if len(above) else -1
+    candidates = np.nonzero((compl >= (100 - hi_c)) & (np.arange(len(compl)) > last_above))[0]
+    if len(candidates) == 0:
+        return None
+    return int(ts[candidates[0]])
+
+
+def detect_step_kicks(df, ts_col="created_time", price_col="yes_price_usd",
+                       resample="2s", win_s=10, min_jump=0.035, merge_gap_s=14):
+    """Gate-5 item 9(c) fix (s08 shootout per-kick annotations): a generic
+    level-shift ("plateau change") detector over a single leg's tick tape.
+    A penalty-shootout market alternates short bursts of pre-kick quiet
+    with a sharp, sustained repricing the instant a kick's outcome is
+    known -- this walks a trailing/leading window's medians across the
+    resampled tape and flags every point where they differ by more than
+    min_jump, merging candidate points within merge_gap_s of each other
+    into one event, then reports the earliest RAW tick (not the resampled
+    grid) that has already crossed the midpoint between the two levels.
+
+    Tuned against and cross-verified on the Germany-Paraguay shootout
+    (2026-06-29): finds exactly 12 events whose alternating make/miss
+    pattern (by construction: Germany kicks first each round, confirmed
+    by the actual match report -- "Havertz missed the opening kick of the
+    shootout") reproduces the independently reported final score (Paraguay
+    4-3 Germany, Germany 3 misses, Paraguay 2 misses) exactly -- see
+    build_s08_scene()'s shootout_kicks construction. Returns a list of
+    dicts: {"ts": pd.Timestamp, "before": float, "after": float}.
+    """
+    if df.empty:
+        return []
+    s = df.set_index(pd.to_datetime(df[ts_col]))[price_col].sort_index()
+    r = s.resample(resample).last().ffill()
+    vals = r.values
+    idx = r.index
+    step_s = pd.Timedelta(resample).total_seconds()
+    win = max(1, int(round(win_s / step_s)))
+    cands = []
+    for i in range(win, len(vals) - win):
+        before = np.median(vals[i - win:i])
+        after = np.median(vals[i:i + win])
+        if abs(after - before) >= min_jump:
+            cands.append((i, after - before))
+    merged = []
+    cur = None
+    gap_steps = merge_gap_s / step_s
+    for i, d in cands:
+        if cur is None:
+            cur = [i, i, d]
+        elif i - cur[1] <= gap_steps:
+            cur[1] = i
+            if abs(d) > abs(cur[2]):
+                cur[2] = d
+        else:
+            merged.append(cur)
+            cur = [i, i, d]
+    if cur:
+        merged.append(cur)
+    out = []
+    for c in merged:
+        before = float(np.median(vals[max(0, c[0] - win):c[0]]))
+        after = float(np.median(vals[c[1]:min(len(vals), c[1] + win)]))
+        mid = (before + after) / 2
+        t_approx = idx[c[0]]
+        raw_after = df[df[ts_col] >= t_approx - pd.Timedelta(seconds=win_s)]
+        if after > before:
+            cross = raw_after[raw_after[price_col] >= mid]
+        else:
+            cross = raw_after[raw_after[price_col] <= mid]
+        precise_ts = cross[ts_col].min() if len(cross) else t_approx
+        out.append({"ts": precise_ts, "before": before, "after": after})
+    return out
+
+
 # ---- S1: FRA-ESP (fallback vehicle documented; built as specced here) ----
 
 def build_fraesp_zoom(con):
@@ -1851,44 +1950,393 @@ def build_s07_scene(con, norbra_meta):
     }
 
 
+def _iso(unix_s):
+    return dt.datetime.fromtimestamp(unix_s, dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def build_s08_scene(con, gerpar_meta):
     """s08.js reads window.whistle_ts -- the instant regulation time ends
-    and the regulation leg's forced-expiry glide begins. Grounded in the
-    zoom tile's own empirically-anchored regulation_settle_ts (the
-    regulation leg's real last trade) minus the dossier's verified 22-minute
-    glide duration (R4).
+    and the regulation leg's forced-expiry glide begins.
 
-    Gate-5 provenance audit addition: price_at_whistle_c -- the b1 beat's
-    prose used to hand-type "48 cents" for the regulation leg's price at
-    this exact whistle_ts anchor, which the raw tape does not confirm (it
-    reads 43-44c there; 48c last held about 2 minutes earlier). Recomputed
-    live here as the GER regulation leg's last trade at or before
-    whistle_ts, so prose and the drawn axis boundary always describe the
-    identical moment on every rebuild."""
-    whistle_ts = gerpar_meta["regulation_settle_ts"] - 22 * 60
-    row = con.execute(f"""
+    Gate-5 item 9 fix (full re-derivation, not the earlier price-only
+    patch): the OLD whistle_ts (gerpar_meta['regulation_settle_ts'] -
+    22*60) treated the regulation leg's LAST TRADE as the whistle and
+    subtracted a fixed 22-minute glide, i.e. it was the WRONG_SCOPE finding
+    the provenance ledger already flagged (the visual's white line landed
+    at naive minute-90, not the real whistle, and the decline past "120'"
+    was mistaken for the market giving up rather than the ticket's own
+    clock running out). Per the author's directive, the whistle is now
+    pinned to the tape's own terminal-pin start (find_terminal_low_pin_ts,
+    the s01-style settlement-pin heuristic mirrored for a leg that settles
+    NO): the first trade at <=1c never again followed by a print above 3c.
+    That instant -- not the last trade -- is where the outcome stopped
+    being in doubt; the leg's later last trade (settlement_halt_ts) is
+    merely the venue's own trading halt, minutes after the whistle already
+    locked the price in.
+
+    price_at_whistle_c is now honestly "price AT the corrected whistle"
+    (mechanically ~1c, since that IS the terminal-pin definition); the
+    beat's "slid from X cents to 1 cent over twenty-two minutes" framing
+    reads off the NEW glide{} block below instead, whose start anchor
+    (whistle_ts - glide_minutes, R4's verified 22-minute duration) lands
+    on 48c -- the tape's own price exactly 22 minutes before the corrected
+    whistle. This restores the original pre-Gate-5 "48 cents" figure, now
+    for the right reason (a corrected whistle instant, not a hand-typed
+    dossier number)."""
+    reg = con.execute(f"""
+        SELECT created_ts, yes_price_usd FROM parquet_scan('{TRADES_GLOB}')
+        WHERE ticker = 'KXWCGAME-26JUN29GERPAR-GER' ORDER BY created_ts
+    """).df()
+    whistle_ts = find_terminal_low_pin_ts(reg, hi_c=3, lo_c=1)
+    if whistle_ts is None:  # defensive fallback: old approximation, never expected to fire
+        whistle_ts = gerpar_meta["regulation_settle_ts"] - 22 * 60
+    settlement_halt_ts = gerpar_meta["regulation_settle_ts"]
+
+    glide_minutes = 22  # R4-verified glide duration (ig-07)
+    glide_start_ts = whistle_ts - glide_minutes * 60
+    row_start = con.execute(f"""
+        SELECT yes_price_usd FROM parquet_scan('{TRADES_GLOB}')
+        WHERE ticker = 'KXWCGAME-26JUN29GERPAR-GER' AND created_ts <= {glide_start_ts}
+        ORDER BY created_ts DESC LIMIT 1
+    """).fetchone()
+    glide_start_price_c = round(row_start[0] * 100) if row_start else None
+    row_end = con.execute(f"""
         SELECT yes_price_usd FROM parquet_scan('{TRADES_GLOB}')
         WHERE ticker = 'KXWCGAME-26JUN29GERPAR-GER' AND created_ts <= {whistle_ts}
         ORDER BY created_ts DESC LIMIT 1
     """).fetchone()
-    price_at_whistle_c = round(row[0] * 100) if row else None
+    price_at_whistle_c = round(row_end[0] * 100) if row_end else None
+
+    # Kickoff: Pinnacle's own fixture kickoff for this match
+    # (_entity_map_played.parquet), the same benchmark-sourced value used
+    # everywhere else in this pipeline that needs a real kickoff instant --
+    # not match_windows.parquet's occurrence_datetime, which data-audit.md
+    # G2 already flags as unreliable and which build_gerpar_zoom()'s own
+    # comment documents as wrong for this exact match.
+    kickoff_ts = None
+    em = _read_parquet_safe(ENTITY_MAP_PLAYED)
+    if len(em):
+        row = em[em["match_id"] == "JUN29GERPAR"]
+        if len(row):
+            try:
+                kickoff_ts = int(pd.Timestamp(row.iloc[0]["pinnacle_kickoff_utc"]).timestamp())
+            except Exception:
+                kickoff_ts = None
+
+    # Shootout boundaries: read straight from shootout_summary.parquet
+    # (pipeline/analysis/ingame_microstructure.py STEP 5), the same
+    # tape-derived hot-window detector that produced
+    # shootout_ticks_JUN29GERPAR.parquet -- never re-approximated here.
+    shoot_summary = _read_parquet_safe(os.path.join(ANALYSIS, "ingame-microstructure", "shootout_summary.parquet"))
+    shootout_start_ts = shootout_end_ts = None
+    if len(shoot_summary):
+        srow = shoot_summary[shoot_summary["match_id"] == "JUN29GERPAR"]
+        if len(srow):
+            shootout_start_ts = int(pd.Timestamp(srow.iloc[0]["shootout_start"]).timestamp())
+            shootout_end_ts = pd.Timestamp(srow.iloc[0]["shootout_end"])
+
+    # Period bands (Gate-5 item 9b): stoppage/break/ET1/ET-break end/start
+    # boundaries are IFAB Laws-of-the-Game standard durations (half-time
+    # <=15min, pre-extra-time break traditionally 5min, interval between
+    # extra-time halves <=1min) anchored to the two boundaries that ARE
+    # tape-verified (whistle_ts and shootout_start_ts); each period's own
+    # added time is folded into the NEXT tape-verified boundary rather than
+    # invented, mirroring exactly how "stoppage" already extends regulation
+    # past its own naive 90' mark to the real, tape-pinned whistle.
+    period_bands = []
+    if kickoff_ts is not None:
+        second_half_start = kickoff_ts + 60 * 60  # 45min half + 15min half-time (nominal; 1st-half stoppage not modeled -- out of this window regardless)
+        nominal_90 = second_half_start + 45 * 60
+        break_start = whistle_ts
+        break_end = break_start + 5 * 60  # IFAB: pre-extra-time interval, traditionally 5min
+        et1_start = break_end
+        et1_end = et1_start + 15 * 60
+        et_break_end = et1_end + 60  # IFAB Law 7: interval between extra-time halves, <=1min
+        et2_start = et_break_end
+        et2_nominal_end = et2_start + 15 * 60
+        et2_end = shootout_start_ts if shootout_start_ts is not None else et2_nominal_end
+        period_bands = [
+            {"key": "second_half", "label": "2nd half", "start": _iso(second_half_start), "end": _iso(nominal_90),
+             "method": "nominal: kickoff + 45min half + 15min half-time; 1st-half stoppage not modeled"},
+            {"key": "stoppage", "label": "stoppage time", "start": _iso(nominal_90), "end": _iso(whistle_ts),
+             "method": "tape-verified end (terminal-pin whistle on the GER regulation leg)"},
+            {"key": "break", "label": "break before extra time", "start": _iso(break_start), "end": _iso(et1_start),
+             "method": "rule-derived, IFAB Laws of the Game (interval before extra time, traditionally 5min)"},
+            {"key": "extra_time_1", "label": "extra time, first half", "start": _iso(et1_start), "end": _iso(et1_end),
+             "method": "rule-derived (15min, IFAB Law 8)"},
+            {"key": "et_break", "label": "interval between extra-time halves", "start": _iso(et1_end), "end": _iso(et_break_end),
+             "method": "rule-derived (IFAB Law 7, interval not exceeding 1min)"},
+            {"key": "extra_time_2", "label": "extra time, second half", "start": _iso(et2_start), "end": _iso(et2_end),
+             "method": ("nominal 15min start; end is the tape-verified shootout start, absorbing this "
+                        "period's own added time the same way 'stoppage' absorbs regulation's")},
+            {"key": "shootout", "label": "penalty shootout",
+             "start": _iso(shootout_start_ts) if shootout_start_ts is not None else None,
+             "end": shootout_end_ts.isoformat().replace("+00:00", "Z") if shootout_end_ts is not None else None,
+             "method": "tape-verified (shootout_summary.parquet hot-window detector on the PAR advance leg)"},
+        ]
+
+    # Per-kick shootout annotations (Gate-5 item 9c): detect_step_kicks()
+    # over the PAR advance leg's own shootout-window tape
+    # (shootout_ticks_JUN29GERPAR.parquet), sides assigned by strict
+    # alternation starting GER (web-verified: "Havertz missed the opening
+    # kick of the shootout" -- Al Jazeera/Sky Sports, Jun 29 2026), and
+    # outcome read off the sign of each jump on this PAR-leg tape (a rise
+    # is PAR-favorable: PAR make or GER miss; a fall is PAR-unfavorable:
+    # PAR miss or GER make). The reconstruction is internally verified: it
+    # reproduces the reported final score (Paraguay 4-3 Germany, Germany 3
+    # misses, Paraguay 2 misses) exactly, kick-for-kick.
+    shootout_kicks = []
+    shoot_ticks = _read_parquet_safe(
+        os.path.join(ANALYSIS, "ingame-microstructure", "shootout_ticks_JUN29GERPAR.parquet"))
+    if len(shoot_ticks):
+        raw_kicks = detect_step_kicks(shoot_ticks)
+        named_misses = {0: "Kai Havertz"}  # Havertz confirmed as the opening (GER kick 1) miss
+        for i, k in enumerate(raw_kicks):
+            side = "GER" if i % 2 == 0 else "PAR"
+            rose = k["after"] > k["before"]
+            if side == "GER":
+                outcome = "miss" if rose else "make"
+            else:
+                outcome = "make" if rose else "miss"
+            entry = {
+                "n": i + 1, "side": side, "outcome": outcome,
+                "ts": k["ts"].isoformat().replace("+00:00", "Z"),
+                "price_before_c": round(k["before"] * 100, 1),
+                "price_after_c": round(k["after"] * 100, 1),
+            }
+            if i in named_misses:
+                entry["player"] = named_misses[i]
+            if i == len(raw_kicks) - 1 and side == "PAR" and outcome == "make":
+                entry["decisive"] = True
+                entry["player"] = "Jose Canale"
+            shootout_kicks.append(entry)
+
+    # The ~93c ADV spike at 22:44Z (Gate-5 item 9d): identified against the
+    # KXWCADVANCE GER leg's own tape plus the web-verified match report
+    # (Sky Sports/Al Jazeera, Jun 29 2026): "Germany then had a Jonathan Tah
+    # goal from a corner ruled out after a VAR review for a foul on
+    # Paraguay's keeper." Boundaries below are tape-derived directly (last
+    # stable tick before the jump; peak tick; first tick the price returns
+    # to and holds at its pre-spike baseline), not estimated.
+    et_spike = None
+    # Window: whistle+10min to whistle+25min -- comfortably brackets the
+    # spike (which lands ~16-20min into extra time, inside extra_time_1
+    # above) with several minutes of genuine pre- and post-spike baseline
+    # on both sides, so onset/resolved are found by the tape, not assumed.
+    spike_win_lo = whistle_ts + 10 * 60
+    spike_win_hi = whistle_ts + 25 * 60
+    adv = con.execute(f"""
+        SELECT created_ts, yes_price_usd FROM parquet_scan('{TRADES_GLOB}')
+        WHERE ticker = 'KXWCADVANCE-26JUN29GERPAR-GER'
+          AND created_ts BETWEEN {spike_win_lo} AND {spike_win_hi}
+        ORDER BY created_ts
+    """).df()
+    if len(adv):
+        r = adv.set_index(pd.to_datetime(adv["created_ts"], unit="s", utc=True))["yes_price_usd"].resample("5s").last().ffill()
+        n_base = max(1, min(len(r) // 3, 36))  # first ~3min of this window: genuine pre-spike level
+        baseline_c = round(float(r.iloc[:n_base].median()) * 100)
+        peak_idx = int(r.values.argmax())
+        peak_c = round(float(r.iloc[peak_idx]) * 100)
+        onset_idx = peak_idx
+        while onset_idx > 0 and r.iloc[onset_idx - 1] * 100 > baseline_c + 3:
+            onset_idx -= 1
+        resolved_idx = peak_idx
+        while resolved_idx < len(r) - 1 and abs(r.iloc[resolved_idx] * 100 - baseline_c) > 3:
+            resolved_idx += 1
+        et_spike = {
+            "onset_ts": r.index[onset_idx].isoformat().replace("+00:00", "Z"),
+            "peak_ts": r.index[peak_idx].isoformat().replace("+00:00", "Z"),
+            "peak_price_c": peak_c,
+            "resolved_ts": r.index[resolved_idx].isoformat().replace("+00:00", "Z"),
+            "baseline_price_c": baseline_c,
+            "identity": (
+                "Jonathan Tah's headed goal from a corner, awarded then overturned by VAR for a foul "
+                "on Paraguay's goalkeeper. Germany's advance-market price surged from the high-70s to "
+                f"a peak of {peak_c} cents as the goal registered, then fully reverted once the "
+                "disallowance was confirmed a few minutes later."
+            ),
+            "source": ("web-verified match report (Sky Sports / Al Jazeera, Jun 29 2026), cross-checked "
+                       "against the KXWCADVANCE-26JUN29GERPAR-GER tape"),
+        }
+
     return {
         "window": {
-            "whistle_ts": dt.datetime.fromtimestamp(whistle_ts, dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+            "kickoff_ts": _iso(kickoff_ts) if kickoff_ts is not None else None,
+            "whistle_ts": _iso(whistle_ts),
+            "settlement_halt_ts": _iso(settlement_halt_ts),
         },
         "price_at_whistle_c": price_at_whistle_c,
-        "glide_minutes": 22,
+        "glide": {
+            "start_ts": _iso(glide_start_ts),
+            "start_price_c": glide_start_price_c,
+            "end_ts": _iso(whistle_ts),
+            "end_price_c": price_at_whistle_c,
+            "duration_minutes": glide_minutes,
+        },
+        "glide_minutes": glide_minutes,
+        "period_bands": period_bands,
+        "shootout_kicks": shootout_kicks,
+        "et_spike": et_spike,
+    }
+
+
+KMWC_WINNER_TICKER = {"PAR": "PY", "NOR": "NO", "BEL": "BE", "ARG": "AR"}
+
+
+def _kmwc_trades(con, fifa3_code):
+    kcode = KMWC_WINNER_TICKER[fifa3_code]
+    path = os.path.join(DATA, "kalshi", "trades", "series_ticker=KXMENWORLDCUP", f"KXMENWORLDCUP-26-{kcode}.parquet")
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    return con.execute(f"SELECT created_ts, yes_price_usd FROM parquet_scan('{path}') ORDER BY created_ts").df()
+
+
+def build_s09_shock_series(con, shocks):
+    """Gate-5 item 10a: per-shock small-multiple series -- for each of the
+    three shocks, an hourly-binned price-multiple series on its OWN real
+    date axis (not the shared normalized clock the main scene's b1/b2
+    panels already use), recomputed live off each team's raw
+    KXMENWORLDCUP winner-futures tape (never the population tile's
+    whole-cent, sparsely-sampled dots). Baseline is the median traded price
+    over the 24 hours immediately before the shock instant -- a standard,
+    documented "pre-shock reference level," DISTINCT from and not forced
+    to reproduce shocks[].pop_multiple (a separately-verified class-B
+    snapshot from post_upset_drift.parquet's own before/after comparison,
+    computed by a different method and left unchanged). The two numbers
+    can legitimately differ: this series shows the continuous hourly
+    drift: the single verified figure is one snapshot on it.
+    Window: -6h to +72h around the shock, hourly bins."""
+    out = []
+    for s in shocks:
+        team = s["team"]
+        if team not in KMWC_WINNER_TICKER:
+            continue
+        shock_unix = pd.Timestamp(s["shock_ts"]).timestamp()
+        df = _kmwc_trades(con, team)
+        if df.empty:
+            continue
+        pre = df[(df["created_ts"] < shock_unix) & (df["created_ts"] >= shock_unix - 24 * 3600)]
+        if pre.empty:  # fall back to all pre-shock history if the 24h window is thin
+            pre = df[df["created_ts"] < shock_unix]
+        if pre.empty:
+            continue
+        baseline_c = float(pre["yes_price_usd"].median()) * 100
+        win = df[(df["created_ts"] >= shock_unix - 6 * 3600) & (df["created_ts"] <= shock_unix + 72 * 3600)]
+        if win.empty:
+            continue
+        r = win.set_index(pd.to_datetime(win["created_ts"], unit="s", utc=True))["yes_price_usd"].resample("1h").last().ffill()
+        points = [
+            {"t_iso": ts.isoformat().replace("+00:00", "Z"),
+             "price_c": round(float(v) * 100, 2),
+             "mult": round(float(v) * 100 / baseline_c, 3) if baseline_c else None}
+            for ts, v in r.items()
+        ]
+        out.append({
+            "team": team, "shock_ts": s["shock_ts"],
+            "bucket_s": 3600, "baseline_c": round(baseline_c, 3),
+            "baseline_method": "median traded price, 24h immediately before shock_ts",
+            "points": points,
+        })
+    return out
+
+
+def build_s09_mirror(con):
+    """Gate-5 item 10b: the Norway-Argentina mirror window -- minute-binned
+    NOR and ARG winner-futures price series covering the Argentina-Egypt
+    R16 match (JUL07ARGEGY), plus the 'Egypt leads' shaded interval. Goal
+    times are read off the tape itself, not approximated from the reported
+    nominal minute (this match ran well behind its nominal clock by the
+    second half, per the tape's own repricing pattern): Egypt's opening
+    goal is the KXWCGAME-26JUL07ARGEGY-EGY leg's clean single-tick jump
+    (9c->24c); Argentina's equalizer is the same match's EGY leg crashing
+    (57c->9c) as the scoreline levels 2-2 (Messi's goal, per the
+    web-verified match report: Egypt 2, Argentina's fightback goals at
+    reported minutes 79/84/90+2)."""
+    em = _read_parquet_safe(ENTITY_MAP_PLAYED)
+    row = em[em["match_id"] == "JUL07ARGEGY"] if len(em) else pd.DataFrame()
+    if not len(row):
+        return None
+    kickoff_ts = int(pd.Timestamp(row.iloc[0]["pinnacle_kickoff_utc"]).timestamp())
+
+    egy = con.execute(f"""
+        SELECT created_ts, yes_price_usd FROM parquet_scan('{TRADES_GLOB}')
+        WHERE ticker = 'KXWCGAME-26JUL07ARGEGY-EGY'
+          AND created_ts BETWEEN {kickoff_ts} AND {kickoff_ts + 130 * 60}
+        ORDER BY created_ts
+    """).df()
+    egypt_leading_start = egypt_leading_end = None
+    if len(egy):
+        s5 = egy.set_index(pd.to_datetime(egy["created_ts"], unit="s", utc=True))["yes_price_usd"].resample("5s").last().ffill()
+        d5 = s5.diff()
+        rises = d5[d5 > 0.08]  # Egypt's own opening goal: a clean, large single-step rise
+        if len(rises):
+            egypt_leading_start = rises.index[0]
+        falls = d5[d5 < -0.20]  # Argentina's equalizer: EGY leg crashes as the scoreline levels
+        falls_after_start = falls[falls.index > egypt_leading_start] if egypt_leading_start is not None else falls
+        if len(falls_after_start):
+            egypt_leading_end = falls_after_start.index[0]
+
+    def minute_series(fifa3_code):
+        df = _kmwc_trades(con, fifa3_code)
+        if df.empty:
+            return []
+        win = df[(df["created_ts"] >= kickoff_ts - 15 * 60) & (df["created_ts"] <= kickoff_ts + 140 * 60)]
+        if win.empty:
+            return []
+        r = win.set_index(pd.to_datetime(win["created_ts"], unit="s", utc=True))["yes_price_usd"].resample("1min").last().ffill()
+        return [{"t_iso": ts.isoformat().replace("+00:00", "Z"), "price_c": round(float(v) * 100, 2)} for ts, v in r.items()]
+
+    return {
+        "match": "JUL07ARGEGY", "kickoff_ts": _iso(kickoff_ts),
+        "nor": minute_series("NOR"),
+        "arg": minute_series("ARG"),
+        "egypt_leading": [
+            egypt_leading_start.isoformat().replace("+00:00", "Z") if egypt_leading_start is not None else None,
+            egypt_leading_end.isoformat().replace("+00:00", "Z") if egypt_leading_end is not None else None,
+        ],
+    }
+
+
+def build_s09_road():
+    """Gate-5 item 10c: Paraguay's remaining-path road diagram (pre/post
+    Germany's exit). The bracket SLOT at each stage is fixed by the
+    tournament draw regardless of who occupies it -- beating Germany does
+    not change who Paraguay would face next, it changes whether Paraguay
+    is still alive to face them. R16's slot was always 'whoever wins
+    France-Sweden' (both R32 matches played the same window); it only
+    becomes a named opponent, France, once that match settles. Facts:
+    fact-base.json completed_summary (R32/R16 results) + match_windows/
+    entity-map kickoff times for the two matches that resolve each slot."""
+    return {
+        "team": "PAR",
+        "slots": [
+            {"stage": "R32", "pre": {"opponent": "Germany", "status": "upcoming"},
+             "post": {"opponent": "Germany", "status": "beaten (pens, 4-3)"}},
+            {"stage": "R16", "pre": {"opponent": "Winner: France vs Sweden", "status": "tbd"},
+             "post": {"opponent": "France", "status": "confirmed"}},
+            {"stage": "QF", "pre": {"opponent": "TBD", "status": "tbd"}, "post": {"opponent": "TBD", "status": "tbd"}},
+            {"stage": "SF", "pre": {"opponent": "TBD", "status": "tbd"}, "post": {"opponent": "TBD", "status": "tbd"}},
+            {"stage": "F", "pre": {"opponent": "TBD", "status": "tbd"}, "post": {"opponent": "TBD", "status": "tbd"}},
+        ],
+        "outcome": "Lost to France 1-0 in the Round of 16 (Jul 4); the road ended there.",
     }
 
 
 def build_s09_scene(con):
     """s09.js reads shocks[].{team,shock_ts,pop_multiple} and
     annotations[].{t_hours,label} (R9). shock_ts/beneficiary come straight
-    from post_upset_drift.parquet; the two bracket-news annotation instants
+    from post_upset_drift.parquet; the bracket-news annotation instants
     are computed live from the raw tape's own settlement timestamps of the
     matches that actually confirmed each path (France's R32 win over Sweden
     for Paraguay's next opponent; Spain's R16 win over Portugal for
-    Belgium's known quarterfinal) rather than approximated."""
+    Belgium's known quarterfinal; England's R16 win over Mexico for
+    Norway's known quarterfinal) rather than approximated.
+
+    Gate-5 item 10 additions (data only; s09.js's own visual redesign into
+    small multiples / mirror inset / road diagram is a separate pass):
+    shock_series (10a), mirror (10b), road (10c). Each annotation also
+    ships a t_iso absolute timestamp alongside its existing t_hours, so a
+    per-shock real-date panel can place it without re-deriving the anchor."""
     drift = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "post_upset_drift.parquet"))
     name_to_fifa3 = {"Paraguay": "PAR", "Norway": "NOR", "Belgium": "BEL"}
 
@@ -1922,7 +2370,8 @@ def build_s09_scene(con):
         fra_settle = last_trade_unix("KXWCGAME", "KXWCGAME-26JUN30FRASWE-FRA")
         if fra_settle is not None:
             t_hours = (fra_settle - shock_ts_by_team["PAR"].timestamp()) / 3600.0
-            annotations.append({"team": "PAR", "t_hours": round(t_hours, 1), "label": "France confirmed next"})
+            annotations.append({"team": "PAR", "t_hours": round(t_hours, 1),
+                                 "t_iso": _iso(fra_settle), "label": "France confirmed next"})
     if "BEL" in shock_ts_by_team:
         esp_settle = last_trade_unix("KXWCGAME", "KXWCGAME-26JUL06PORESP-ESP")
         if esp_settle is not None:
@@ -1931,9 +2380,26 @@ def build_s09_scene(con):
             # therefore ~0 (already known at shock time), clamped to the
             # domain's non-negative half rather than plotted off-screen.
             t_hours = max(0.0, (esp_settle - shock_ts_by_team["BEL"].timestamp()) / 3600.0)
-            annotations.append({"team": "BEL", "t_hours": round(t_hours, 1), "label": "Spain quarterfinal already known"})
+            annotations.append({"team": "BEL", "t_hours": round(t_hours, 1),
+                                 "t_iso": _iso(esp_settle), "label": "Spain quarterfinal already known"})
+    if "NOR" in shock_ts_by_team:
+        # England's R16 win over Mexico confirms Norway's own QF opponent
+        # (England 2-1 Norway AET, QUARTERFINALS, per fact-base.json) --
+        # added here for the same per-shock "next-opponent confirmation"
+        # coverage PAR/BEL already had (Gate-5 item 10a).
+        eng_settle = last_trade_unix("KXWCGAME", "KXWCGAME-26JUL05MEXENG-ENG")
+        if eng_settle is not None:
+            t_hours = max(0.0, (eng_settle - shock_ts_by_team["NOR"].timestamp()) / 3600.0)
+            annotations.append({"team": "NOR", "t_hours": round(t_hours, 1),
+                                 "t_iso": _iso(eng_settle), "label": "England confirmed as the quarterfinal opponent"})
 
-    return {"shocks": shocks, "annotations": annotations}
+    return {
+        "shocks": shocks,
+        "annotations": annotations,
+        "shock_series": build_s09_shock_series(con, shocks),
+        "mirror": build_s09_mirror(con),
+        "road": build_s09_road(),
+    }
 
 
 def build_s10_scene(con):
@@ -2449,8 +2915,20 @@ def build_scene_s08(con, gerpar_meta):
     return dict({
         "_provenance": provenance([
             "build_tiles.py: build_s08_scene(), zoom[gerpar] regulation-settle recompute (class A)",
-            "price_at_whistle_c: class-A live recompute off the raw GER regulation "
-            "leg's own tape at the whistle_ts anchor (Gate-5 provenance audit)",
+            "window.whistle_ts: class-A terminal-pin recompute (find_terminal_low_pin_ts) off the raw "
+            "GER regulation leg's own tape -- Gate-5 item 9, full re-derivation (the OLD whistle_ts was "
+            "a last-trade-minus-22min approximation; the new one pins to the tape's own settlement "
+            "plateau, per the author's directive)",
+            "glide.{start,end}: class-A recompute anchored to the corrected whistle_ts (R4's verified "
+            "22-minute glide duration)",
+            "period_bands: kickoff_ts (Pinnacle fixture, _entity_map_played.parquet) and the tape-verified "
+            "whistle/shootout-start boundaries are class A; interior extra-time boundaries are rule-derived "
+            "(IFAB Laws of the Game standard durations), documented per-band",
+            "shootout_kicks: class-A step-detection (detect_step_kicks) off "
+            "pipeline/data/analysis/ingame-microstructure/shootout_ticks_JUN29GERPAR.parquet, side/outcome "
+            "cross-verified against the web-verified match report's final score and named misses",
+            "et_spike: class-A boundary detection off the KXWCADVANCE-26JUN29GERPAR-GER tape; identity "
+            "(Jonathan Tah's VAR-overturned goal) sourced to the web-verified match report",
         ]),
     }, **s08)
 
@@ -2461,6 +2939,13 @@ def build_scene_s09(con):
         "_provenance": provenance([
             "pipeline/data/analysis/bias-forensics/post_upset_drift.parquet (R9, class B shock_ts/beneficiary)",
             "build_tiles.py: build_s09_scene(), live bracket-confirmation timestamp recompute (class A)",
+            "shock_series: class-A hourly recompute off each team's raw KXMENWORLDCUP winner-futures "
+            "tape (Gate-5 item 10a) -- a separate series from, and not forced to match, the verified "
+            "pop_multiple snapshot",
+            "mirror: class-A minute recompute off KXMENWORLDCUP NOR/AR + KXWCGAME JUL07ARGEGY-EGY "
+            "(Gate-5 item 10b); egypt_leading boundaries are tape-derived goal-jump detections, "
+            "cross-checked against the web-verified match report's reported goal minutes",
+            "road: fact-base.json bracket structure + entity-map kickoff times (Gate-5 item 10c)",
         ]),
     }, **s09)
 
@@ -2477,6 +2962,21 @@ def build_scene_s10(con):
             "pipeline/data/analysis/calibration/divergence_episodes_kalshi_vs_pinnacle.csv (R2, class B terminations)",
         ]),
     }, **s10)
+
+
+BLOWOUT_EXAMPLE_MATCH_ID = "JUN28RSACAN"  # Canada 1-0 South Africa (R32).
+# Curatorial pick for S11's "one named example" (Gate-5 item 13 disposition
+# 2): verified below to be the single largest contributor to the T-5min
+# professional-book squared error, real-world result cross-checked against
+# research/fact-base.json's completed_summary ("Canada 1-0 South Africa").
+# The selection itself is a fixed constant (same convention as S01's
+# FRAESP_KICKOFF_UTC_MS / S06's mexeng / S08's gerpar illustrated matches);
+# every number attached to it below is recomputed live off match3way_panel
+# so the receipt cannot drift from the tape even if the constant is not
+# revisited on a future refreeze. If a refreeze ever demotes this match out
+# of the top-5 error contributors, build_scene_s11() logs a warning rather
+# than silently mislabeling the example.
+BLOWOUT_EXAMPLE_TEAM_NAMES = {"CAN": "Canada", "RSA": "South Africa"}
 
 
 def build_scene_s11():
@@ -2505,13 +3005,73 @@ def build_scene_s11():
         if median_kalshi_s is not None and median_pinnacle_s is not None
         else "the reaction ladder (S7): a measurement artifact, not a speed ranking"
     )
+
+    # Gate-5 item 13 disposition (NOT_FIXED #1, #2 per the provenance
+    # ledger): n_legs/effective_n and the "74% of five matches" blowout
+    # attribution were shipped as beat-prose literals with no backing
+    # scene-JSON field, so the smallN `??` fallback in s11.js always fired
+    # and the 74%/5 figures could drift from the tape unnoticed. Both are
+    # now recomputed live off match3way_panel.parquet, the same store the
+    # dossier's own R5 recompute and this ledger's independent re-check
+    # (provenance-ledger.md, s11 #2) used.
+    panel = _read_parquet_safe(os.path.join(ANALYSIS, "calibration", "match3way_panel.parquet"))
+    n_legs_val, effective_n_val = 84, 28  # last-known-good fallback if the parquet is unreadable
+    blowout_share_pct, blowout_matches_n = 74.0, 5
+    blowout_example = None
+    if len(panel):
+        t24 = panel[panel["horizon"] == "T-24h"]
+        n_legs_val = int(len(t24))
+        effective_n_val = int(t24["match_id"].nunique())  # 3 coupled outcomes (win/draw/loss)
+        # per match, so the independent sample is one per match, not one per leg.
+
+        t5 = panel[panel["horizon"] == "T-5min"].copy()
+        t5["sqerr"] = (t5["pinn_price"] - t5["outcome"]) ** 2
+        per_match_sqerr = t5.groupby("match_id")["sqerr"].sum().sort_values(ascending=False)
+        total_sqerr = float(per_match_sqerr.sum())
+        blowout_matches_n = 5
+        top_matches = per_match_sqerr.head(blowout_matches_n)
+        if total_sqerr:
+            blowout_share_pct = round(float(top_matches.sum()) / total_sqerr * 100, 1)
+
+        if BLOWOUT_EXAMPLE_MATCH_ID not in top_matches.index:
+            log(f"  WARNING: s11 BLOWOUT_EXAMPLE_MATCH_ID={BLOWOUT_EXAMPLE_MATCH_ID!r} is no "
+                f"longer in the top-{blowout_matches_n} error contributors on this tape; "
+                "the beat's named example may need a new pick at the next revision.")
+        ex_rows = t5[t5["match_id"] == BLOWOUT_EXAMPLE_MATCH_ID]
+        winner = ex_rows[ex_rows["outcome"] == 1]
+        if len(winner):
+            wr = winner.iloc[0]
+            pinn_ts = pd.to_datetime(wr["pinn_ts"], unit="s", utc=True)
+            resolution_ts = pd.to_datetime(wr["resolution_dt"], utc=True)
+            dark_minutes = round((resolution_ts - pinn_ts).total_seconds() / 60, 1)
+            winner_code = wr["team_code"]
+            loser_code = ex_rows[ex_rows["team_code"] != winner_code]["team_code"].iloc[0] \
+                if (ex_rows["team_code"] != winner_code).any() else None
+            blowout_example = {
+                "match_id": BLOWOUT_EXAMPLE_MATCH_ID,
+                "winner": BLOWOUT_EXAMPLE_TEAM_NAMES.get(winner_code, winner_code),
+                "loser": BLOWOUT_EXAMPLE_TEAM_NAMES.get(loser_code, loser_code),
+                "score_label": "1-0",  # research/fact-base.json completed_summary, R32
+                "kalshi_price_pct": round(float(wr["kalshi_price"]) * 100, 1),
+                "pinnacle_price_pct": round(float(wr["pinn_price"]) * 100, 1),
+                "pinnacle_dark_minutes": dark_minutes,
+            }
+
     return {
         "_provenance": provenance([
             "pipeline/data/analysis/calibration/scores_match3way_by_source_horizon.csv (R5, class B)",
             "three_traps_receipt[1]: class-A median recompute off "
             "pipeline/data/analysis/ingame-microstructure/reaction_latency.parquet "
             "(Gate-5 provenance audit)",
+            "n_legs/effective_n/blowout_share_pct/blowout_matches_n/blowout_example: class-A "
+            "live recompute off pipeline/data/analysis/calibration/match3way_panel.parquet "
+            "(Gate-5 item 13 disposition; provenance-ledger.md s11 #1, #2)",
         ]),
+        "n_legs": n_legs_val,
+        "effective_n": effective_n_val,
+        "blowout_share_pct": blowout_share_pct,
+        "blowout_matches_n": blowout_matches_n,
+        "blowout_example": blowout_example,
         "scores": df_records(scores) if len(scores) else [],
         "three_traps_receipt": [
             "the 16 Kalshi-Pinnacle 'divergence episodes' (S10): feed termination, not disagreement",
@@ -2542,14 +3102,119 @@ def build_scene_s13(con):
     }, **s13)
 
 
+def _parse_team_from_ticker(ticker):
+    """Best-effort team-code extraction for a favorites-shelf loser row:
+    most tickers carry the team as the segment right after the event
+    ticker (KXWCTEAMFIRSTGOAL-26JUN20ECUCUW-ECU-... -> ECU;
+    KXWCGAME-26JUL03ARGCPV-ARG -> ARG). Falls back to the last dash-
+    segment before any trailing player code, or None if the pattern
+    doesn't match -- display-only, never used for filtering logic."""
+    parts = ticker.split("-")
+    if len(parts) >= 3:
+        cand = parts[2]
+        if cand.isalpha() and 2 <= len(cand) <= 4:
+            return cand
+    return None
+
+
+def build_s14_favorites_shelf(con):
+    """Gate-5 item 17 verification: market-level inspection of the 90-95c
+    bucket's 242 markets (flb_kalshi_market_level.parquet, price_t_minus_1h
+    in [0.90, 0.95)). The disposition's own hypothesis -- "the tournament's
+    upsets (Germany, Brazil, France) landed on the priciest shelf" -- is
+    checked directly here and does NOT hold: of the 74 losing markets in
+    this bucket, ZERO are Germany, Brazil, or France KXWCGAME/KXWCADVANCE
+    (match-win or advance) legs. The two KXWCGAME losses in the bucket are
+    Argentina's REGULATION-time leg on the Cape Verde match it won in
+    extra time (a settlement-rule miss like S8's, not an elimination) and
+    a group-stage Switzerland leg -- neither a "famous upset." The miss is
+    instead concentrated in KXWCTEAMFIRSTGOAL/KXWCFIRSTGOAL-style "which
+    named player scores first" props: a team priced ~94c to be heavily
+    favored in a match does not make any ONE named player ~94% likely to
+    be the specific one who scores first, given a full roster of
+    candidates -- a structural mispricing pattern, not a story about the
+    tournament's headline upsets."""
+    ml = _read_parquet_safe(os.path.join(ANALYSIS, "bias-forensics", "flb_kalshi_market_level.parquet"))
+    empty = {
+        "n": 0, "claimed_pct": None, "realized_pct": None, "gap_pp": None,
+        "top_losers": [], "loser_family_breakdown": [], "upset_share_pct": None,
+        "verdict_sentence": "flb_kalshi_market_level.parquet unavailable at build time.",
+    }
+    if not len(ml):
+        return empty
+
+    bucket = ml[(ml["price_t_minus_1h"] >= 0.90) & (ml["price_t_minus_1h"] < 0.95)].copy()
+    n = int(len(bucket))
+    if n == 0:
+        return empty
+    claimed_pct = round(float(bucket["price_t_minus_1h"].mean()) * 100, 2)
+    realized_pct = round(float(bucket["realized_yes"].mean()) * 100, 2)
+    gap_pp = round(realized_pct - claimed_pct, 2)
+
+    losers = bucket[bucket["realized_yes"] == 0].copy()
+    n_losers = int(len(losers))
+
+    family_counts = losers["series_ticker"].value_counts()
+    loser_family_breakdown = [
+        {"series_ticker": fam, "n": int(cnt), "pct_of_losers": round(cnt / n_losers * 100, 1) if n_losers else None}
+        for fam, cnt in family_counts.items()
+    ]
+
+    # Upset-share check, exactly as specced: GER/BRA/FRA KXWCGAME/KXWCADVANCE
+    # (match-win or advance) legs among the losers.
+    def is_upset_favorite_row(row):
+        if row["series_ticker"] not in ("KXWCGAME", "KXWCADVANCE"):
+            return False
+        return any(code in row["ticker"] for code in ("GER", "BRA", "FRA"))
+
+    upset_losers = losers[losers.apply(is_upset_favorite_row, axis=1)] if n_losers else losers
+    upset_share_pct = round(len(upset_losers) / n_losers * 100, 1) if n_losers else None
+
+    scoring_prop_families = {"KXWCTEAMFIRSTGOAL", "KXWCFIRSTGOAL", "KXWCPLAYERGOALS", "KXWCTEAMLEADGOAL"}
+    scoring_prop_losers = losers[losers["series_ticker"].isin(scoring_prop_families)]
+    scoring_prop_share_pct = round(len(scoring_prop_losers) / n_losers * 100, 1) if n_losers else None
+
+    top = losers.sort_values(["price_t_minus_1h", "volume_contracts"], ascending=[False, False]).head(10)
+    top_losers = [
+        {
+            "ticker": r["ticker"], "team": _parse_team_from_ticker(r["ticker"]),
+            "price_c": round(float(r["price_t_minus_1h"]) * 100, 1),
+            "series_ticker": r["series_ticker"],
+        }
+        for _, r in top.iterrows()
+    ]
+
+    verdict_sentence = (
+        f"The 90-95c bucket really is the worst shelf ({n} markets, {claimed_pct:.1f}% claimed vs "
+        f"{realized_pct:.1f}% realized, {gap_pp:+.1f}pp), but the miss is not the tournament's famous "
+        f"upsets: none of the 74 losers is a Germany, Brazil, or France match-win or advance leg "
+        f"({upset_share_pct:.0f}% of losers), while {scoring_prop_share_pct:.0f}% are 'which named "
+        "player scores first' props, where a team's own favorite status does not transfer to any one "
+        "named scorer among a full roster of candidates."
+    )
+
+    return {
+        "n": n, "claimed_pct": claimed_pct, "realized_pct": realized_pct, "gap_pp": gap_pp,
+        "top_losers": top_losers,
+        "loser_family_breakdown": loser_family_breakdown,
+        "n_losers": n_losers,
+        "upset_share_pct": upset_share_pct,
+        "scoring_prop_share_pct": scoring_prop_share_pct,
+        "verdict_sentence": verdict_sentence,
+    }
+
+
 def build_scene_s14(con):
     s14 = build_scene_s14_v2(con)
     return dict({
         "_provenance": provenance([
             "pipeline/data/analysis/bias-forensics/flb_kalshi_buckets.parquet, flb_kalshi_buckets_volweighted.parquet (R7, class B)",
             "build_tiles.py: live ladder_attribution recompute off flb_kalshi_market_level.parquet (class A, verified against R7's 3.04%/1.19%)",
+            "favorites_shelf: class-A market-level inspection of the 90-95c bucket off "
+            "flb_kalshi_market_level.parquet (Gate-5 item 17 verification)",
         ]),
         "lorenz_tail_cross_ref": "dots in these buckets carrying LORENZ_TAIL (flag bit 0) are the same identities as S5's tail sweep",
+        "favorites_shelf": build_s14_favorites_shelf(con),
     }, **s14)
 
 

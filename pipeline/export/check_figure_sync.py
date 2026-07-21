@@ -229,6 +229,36 @@ def hero_leg_price(label):
     return f
 
 
+_raw_js_cache = {}
+
+
+def raw_js_source(scene_id):
+    """Full raw text of docs/js/scenes/<scene_id>.js -- unlike beat_text(),
+    not limited to `html:` beat literals. Used for slots that check a
+    module-level JS constant or a non-beat DOM string (e.g. an SVG/pinned
+    caption built outside the beats array) against the beat prose's own
+    copy of the same figure."""
+    if scene_id not in _raw_js_cache:
+        path = os.path.join(SCENES_JS, f"{scene_id}.js")
+        _raw_js_cache[scene_id] = open(path, encoding="utf-8").read()
+    return _raw_js_cache[scene_id]
+
+
+def s08_r4_const(name):
+    """S08's R4_* module constants (the single source the pinned SVG
+    caption reads live) -- see s08.js header comment, provenance ledger
+    s08 #3. Self-consistency slots below diff the beat prose's own
+    hand-typed copy of the same R4 (ig-07) figure against this constant,
+    since no s08.json field backs a cross-tournament-cited figure."""
+    def f():
+        src = raw_js_source("s08")
+        m = re.search(rf"const {name} = (\d+);", src)
+        if not m:
+            raise ValueError(f"constant {name} not found in s08.js")
+        return int(m.group(1))
+    return f
+
+
 # ------------------------------------------------------------------ #
 # The curated slot map. One entry per confirmed hardcoded-prose-number /
 # data-field pair, built by reading each scene's beats against its own
@@ -374,16 +404,55 @@ SLOTS = [
         note="pinnacle.suspend_end_s - pinnacle.suspend_start_s",
     ),
 
-    # -- S08 Germany-Paraguay: regulation leg's price at the whistle anchor
-    # (Gate-5 provenance audit: "48 cents" was a hand-typed dossier figure
-    # the raw tape does not confirm at the exact whistle_ts anchor driving
-    # the axis; the tape reads 43-44c there) --
+    # -- S08 Germany-Paraguay: regulation leg's price at the glide's start
+    # (Gate-5 item 9 full re-derivation: whistle_ts is now pinned to the
+    # tape's own terminal-pin start, not a last-trade-minus-22min
+    # approximation; "price_at_whistle_c" is honestly ~1c at that corrected
+    # instant, so the beat's "slid from X cents to 1 cent" claim now reads
+    # off glide.start_price_c -- the price exactly 22 minutes (R4's
+    # verified glide duration) before the corrected whistle. This restores
+    # the original 48-cent figure, now for the right reason.) --
     dict(
         id="s08-price-at-whistle", scene="s08",
         regex=r"price slid from (\d+) cents to 1 cent over twenty-two minutes",
-        extract=intg(), actual=lambda: scene_json("s08")["price_at_whistle_c"],
+        extract=intg(), actual=lambda: scene_json("s08")["glide"]["start_price_c"],
         compare=cmp_int,
-        note="price_at_whistle_c vs the '44 cents' claim",
+        note="glide.start_price_c vs the 'N cents' claim",
+    ),
+    # -- S08 provenance ledger #3: the decay-caption's two R4 (ig-07)
+    # cross-tournament figures used to be hand-typed twice (once in the
+    # beat prose, once in the pinned SVG caption) with no shared source and
+    # no checker slot. s08.js now single-sources them as R4_* module
+    # constants (the SVG caption reads them live); these slots diff the
+    # beat prose's own plain-text copy against that same constant, since
+    # no s08.json field backs a figure this scene only cites, not derives. --
+    dict(
+        id="s08-decay-rate-sync", scene="s08",
+        regex=r"never faster than (\d+) cents a minute",
+        extract=intg(), actual=s08_r4_const("R4_DECAY_MAX_C_PER_MIN"),
+        compare=cmp_int,
+        note="beat prose vs the R4_DECAY_MAX_C_PER_MIN constant the SVG caption reads live",
+    ),
+    dict(
+        id="s08-goal-move-lo-sync", scene="s08",
+        regex=r"a real goal moves a price (\d+) to \d+ cents in \d+ seconds",
+        extract=intg(), actual=s08_r4_const("R4_GOAL_MOVE_LO_C"),
+        compare=cmp_int,
+        note="beat prose vs the R4_GOAL_MOVE_LO_C constant, goal-move lower bound",
+    ),
+    dict(
+        id="s08-goal-move-hi-sync", scene="s08",
+        regex=r"a real goal moves a price \d+ to (\d+) cents in \d+ seconds",
+        extract=intg(), actual=s08_r4_const("R4_GOAL_MOVE_HI_C"),
+        compare=cmp_int,
+        note="beat prose vs the R4_GOAL_MOVE_HI_C constant, goal-move upper bound",
+    ),
+    dict(
+        id="s08-goal-move-window-sync", scene="s08",
+        regex=r"a real goal moves a price \d+ to \d+ cents in (\d+) seconds",
+        extract=intg(), actual=s08_r4_const("R4_GOAL_MOVE_WINDOW_S"),
+        compare=cmp_int,
+        note="beat prose vs the R4_GOAL_MOVE_WINDOW_S constant",
     ),
 
     # -- S09 bracket math: three shock multiples --
@@ -412,6 +481,16 @@ SLOTS = [
         note="shocks[team=BEL].pop_multiple",
     ),
 
+    # -- S10 gap chart: Pinnacle termination count (Gate-5 item 12) --
+    dict(
+        id="s10-pinnacle-terminations-n", scene="s10",
+        regex=r"([A-Za-z]+) times in the knockout stage, Pinnacle stopped quoting",
+        extract=word(),
+        actual=lambda: len(scene_json("s10")["pinnacle_terminations"]),
+        compare=cmp_int,
+        note="len(pinnacle_terminations) vs the 'Sixteen times' claim",
+    ),
+
     # -- S11 calibration: the day-out Kalshi/Pinnacle Brier pair --
     dict(
         id="s11-kalshi-t24-brier", scene="s11",
@@ -428,6 +507,58 @@ SLOTS = [
         actual=lambda: find_by(scene_json("s11")["scores"], horizon="T-24h", source="pinnacle_devig")["brier"],
         compare=cmp_round(3),
         note="scores[horizon=T-24h,source=pinnacle_devig].brier",
+    ),
+    # -- S11 calibration: Gate-5 item 13 additions (n_legs/effective_n and
+    # the blowout attribution + its one named example, all now live off
+    # match3way_panel.parquet -- provenance-ledger.md s11 #1, #2) --
+    dict(
+        id="s11-n-legs", scene="s11",
+        regex=r"This chart grades (\d+) matched tickets",
+        extract=intg(), actual=lambda: scene_json("s11")["n_legs"],
+        compare=cmp_int,
+        note="n_legs",
+    ),
+    dict(
+        id="s11-effective-n", scene="s11",
+        regex=r"across (\d+) knockout matches",
+        extract=intg(), actual=lambda: scene_json("s11")["effective_n"],
+        compare=cmp_int,
+        note="effective_n",
+    ),
+    dict(
+        id="s11-blowout-share-pct", scene="s11",
+        regex=r"About ([\d.]+)% of the professional book.s error",
+        extract=num(), actual=lambda: scene_json("s11")["blowout_share_pct"],
+        compare=cmp_round(0),
+        note="blowout_share_pct",
+    ),
+    dict(
+        id="s11-blowout-matches-n", scene="s11",
+        regex=r"error on this chart comes from ([a-z-]+) matches like this one",
+        extract=word(), actual=lambda: scene_json("s11")["blowout_matches_n"],
+        compare=cmp_int,
+        note="blowout_matches_n",
+    ),
+    dict(
+        id="s11-blowout-example-kalshi-price", scene="s11",
+        regex=r"Kalshi.s price already showed (\d+) cents on Canada",
+        extract=intg(), actual=lambda: scene_json("s11")["blowout_example"]["kalshi_price_pct"],
+        compare=cmp_round(0),
+        note="blowout_example.kalshi_price_pct",
+    ),
+    dict(
+        id="s11-blowout-example-pinnacle-price", scene="s11",
+        regex=r"still had Canada at (\d+) cents",
+        extract=intg(), actual=lambda: scene_json("s11")["blowout_example"]["pinnacle_price_pct"],
+        compare=cmp_round(0),
+        note="blowout_example.pinnacle_price_pct",
+    ),
+    dict(
+        id="s11-blowout-example-dark-minutes", scene="s11",
+        regex=r"for the last (\d+) minutes of the match",
+        extract=intg(), actual=lambda: scene_json("s11")["blowout_example"]["pinnacle_dark_minutes"],
+        compare=cmp_round(0),
+        note="blowout_example.pinnacle_dark_minutes",
     ),
 
     # -- S13 bias forensics: polls, host-peer ratios, zombie money --
@@ -481,14 +612,14 @@ SLOTS = [
     ),
     dict(
         id="s13-zombie-trades", scene="s13",
-        regex=r"wound down together: ([\d,]+)\s*trades",
+        regex=r"the wind-down was ([\d,]+)\s*housekeeping trades",
         extract=intg(), actual=lambda: scene_json("s13")["zombie_money"]["n_trades"],
         compare=cmp_int,
         note="zombie_money.n_trades",
     ),
     dict(
         id="s13-zombie-usd", scene="s13",
-        regex=r"about \$([\d,]+) in total",
+        regex=r"housekeeping trades worth about \$([\d,]+)",
         extract=intg(), actual=lambda: scene_json("s13")["zombie_money"]["total_usd"],
         compare=cmp_int,
         note="zombie_money.total_usd",
@@ -532,6 +663,64 @@ SLOTS = [
         extract=num(), actual=s14_cheap_band_stat("win_rate_pct"),
         compare=cmp_round(2),
         note="n_markets-weighted win_rate_pct of buckets 1-5c + 5-10c",
+    ),
+
+    # -- S14 b4: the favorites-shelf verdict (Gate-5 item 17 rewrite --
+    # the mirror-seller mechanism was dropped for lack of market-level
+    # support; these are the market-level figures that replaced it) --
+    dict(
+        id="s14-favorites-n", scene="s14",
+        regex=r"favorites: (\d+) of them",
+        extract=intg(), actual=lambda: scene_json("s14")["favorites_shelf"]["n"],
+        compare=cmp_int,
+        note="favorites_shelf.n",
+    ),
+    dict(
+        id="s14-favorites-claimed-pct", scene="s14",
+        regex=r"average of ([\d.]+) cents",
+        extract=num(), actual=lambda: scene_json("s14")["favorites_shelf"]["claimed_pct"],
+        compare=cmp_round(1),
+        note="favorites_shelf.claimed_pct",
+    ),
+    dict(
+        id="s14-favorites-realized-pct", scene="s14",
+        regex=r"came true only ([\d.]+)% of the time",
+        extract=num(), actual=lambda: scene_json("s14")["favorites_shelf"]["realized_pct"],
+        compare=cmp_round(1),
+        note="favorites_shelf.realized_pct",
+    ),
+    dict(
+        id="s14-favorites-gap", scene="s14",
+        regex=r"a (\d+)-point miss",
+        extract=intg(),
+        actual=lambda: round(abs(scene_json("s14")["favorites_shelf"]["gap_pp"])),
+        compare=cmp_int,
+        note="abs(favorites_shelf.gap_pp), rounded",
+    ),
+    dict(
+        id="s14-favorites-nlosers", scene="s14",
+        regex=r"Of the (\d+) losing tickets",
+        extract=intg(), actual=lambda: scene_json("s14")["favorites_shelf"]["n_losers"],
+        compare=cmp_int,
+        note="favorites_shelf.n_losers",
+    ),
+    dict(
+        id="s14-favorites-upset-pct", scene="s14",
+        regex=r"bucket, (\d+)% are a Germany",
+        extract=intg(),
+        actual=lambda: round(scene_json("s14")["favorites_shelf"]["upset_share_pct"]),
+        compare=cmp_int,
+        note="favorites_shelf.upset_share_pct, rounded (the dropped mirror-seller "
+             "mechanism's replacement: this is why it is not the tournament's "
+             "famous upsets)",
+    ),
+    dict(
+        id="s14-favorites-scoring-prop-pct", scene="s14",
+        regex=r"Instead, (\d+)% are bets on which named player",
+        extract=intg(),
+        actual=lambda: round(scene_json("s14")["favorites_shelf"]["scoring_prop_share_pct"]),
+        compare=cmp_int,
+        note="favorites_shelf.scoring_prop_share_pct, rounded",
     ),
 
     # -- S17 the frozen hero number --

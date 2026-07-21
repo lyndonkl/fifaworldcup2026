@@ -2,7 +2,7 @@
  * (storyboard §3, R10 + R12; R21 as a footnote line). Layout: `flag-pairs`.
  *
  * Contract: docs/CONTRACT.md §4 (scene module shape), §4.2 (registry row:
- * act 4, 4 steps, no zoom tile). Tokens are law — every color/duration/size
+ * act 4, 3 steps, no zoom tile). Tokens are law — every color/duration/size
  * below is a token lookup, never a literal.
  *
  * Also the S12 fold-contingency destination (storyboard §3 S12): if the
@@ -27,7 +27,9 @@
  *      poll) and the United States row (Pew) match the storyboard's 87%/11c
  *      and 7%/1.5c exactly; no new computation needed, just the two rows
  *      surfaced as JSON with a `team` code matching manifest.teams'
- *      convention (see #3).
+ *      convention (see #3), plus a display `label` ("Argentina", "USA") —
+ *      the same field host_peers.teams rows already carry — so the stage
+ *      kicker can name the country without a JS-side name table.
  *   2. `host_peers.teams[]` needs `pretournament_contracts`,
  *      `model_odds_pct`, and `price_ratio_x` (2.0 Mexico, 1.42 USA in the
  *      shipped JSON; R12's pre-recompute estimates were ~1.8/~1.5)
@@ -43,7 +45,9 @@
  *   3. `pretournament_cutoff_s`: integer seconds since manifest.epoch (not
  *      hardcoded here) marking the tournament-kickoff cutoff used to filter
  *      population dots into the "honest pre-tournament scale" host-peer
- *      columns (birth_ts < cutoff).
+ *      columns AND the b1/b2 pair fills (birth_ts < cutoff for both — the
+ *      pair fills used to skip this filter and towered to the
+ *      in-tournament tape under a pre-kickoff snapshot label).
  *   4. `team` code strings on every pair/host-peer row MUST match whatever
  *      convention `manifest.teams` actually uses — ticker suffixes
  *      inspected during this build are inconsistent (2-letter ISO for some
@@ -60,6 +64,16 @@
  *      United States/USA) and shipped an under-scoped 277/$2,190 total;
  *      the JOIN now normalizes on a word-order-invariant, alias-mapped
  *      team name so all 28 losers resolve.
+ *
+ * GATE-5 BATCH 3 (items 14+15): b3 is now experiment-shaped — it names its
+ * own control group (Ecuador, Croatia: two teams Opta rated at about the
+ * hosts' own tiny chance, minus a home crowd) before stating the two
+ * measured results, states the implication in plain words, and adds the
+ * who-bought caveat (the tape counts trades, not passports). The former
+ * standalone b4 (zombie-money footnote) is SHRUNK to a receipts line
+ * folded into b3's own close, per author disposition; the scene drops
+ * from 4 beats to 3 and `overlay().step()` now fires the zombie chip
+ * alongside the host-peer panel on 'b3' rather than on its own step.
  */
 
 /* global d3 */
@@ -180,14 +194,23 @@ function layout(data, view) {
   }
 
   // --- Pair steps: one country's winner-futures dots FILL a bar footprint
-  // from the zero baseline up to its own traded price level (§0: dots are
-  // money; the drawn bar overlay in overlay() outlines this exact same
-  // footprint, so the outline and the fill are the same claim, not two
-  // separately-eyeballed marks). Previously these dots sat in a thin
-  // horizontal streak at a single height, which read as a scatter, not a
-  // bar (design-revision-spec: "dots as fill texture inside bars"). ---
+  // from the zero baseline up to the price each dot actually traded at,
+  // restricted -- exactly like the host-peer step below -- to money born
+  // BEFORE the tournament-kickoff cutoff (birth_ts < pretournament_cutoff_s,
+  // the same scene-JSON field). That window is the claim everything else in
+  // the beat makes: the amber label is a pre-kickoff snapshot price, and the
+  // host panel's footer already promises "before kickoff." Unfiltered, this
+  // fill towered to the in-tournament tape (Argentina money bought at 40c+
+  // as they advanced) under an 11-cent label -- the outline told the
+  // snapshot claim and the dots told a different one. Post-fix the two
+  // agree by construction: pre-kickoff Argentina dots sit in the 9-10c
+  // bands against the 11c outline, USA dots at 1-4c against 1.5c (verified
+  // against pop-75k.bin during this fix). Previously these dots also sat in
+  // a thin horizontal streak at a single height, which read as a scatter,
+  // not a bar (design-revision-spec: "dots as fill texture inside bars"). ---
   const barBottom = view.region.y + view.region.h;
-  if (famIdx >= 0) {
+  const pairCutoff = hostPeers.pretournament_cutoff_s;
+  if (famIdx >= 0 && pairCutoff !== undefined) {
     for (const pair of pairs) {
       const teamIdx = manifest.teams.indexOf(pair.team);
       if (teamIdx < 0) continue;
@@ -196,6 +219,7 @@ function layout(data, view) {
       if (!targetState) continue;
       for (let i = 0; i < N; i++) {
         if (pop.family[i] !== famIdx || pop.team[i] !== teamIdx) continue;
+        if (pop.birth_ts[i] >= pairCutoff) continue;
         const priceC = pop.price_band[i];
         if (priceC === 255) continue;
         const barTop = y(priceC);
@@ -255,9 +279,12 @@ function overlay(container, data, view, scalesObj) {
   const g = container.svg.append('g').attr('class', 's13-overlay');
 
   // Units caption: the scene's one standing Zone K occupant, on screen for
-  // the whole scene, not just the poll-vs-price steps (design-revision-spec
-  // CR-12) -- "the dot columns are money" stays true through the host-peer
-  // step too. Repositioned to the top on mobile per the storyboard note.
+  // the whole scene (design-revision-spec CR-12), but its TEXT now tracks
+  // the step: the pair beats' "poll bars" line was persisting into b3,
+  // where no poll bar exists and column height means dot count, not price.
+  // Each step restates its own encoding instead. Both wordings carry the
+  // pre-kickoff qualifier the b1/b2 fill filter (layout()) now enforces.
+  // Repositioned to the top on mobile per the storyboard note.
   const unitsCaption = g.append('text')
     .attr('class', 's13-units-caption')
     .attr('x', view.mobile ? view.region.x : view.region.x)
@@ -266,20 +293,29 @@ function overlay(container, data, view, scalesObj) {
     .style('font-size', view.css('type-caption-size'))
     .style('fill', view.css('ink-mid'))
     .style('opacity', 0);
-  unitsCaption.append('tspan').attr('x', view.region.x).attr('dy', '0em')
-    .text('Poll bars are agreement, not probability.');
-  unitsCaption.append('tspan').attr('x', view.region.x).attr('dy', '1.15em')
-    .text('The dot columns are money.');
+  const unitsLine1 = unitsCaption.append('tspan')
+    .attr('x', view.region.x).attr('dy', '0em');
+  const unitsLine2 = unitsCaption.append('tspan')
+    .attr('x', view.region.x).attr('dy', '1.15em');
+  function setUnitsCaption(l1, l2) {
+    unitsLine1.text(l1);
+    unitsLine2.text(l2);
+  }
 
   const pairG = g.append('g').attr('class', 's13-pair').style('opacity', 0);
   const hostG = g.append('g').attr('class', 's13-hosts').style('opacity', 0);
   const footnoteChip = g.append('text')
     .attr('class', 's13-zombie-chip')
     .attr('x', view.region.x)
-    // b4 leaves the b3 host panel on screen (see step(), "dots stay"), so
-    // this sits below BOTH the country-name row (h+20) and the host
-    // panel's own unit label (h+40), not stacked within 12px of them.
-    .attr('y', view.region.y + view.region.h + 60)
+    // Gate-5 batch 3: this draws together with the b3 host panel (see
+    // step(), one beat, not two), so it sits below BOTH the country-name
+    // row (h+18) and the host panel's own unit label (h+34). Two tspan
+    // lines (subject, then figures) starting at h+50: the subject prefix
+    // pushed a single line to ~700px of 13px tape, wider than the room
+    // right of region.x at the 900px-wide desktop floor, and the second
+    // line's baseline (h+50 + 1.1em = h+64, i.e. 0.92*H + 64) still
+    // clears the canvas bottom at H=900 (892 < 900).
+    .attr('y', view.region.y + view.region.h + 50)
     .style('font-family', view.css('font-tape'))
     .style('font-size', view.css('type-tape-size'))
     .style('fill', view.css('ink-low'))
@@ -293,17 +329,26 @@ function overlay(container, data, view, scalesObj) {
     // Scale titles, redrawn with the pair (design-revision-spec G3: "s13
     // scale titles at first pair" -- shown on every pair so the units are
     // never more than one screen away from the marks they describe).
+    // These used to hang at region.y - 74, which the review viewport
+    // clips: at H=900, region.y = 0.08*900 = 72, so the baseline sat at
+    // -2, off-canvas. Down here the arithmetic works at every sane
+    // height: titleBase = region.y + region.h = 0.92*H (828 at H=900),
+    // titles at +20/+36 land at 848/864, inside the canvas whenever
+    // H >= ~500. The two rows STAGGER vertically because the poll title
+    // is ~260px wide at micro size and the two column centers sit only
+    // 0.24*region.w apart (~116px at the 900px-wide desktop floor), too
+    // close to share one row. Nothing else draws below the baseline on
+    // the pair beats (the b3 footer ladder lives in hostG).
+    const titleBase = view.region.y + view.region.h;
     pairG.append('text')
-      // Lifted from -48 to -74: the standing two-line units caption sits at
-      // region.y-32, and the previous 16px gap let this line crowd it.
-      .attr('x', pairX.poll).attr('y', view.region.y - 74)
+      .attr('x', pairX.poll).attr('y', titleBase + 20)
       .attr('text-anchor', 'middle')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
       .style('fill', view.css('ink-low'))
       .text('fans who said their team would win (poll %)');
     pairG.append('text')
-      .attr('x', pairX.price).attr('y', view.region.y - 74)
+      .attr('x', pairX.price).attr('y', titleBase + 36)
       .attr('text-anchor', 'middle')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
@@ -344,26 +389,62 @@ function overlay(container, data, view, scalesObj) {
       .style('fill', 'none')
       .style('stroke', view.css(PAIR_IDENTITY[key] || 'identity-ref'))
       .style('stroke-width', 1.5);
+    // The beat's one amber callout, anchored OUTSIDE the dot footprint:
+    // to the RIGHT of the column at the price line, tied back by a short
+    // leader. Over the column itself (the old priceTop - 18) the fill
+    // overprinted the glyphs -- b2's whole blob trades at 1-4c, engulfing
+    // any label near its own top. The right side is open field on every
+    // surface: the column's right edge is region.x + 0.56*region.w + 32,
+    // and the label ends ~150px past it, inside region.w (484px at the
+    // 900px-wide desktop floor).
+    const priceEdgeR = pairX.price + PAIR_BAR_W / 2;
+    pairG.append('line')
+      .attr('x1', priceEdgeR + 4).attr('y1', priceTop)
+      .attr('x2', priceEdgeR + 40).attr('y2', priceTop)
+      .style('stroke', view.css('accent-annotation'))
+      .style('stroke-width', 1);
     pairG.append('text')
-      // -18, not -10: the bar's own dot fill starts exactly at priceTop and
-      // jitters across its full width, so a label only 10px above it got
-      // dots rendered through the glyphs.
-      .attr('x', pairX.price).attr('y', priceTop - 18)
-      .attr('text-anchor', 'middle')
+      .attr('x', priceEdgeR + 46).attr('y', priceTop + 4)
+      .attr('text-anchor', 'start')
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-annotation-size'))
       .style('fill', view.css('accent-annotation'))
       .text(`${pair.kalshi_price_pct}¢ price`);
 
+    // Kicker: the COUNTRY -- the subject the beat is actually about --
+    // with the pollster demoted to a caption-size source line beneath it.
+    // The pollster name used to BE the 28px ink-hi kicker while the
+    // country never appeared on stage at all. `pair.label` is the scene
+    // JSON's own display name (same field host_peers.teams rows carry);
+    // the team code is the fallback, never a JS-side name table.
+    // Anchored text-end just LEFT of the fixed KEY panel: the region's
+    // own top-right corner sits UNDER that panel (the blind re-read saw
+    // both lines as a dark smudge behind it), so the exclusion width the
+    // design system reserves for the KEY is the real right edge here.
+    // The standing caption at the top-left ends well short of where a
+    // country name of this length starts, at every viewport width.
+    const kickerX = view.mobile
+      ? view.region.x + view.region.w
+      : view.W - (view.tokens.spacing_px[4] || 24)
+        - (view.tokens.layout['key-exclusion-w-px'] || 280)
+        - (view.tokens.spacing_px[2] || 12);
     pairG.append('text')
-      .attr('x', (pairX.poll + pairX.price) / 2)
-      .attr('y', view.region.y - 8)
-      .attr('text-anchor', 'middle')
+      .attr('x', kickerX)
+      .attr('y', view.region.y - 26)
+      .attr('text-anchor', 'end')
       .style('font-family', view.css('font-apparatus'))
       .style('font-weight', 600)
       .style('font-size', view.css('type-kicker-size'))
       .style('fill', view.css('ink-hi'))
-      .text(pair.poll_source ? pair.poll_source.split('(')[0].trim() : pair.key);
+      .text(pair.label || pair.team);
+    pairG.append('text')
+      .attr('x', kickerX)
+      .attr('y', view.region.y - 8)
+      .attr('text-anchor', 'end')
+      .style('font-family', view.css('font-apparatus'))
+      .style('font-size', view.css('type-caption-size'))
+      .style('fill', view.css('ink-mid'))
+      .text(pair.poll_source ? `${pair.poll_source.split('(')[0].trim()} poll` : '');
 
     pairG.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
     hostG.style('opacity', 0);
@@ -387,8 +468,12 @@ function overlay(container, data, view, scalesObj) {
     // bars' own top edges and dot fill (Ecuador, Croatia) once those bars
     // gained a drawn outline this pass. Zone F placement (G5): left-aligned
     // to region.x, clear of every bar regardless of height.
+    // Footer ladder, compressed so the now-two-line zombie chip fits the
+    // 0.08*H band under the baseline (72px at H=900): countries +18,
+    // this unit line +34, chip lines +50/+64 -- every neighboring pair
+    // keeps >=3px between descenders and cap tops at those sizes.
     hostG.append('text')
-      .attr('x', view.region.x).attr('y', view.region.y + view.region.h + 40)
+      .attr('x', view.region.x).attr('y', view.region.y + view.region.h + 34)
       .style('font-family', view.css('font-apparatus'))
       .style('font-size', view.css('type-micro-size'))
       .style('fill', view.css('ink-low'))
@@ -405,14 +490,15 @@ function overlay(container, data, view, scalesObj) {
       if (cx === undefined) return;
       const bw = hostX.bandwidth();
       const barH = (hostCounts.get(t.key) || 0) * HOST_BAR_SPACING;
+      const barTop = view.region.y + view.region.h - barH;
       hostG.append('rect')
-        .attr('x', cx).attr('y', view.region.y + view.region.h - barH)
+        .attr('x', cx).attr('y', barTop)
         .attr('width', bw).attr('height', barH)
         .style('fill', 'none')
         .style('stroke', view.css(HOST_IDENTITY[t.key] || 'identity-ref'))
         .style('stroke-width', 1.5);
       hostG.append('text')
-        .attr('x', cx + bw / 2).attr('y', view.region.y + view.region.h + 20)
+        .attr('x', cx + bw / 2).attr('y', view.region.y + view.region.h + 18)
         .attr('text-anchor', 'middle')
         .style('font-family', view.css('font-apparatus'))
         .style('font-size', view.css('type-caption-size'))
@@ -424,18 +510,27 @@ function overlay(container, data, view, scalesObj) {
         // No amber here (design-revision-spec CR: "b3: NO amber") -- the
         // beat's point is that attention bought volume, not belief, so the
         // ratio reads as plain fact, not a flagged anomaly.
-        const markerY = view.region.y + view.region.h * 0.25;
-        hostG.append('circle')
-          .attr('cx', cx + bw / 2).attr('cy', markerY)
-          .attr('r', 4)
-          .style('fill', view.css('ink-hi'));
-        hostG.append('text')
-          .attr('x', cx + bw / 2).attr('y', markerY - 10)
+        // The label hangs just above ITS OWN bar top -- barTop is the same
+        // stacked-dot height the outline uses, so the annotation stays
+        // bound to the bar it describes at any recompute (the old fixed
+        // markerY at region.h * 0.25 floated ~320px above both bars).
+        // Two short stacked lines, not one wide one: adjacent host columns
+        // sit one band step apart (~122px at the 900px-wide desktop
+        // floor), and "the model's price" (~120px at caption size) fits a
+        // step where the full one-line phrase (~155px) did not.
+        const ratioLabel = hostG.append('text')
+          .attr('x', cx + bw / 2).attr('y', barTop - 28)
           .attr('text-anchor', 'middle')
           .style('font-family', view.css('font-apparatus'))
           .style('font-size', view.css('type-caption-size'))
-          .style('fill', view.css('ink-hi'))
-          .text(`${t.price_ratio_x}x the model's price`);
+          .style('fill', view.css('ink-hi'));
+        ratioLabel.append('tspan')
+          .attr('x', cx + bw / 2).attr('dy', '0em')
+          .style('font-weight', 600)
+          .text(`${t.price_ratio_x}x`);
+        ratioLabel.append('tspan')
+          .attr('x', cx + bw / 2).attr('dy', '1.15em')
+          .text("the model's price");
       }
     });
 
@@ -447,21 +542,41 @@ function overlay(container, data, view, scalesObj) {
     const z = sceneJson.zombie_money;
     if (!z) return;
     const cents = z.max_price_c === 1 ? '1 cent' : `${z.max_price_c} cents`;
-    footnoteChip.text(`${z.n_trades} trades, about $${Math.round(z.total_usd).toLocaleString('en-US')}, all at ${cents} or less.`);
+    // The chip leads with its own SUBJECT. Bare, the figures sat directly
+    // under "each dot: $75,000 of real money" and read as a contradiction
+    // of it; the subject line names whose money this is. The wording
+    // mirrors the rail's own "all 28 knocked-out teams" sentence without
+    // restating the count, which lives in the rail prose, not this JSON.
+    footnoteChip.selectAll('*').remove();
+    footnoteChip.append('tspan')
+      .attr('x', view.region.x).attr('dy', '0em')
+      .text('wind-down across every knocked-out team:');
+    footnoteChip.append('tspan')
+      .attr('x', view.region.x).attr('dy', '1.1em')
+      .text(`${z.n_trades} trades, about $${Math.round(z.total_usd).toLocaleString('en-US')}, all at ${cents} or less.`);
     footnoteChip.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
   }
 
   function step(beatId) {
-    // The standing units caption (CR-12) stays lit for the whole scene, so
-    // it only needs to fade in once, on first entry.
+    // The standing units caption (CR-12) stays lit for the whole scene;
+    // its text switches to each step's own encoding (see its comment).
+    if (beatId === 'b3') {
+      setUnitsCaption('Each column stacks money traded before kickoff.',
+        'Taller means more money, not a higher price.');
+    } else {
+      setUnitsCaption('Poll bars are agreement, not probability.',
+        'Dot columns are money traded before kickoff.');
+    }
     unitsCaption.transition().duration(view.tokens.motion.durations_ms['overlay-draw-in']).style('opacity', 1);
     if (beatId === 'b1') {
       drawPair('argentina');
     } else if (beatId === 'b2') {
       drawPair('usa');
     } else if (beatId === 'b3') {
+      // Gate-5 batch 3 (item 15): the zombie-money receipt is now this
+      // beat's own close, not a fourth scroll step, so both panels draw
+      // together here.
       drawHostPeers();
-    } else if (beatId === 'b4') {
       drawZombieFootnote();
     }
   }
@@ -526,19 +641,38 @@ const s13 = {
       overlayStep: 'b2',
     },
     {
+      // Gate-5 batch 3 (items 14+15): experiment-shaped host-bias close.
+      // b1/b2 already showed belief (the poll) barely moving the price;
+      // this beat runs the same test on enthusiasm (host money) and folds
+      // the former standalone zombie-money beat in as its own receipt, so
+      // the scene ends on one beat, not two.
       id: 'b3',
-      html: `<p>Playing host was real money, just not real belief. One
-        computer model, built by Opta, plays out the tournament thousands
-        of times to rate each team's true chance. Mexico and the USA are
-        the hosts. Against teams the model rated about the same, they each
+      html: `<p>Playing host was real money, just not real belief. Mexico
+        and the USA are the hosts. One computer model, built by Opta,
+        plays out the tournament thousands of times and rates each team's
+        true chance. Ecuador and Croatia carried about the same tiny
+        chance, with no home crowd behind them. Those two make the fair
+        comparison.</p><p>Against those two peers, Mexico and the USA each
         pulled in roughly two to two and a half times the money before the
-        tournament even began. That attention did nudge the price: Mexico
-        traded at about 2 times its model chance, and the USA at about
-        1.4 times its model chance, on the eve of
-        kickoff.<sup><a href="#fn-18">18</a></sup> Those model chances were
-        tiny to start with. Multiply a tiny chance by 2 and you still get
-        a tiny number, a point or two of price, not ten. Loud in volume,
-        faint in price.</p>`,
+        tournament even began. That attention did nudge the price, but
+        only a little. Mexico traded at about 2 times its model chance,
+        and the USA at about 1.4 times its model chance, on the eve of
+        kickoff.<sup><a href="#fn-18">18</a></sup> Those model chances
+        started tiny. Multiply a tiny chance by 2 and you still land on a
+        tiny number, a point or two of price, not ten.</p><p>Read next to
+        the polls above, the pattern repeats: belief barely moved the
+        price, and love barely moved it either. The market took the fans'
+        extra money and mostly shrugged it off. One honest limit belongs
+        here too: the tape counts trades, not passports. Nobody signs a
+        name to a buy order. Calling that extra money &ldquo;fan
+        money&rdquo; is this piece's best guess, not a fact the tape can
+        prove.</p><p>And when teams actually died, their tickets died
+        clean. Across all 28 knocked-out teams, the wind-down was 302
+        housekeeping trades worth about $2,340, closed-out positions and
+        leftover orders, nothing more.<sup><a href="#fn-18">18</a></sup>
+        Tonight the flags at MetLife Stadium will be Argentina's, and
+        loud. Now you know the price will not care. It never
+        did.</p>`,
       trigger: 'step',
       state: 'peers',
       kind: 'resort',
@@ -548,19 +682,6 @@ const s13 = {
         { token: 'field-rest', glyph: 'dim', label: 'grey = money at rest, the whole tournament' },
       ],
       overlayStep: 'b3',
-    },
-    {
-      id: 'b4',
-      html: `<p>When a team lost, the loyal money did not linger. All 28
-        knockout losers' championship tickets wound down together: 302
-        trades, about $2,340 in total, every one of them at a penny or
-        less.<sup><a href="#fn-18">18</a></sup> Tonight the flags at MetLife
-        Stadium will be Argentina's, and loud. Now you know the price will
-        not care. It never did.</p>`,
-      trigger: 'step',
-      // No state key: dots stay at the host-peer arrangement from b3; this
-      // beat only adds the zombie-money footnote chip.
-      overlayStep: 'b4',
     },
   ],
 

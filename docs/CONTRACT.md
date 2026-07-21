@@ -364,7 +364,7 @@ Beat = {
 | s10 | 3 | braid | 3 steps | — | dots rest at 25%; braid is D3 marks; 16-for-16 count-up chip |
 | s11 | 3 | brier-columns | 3 steps | — | dots never move; columns are outline D3 marks |
 | s12 | 4 | boot-ladder | 2 steps | — | fold trigger (Jul 16 check) may fold into s13: registry drops the import, s13 gains beats |
-| s13 | 4 | flag-pairs | 4 steps | — | poll bars outline-only |
+| s13 | 4 | flag-pairs | 3 steps | — | poll bars outline-only; b3 folds the former zombie-money beat into its own close (Gate-5 batch 3, item 15) |
 | s14 | 4 | calibration-curve | 4 steps + live toggle | — | toggle in #html-overlay, keyboard accessible; re-lights `LORENZ_TAIL` dots |
 | s15 | 5 | stage-strip | 3 steps | — | drain is `ceremonial`; "devigged" qualifier in beat copy |
 | s16 | 5 | lens-carousel | 5 steps | — | one anchor grammar per lens via sibling `anchors` exports |

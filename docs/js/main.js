@@ -534,7 +534,17 @@ function enterScene(scene) {
     || (n.zoom && !DATA.zoom[n.zoom]);
   if (missing) {
     loadSceneNeeds(scene).then(() => {
-      if (activeScene === scene) { activeScene = null; computeActive(); }
+      if (activeScene === scene) {
+        // Reset the beat key too: computeActive() re-activates via
+        // activateBeat(), whose same-key early return fires BEFORE its
+        // enterScene() call — with the key left in place the "re-enter
+        // once the fetch lands" below never actually re-entered, and a
+        // degraded mount (empty scene JSON / zoom tile) stayed on screen
+        // for good (observed: s13 rendering only its caption + dot field
+        // when a fast scroll outran the s13.json fetch).
+        activeScene = null; activeBeatKey = null;
+        computeActive();
+      }
     }).catch(() => {});
   }
   const data = sceneData(scene);
