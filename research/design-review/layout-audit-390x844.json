@@ -14,7 +14,7 @@
         "aKind": "chrome",
         "b": "text \"40'\"",
         "bKind": "svgtext",
-        "ix": 9,
+        "ix": 23,
         "iy": 13
       },
       {
@@ -42,6 +42,14 @@
         "iy": 13
       },
       {
+        "a": "div#chip \"Key amber = tonight's match, France v Spainpale \u2026\"",
+        "aKind": "chrome",
+        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
+        "bKind": "svgtext",
+        "ix": 5,
+        "iy": 33
+      },
+      {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
         "b": "text \"kickoff\"",
@@ -56,22 +64,6 @@
         "bKind": "svgtext",
         "ix": 22,
         "iy": 13
-      },
-      {
-        "a": "text \"40\u00a2\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "text \"60\u00a2\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
       }
     ],
     "stop": "title"
@@ -91,7 +83,7 @@
         "aKind": "chrome",
         "b": "text \"40'\"",
         "bKind": "svgtext",
-        "ix": 9,
+        "ix": 23,
         "iy": 13
       },
       {
@@ -119,6 +111,14 @@
         "iy": 13
       },
       {
+        "a": "div#chip \"Key cyan = one dot, one real tradepale grey = mo\u2026\"",
+        "aKind": "chrome",
+        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
+        "bKind": "svgtext",
+        "ix": 5,
+        "iy": 33
+      },
+      {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
         "b": "text \"kickoff\"",
@@ -141,22 +141,6 @@
         "bKind": "svgtext",
         "ix": 16,
         "iy": 8
-      },
-      {
-        "a": "text \"40\u00a2\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "text \"60\u00a2\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
       }
     ],
     "stop": "s01/b1@0.5"
@@ -172,54 +156,6 @@
     "edge": [],
     "overlaps": [
       {
-        "a": "div#chip \"Key cyan = one dot, one real tradepale grey = mo\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"40'\"",
-        "bKind": "svgtext",
-        "ix": 9,
-        "iy": 13
-      },
-      {
-        "a": "div#chip \"Key cyan = one dot, one real tradepale grey = mo\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"60'\"",
-        "bKind": "svgtext",
-        "ix": 23,
-        "iy": 13
-      },
-      {
-        "a": "div#chip \"Key cyan = one dot, one real tradepale grey = mo\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"80'\"",
-        "bKind": "svgtext",
-        "ix": 23,
-        "iy": 13
-      },
-      {
-        "a": "div#chip \"Key cyan = one dot, one real tradepale grey = mo\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"100'\"",
-        "bKind": "svgtext",
-        "ix": 31,
-        "iy": 13
-      },
-      {
-        "a": "div#chip \"Key cyan = one dot, one real tradepale grey = mo\u2026\"",
-        "aKind": "chrome",
-        "b": "text.label \"\u2461\"",
-        "bKind": "svgtext",
-        "ix": 14,
-        "iy": 18
-      },
-      {
-        "a": "div#chip \"Key cyan = one dot, one real tradepale grey = mo\u2026\"",
-        "aKind": "chrome",
-        "b": "text.label \"\u2462\"",
-        "bKind": "svgtext",
-        "ix": 14,
-        "iy": 18
-      },
-      {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
         "b": "text \"kickoff\"",
@@ -242,22 +178,6 @@
         "bKind": "svgtext",
         "ix": 16,
         "iy": 8
-      },
-      {
-        "a": "text \"40\u00a2\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "text \"60\u00a2\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"match clock (minutes from kickoff)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
       }
     ],
     "stop": "s01/b1@0.9"
@@ -270,159 +190,14 @@
     "scrollY": 5908,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"Jul 25\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 4,
-        "rect": {
-          "x": -4,
-          "y": 146,
-          "w": 35,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Sep 25\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 9,
-        "rect": {
-          "x": -9,
-          "y": 205,
-          "w": 40,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Nov 25\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 10,
-        "rect": {
-          "x": -10,
-          "y": 264,
-          "w": 41,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Jan 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 8,
-        "rect": {
-          "x": -8,
-          "y": 323,
-          "w": 39,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Mar 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 9,
-        "rect": {
-          "x": -9,
-          "y": 380,
-          "w": 40,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"May 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 11,
-        "rect": {
-          "x": -11,
-          "y": 439,
-          "w": 42,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Jul 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 4,
-        "rect": {
-          "x": -4,
-          "y": 497,
-          "w": 35,
-          "h": 15
-        }
-      },
-      {
-        "what": "text.s02-thick-label \"thicker = more money that day\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 24,
-        "rect": {
-          "x": 219,
-          "y": 473,
-          "w": 195,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
-      {
-        "a": "div#chip \"Key cyan = the market on the championgrey = ever\u2026\"",
-        "aKind": "chrome",
-        "b": "text.s02-thick-label \"thicker = more money that day\"",
-        "bKind": "svgtext",
-        "ix": 155,
-        "iy": 16
-      },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
-        "b": "text \"Jul 26\"",
+        "b": "text \"Jul\"",
         "bKind": "svgtext",
         "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "text \"Sep 25\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"Nov 25\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"Jan 26\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"Mar 26\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"May 26\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
         "iy": 15
       }
     ],
@@ -436,175 +211,14 @@
     "scrollY": 6583,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"Jul 25\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 4,
-        "rect": {
-          "x": -4,
-          "y": 146,
-          "w": 35,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Sep 25\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 9,
-        "rect": {
-          "x": -9,
-          "y": 205,
-          "w": 40,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Nov 25\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 10,
-        "rect": {
-          "x": -10,
-          "y": 264,
-          "w": 41,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Jan 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 8,
-        "rect": {
-          "x": -8,
-          "y": 323,
-          "w": 39,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Mar 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 9,
-        "rect": {
-          "x": -9,
-          "y": 380,
-          "w": 40,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"May 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 11,
-        "rect": {
-          "x": -11,
-          "y": 439,
-          "w": 42,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"Jul 26\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 4,
-        "rect": {
-          "x": -4,
-          "y": 497,
-          "w": 35,
-          "h": 15
-        }
-      },
-      {
-        "what": "text.s02-thick-label \"thicker = more money that day\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 24,
-        "rect": {
-          "x": 219,
-          "y": 473,
-          "w": 195,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
-      {
-        "a": "div#chip \"Key cyan = the market on the championgrey = ever\u2026\"",
-        "aKind": "chrome",
-        "b": "text.s02-thick-label \"thicker = more money that day\"",
-        "bKind": "svgtext",
-        "ix": 155,
-        "iy": 16
-      },
-      {
-        "a": "div#chip \"Key cyan = the market on the championgrey = ever\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"you are here\"",
-        "bKind": "svgtext",
-        "ix": 85,
-        "iy": 13
-      },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
-        "b": "text \"Jul 26\"",
+        "b": "text \"Jul\"",
         "bKind": "svgtext",
         "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "div.card \"Skill 1, continued \u2014 a price needs a crowdThis m\u2026\"",
-        "aKind": "card",
-        "b": "text.s02-watch-cue \"Keep your eye on the far right.\"",
-        "bKind": "svgtext",
-        "ix": 193,
-        "iy": 16
-      },
-      {
-        "a": "text \"Sep 25\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"Nov 25\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"Jan 26\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"Mar 26\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
-        "iy": 15
-      },
-      {
-        "a": "text \"May 26\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"from listing to the final (May 2025 to July 2026\u2026\"",
-        "bKind": "svgtext",
-        "ix": 16,
         "iy": 15
       }
     ],
@@ -695,18 +309,10 @@
       {
         "a": "div.card \"Skill 2 of 5 \u2014 what volume meansThe tournament k\u2026\"",
         "aKind": "card",
-        "b": "text \"$7.40B: the press number, about one week stale\"",
+        "b": "text \"$7.40B: the press number,about one week stale\"",
         "bKind": "svgtext",
-        "ix": 301,
-        "iy": 10
-      },
-      {
-        "a": "text \"$7.40B: the press number, about one week stale\"",
-        "aKind": "svgtext",
-        "b": "text \"day two: match markets catch up\"",
-        "bKind": "svgtext",
-        "ix": 227,
-        "iy": 6
+        "ix": 164,
+        "iy": 31
       }
     ],
     "stop": "s03/b1"
@@ -727,7 +333,7 @@
         "b": "div.card \"Skill 2 of 5 \u2014 what volume meansMatch markets ar\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div.card \"Skill 2 of 5 \u2014 what volume meansMatch markets ar\u2026\"",
@@ -812,10 +418,10 @@
       {
         "a": "div.card \"Skill 2 of 5 \u2014 what volume meansMatch markets ar\u2026\"",
         "aKind": "card",
-        "b": "text \"$7.40B: the press number, about one week stale\"",
+        "b": "text \"$7.40B: the press number,about one week stale\"",
         "bKind": "svgtext",
-        "ix": 301,
-        "iy": 16
+        "ix": 164,
+        "iy": 31
       },
       {
         "a": "div.card \"Skill 2 of 5 \u2014 what volume meansMatch markets ar\u2026\"",
@@ -832,14 +438,6 @@
         "bKind": "svgtext",
         "ix": 331,
         "iy": 16
-      },
-      {
-        "a": "text \"$7.40B: the press number, about one week stale\"",
-        "aKind": "svgtext",
-        "b": "text \"day two: match markets catch up\"",
-        "bKind": "svgtext",
-        "ix": 227,
-        "iy": 6
       }
     ],
     "stop": "s03/b2"
@@ -860,7 +458,7 @@
         "b": "div.card \"Skill 2 of 5 \u2014 what volume meansThe counter just\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -917,70 +515,6 @@
         "bKind": "svgtext",
         "ix": 35,
         "iy": 15
-      },
-      {
-        "a": "div.card \"Skill 2 of 5 \u2014 what volume meansThe counter just\u2026\"",
-        "aKind": "card",
-        "b": "text \"Jun 16\"",
-        "bKind": "svgtext",
-        "ix": 37,
-        "iy": 8
-      },
-      {
-        "a": "div.card \"Skill 2 of 5 \u2014 what volume meansThe counter just\u2026\"",
-        "aKind": "card",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 144,
-        "iy": 16
-      },
-      {
-        "a": "text \"0:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 20,
-        "iy": 15
-      },
-      {
-        "a": "text \"6:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 25,
-        "iy": 15
-      },
-      {
-        "a": "text \"6:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text \"12:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 32,
-        "iy": 15
-      },
-      {
-        "a": "text \"18:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "text.axis-title \"hour of day (Eastern Time)\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 69,
-        "iy": 16
       }
     ],
     "stop": "s03/b3"
@@ -1050,70 +584,6 @@
         "bKind": "svgtext",
         "ix": 35,
         "iy": 15
-      },
-      {
-        "a": "div.card \"Skill 2, continued \u2014 the volume trapThe market's\u2026\"",
-        "aKind": "card",
-        "b": "text \"Jun 16\"",
-        "bKind": "svgtext",
-        "ix": 37,
-        "iy": 8
-      },
-      {
-        "a": "div.card \"Skill 2, continued \u2014 the volume trapThe market's\u2026\"",
-        "aKind": "card",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 144,
-        "iy": 16
-      },
-      {
-        "a": "text \"0:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 20,
-        "iy": 15
-      },
-      {
-        "a": "text \"6:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 25,
-        "iy": 15
-      },
-      {
-        "a": "text \"6:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text \"12:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 32,
-        "iy": 15
-      },
-      {
-        "a": "text \"18:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "text.axis-title \"hour of day (Eastern Time)\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 69,
-        "iy": 16
       }
     ],
     "stop": "s04/b1"
@@ -1126,20 +596,7 @@
     "scrollY": 11516,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"rest days: trading drops 6-10.7x; the always-ope\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 172,
-        "rect": {
-          "x": 42,
-          "y": 534,
-          "w": 520,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -1147,7 +604,7 @@
         "b": "div.card \"Skill 2, continued \u2014 the volume trapThe market g\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -1208,22 +665,6 @@
       {
         "a": "div.card \"Skill 2, continued \u2014 the volume trapThe market g\u2026\"",
         "aKind": "card",
-        "b": "text \"Jun 16\"",
-        "bKind": "svgtext",
-        "ix": 37,
-        "iy": 8
-      },
-      {
-        "a": "div.card \"Skill 2, continued \u2014 the volume trapThe market g\u2026\"",
-        "aKind": "card",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 144,
-        "iy": 16
-      },
-      {
-        "a": "div.card \"Skill 2, continued \u2014 the volume trapThe market g\u2026\"",
-        "aKind": "card",
         "b": "text \"scheduled kickoffs, by hour (Eastern Time)\"",
         "bKind": "svgtext",
         "ix": 268,
@@ -1240,9 +681,9 @@
       {
         "a": "div.card \"Skill 2, continued \u2014 the volume trapThe market g\u2026\"",
         "aKind": "card",
-        "b": "text \"what the schedule's credit predicts\"",
+        "b": "text \"the schedule's credit\"",
         "bKind": "svgtext",
-        "ix": 241,
+        "ix": 143,
         "iy": 18
       },
       {
@@ -1252,62 +693,6 @@
         "bKind": "svgtext",
         "ix": 341,
         "iy": 18
-      },
-      {
-        "a": "text \"0:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 20,
-        "iy": 15
-      },
-      {
-        "a": "text \"6:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 25,
-        "iy": 15
-      },
-      {
-        "a": "text \"6:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text \"12:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 32,
-        "iy": 15
-      },
-      {
-        "a": "text \"18:00\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"hour of day (Eastern Time)\"",
-        "bKind": "svgtext",
-        "ix": 15,
-        "iy": 15
-      },
-      {
-        "a": "text.axis-title \"hour of day (Eastern Time)\"",
-        "aKind": "svgtext",
-        "b": "text.axis-title \"tournament day (date)\"",
-        "bKind": "svgtext",
-        "ix": 69,
-        "iy": 16
-      },
-      {
-        "a": "text \"money per hour\"",
-        "aKind": "svgtext",
-        "b": "text \"what the schedule's credit predicts\"",
-        "bKind": "svgtext",
-        "ix": 108,
-        "iy": 7
       }
     ],
     "stop": "s04/b2"
@@ -1320,20 +705,7 @@
     "scrollY": 12360,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 171,
-        "rect": {
-          "x": 52,
-          "y": 529,
-          "w": 509,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -1341,7 +713,15 @@
         "b": "div.card \"Skill 2, continued \u2014 the volume trapAn American \u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key pale blue = markets, sorted by size\"",
+        "aKind": "chrome",
+        "b": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each($250,000) \u00b7 \u2026\"",
+        "bKind": "svgtext",
+        "ix": 180,
+        "iy": 29
       },
       {
         "a": "div.card \"Skill 2, continued \u2014 the volume trapAn American \u2026\"",
@@ -1373,46 +753,6 @@
         "b": "text.s05-diagonal-label \"if every market traded equally\"",
         "bKind": "svgtext",
         "ix": 168,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"0%\"",
-        "bKind": "svgtext",
-        "ix": 6,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"25%\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"50%\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"75%\"",
-        "bKind": "svgtext",
-        "ix": 25,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"100%\"",
-        "bKind": "svgtext",
-        "ix": 32,
         "iy": 15
       }
     ],
@@ -1426,44 +766,7 @@
     "scrollY": 13204,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 171,
-        "rect": {
-          "x": 52,
-          "y": 529,
-          "w": 509,
-          "h": 15
-        }
-      },
-      {
-        "what": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 34,
-        "rect": {
-          "x": -34,
-          "y": 109,
-          "w": 395,
-          "h": 18
-        }
-      },
-      {
-        "what": "text.s05-gini-caption \"market concentration (Gini): 0.928 overall, 0.46\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 25,
-        "rect": {
-          "x": 48,
-          "y": 569,
-          "w": 367,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -1471,14 +774,22 @@
         "b": "div.card \"Skill 2, continued \u2014 depth decides trustKalshi i\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 38
+        "iy": 31
+      },
+      {
+        "a": "div#chip \"Key pale blue = markets, sorted by size\"",
+        "aKind": "chrome",
+        "b": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each($250,000) \u00b7 \u2026\"",
+        "bKind": "svgtext",
+        "ix": 180,
+        "iy": 29
       },
       {
         "a": "div#chip \"Key pale blue = markets, sorted by size\"",
         "aKind": "chrome",
         "b": "text \"19,640 markets, 0.357% of the money\"",
         "bKind": "svgtext",
-        "ix": 113,
+        "ix": 146,
         "iy": 18
       },
       {
@@ -1516,66 +827,10 @@
       {
         "a": "div.card \"Skill 2, continued \u2014 depth decides trustKalshi i\u2026\"",
         "aKind": "card",
-        "b": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
+        "b": "text.s05-core-label \"414 legs across 3 core seriesabsorb 63.06% of al\u2026\"",
         "bKind": "svgtext",
-        "ix": 361,
-        "iy": 18
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"0%\"",
-        "bKind": "svgtext",
-        "ix": 6,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"25%\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"50%\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"75%\"",
-        "bKind": "svgtext",
-        "ix": 25,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"100%\"",
-        "bKind": "svgtext",
-        "ix": 32,
-        "iy": 15
-      },
-      {
-        "a": "text \"100%\"",
-        "aKind": "svgtext",
-        "b": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
-        "bKind": "svgtext",
-        "ix": 32,
-        "iy": 6
-      },
-      {
-        "a": "text.s05-diagonal-label \"if every market traded equally\"",
-        "aKind": "svgtext",
-        "b": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
-        "bKind": "svgtext",
-        "ix": 167,
-        "iy": 14
+        "ix": 199,
+        "iy": 32
       }
     ],
     "stop": "s05/b1"
@@ -1588,68 +843,7 @@
     "scrollY": 14048,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 171,
-        "rect": {
-          "x": 52,
-          "y": 529,
-          "w": 509,
-          "h": 15
-        }
-      },
-      {
-        "what": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 34,
-        "rect": {
-          "x": -34,
-          "y": 109,
-          "w": 395,
-          "h": 18
-        }
-      },
-      {
-        "what": "text.s05-gini-caption \"market concentration (Gini): 0.928 overall, 0.46\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 25,
-        "rect": {
-          "x": 48,
-          "y": 569,
-          "w": 367,
-          "h": 15
-        }
-      },
-      {
-        "what": "text \"ranked 2,426th of 30,133 by money traded\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 17,
-        "rect": {
-          "x": -17,
-          "y": 438,
-          "w": 293,
-          "h": 18
-        }
-      },
-      {
-        "what": "text \"lit because it is surprising, not because it is \u2026\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 17,
-        "rect": {
-          "x": -17,
-          "y": 458,
-          "w": 293,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -1657,30 +851,30 @@
         "b": "div.card \"Skill 2, continued \u2014 depth decides trustA market\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key amber = the ad market, lit for surprisegrey \u2026\"",
+        "aKind": "chrome",
+        "b": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each($250,000) \u00b7 \u2026\"",
+        "bKind": "svgtext",
+        "ix": 180,
+        "iy": 29
       },
       {
         "a": "div#chip \"Key amber = the ad market, lit for surprisegrey \u2026\"",
         "aKind": "chrome",
         "b": "text \"19,640 markets, 0.357% of the money\"",
         "bKind": "svgtext",
-        "ix": 113,
+        "ix": 146,
         "iy": 18
-      },
-      {
-        "a": "div#chip \"Key amber = the ad market, lit for surprisegrey \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"biggest ad market:\"",
-        "bKind": "svgtext",
-        "ix": 97,
-        "iy": 10
       },
       {
         "a": "div#chip \"Key amber = the ad market, lit for surprisegrey \u2026\"",
         "aKind": "chrome",
         "b": "text \"ranked 2,426th of 30,133 by money traded\"",
         "bKind": "svgtext",
-        "ix": 97,
+        "ix": 213,
         "iy": 18
       },
       {
@@ -1688,7 +882,7 @@
         "aKind": "chrome",
         "b": "text \"lit because it is surprising, not because it is \u2026\"",
         "bKind": "svgtext",
-        "ix": 97,
+        "ix": 213,
         "iy": 16
       },
       {
@@ -1726,66 +920,10 @@
       {
         "a": "div.card \"Skill 2, continued \u2014 depth decides trustA market\u2026\"",
         "aKind": "card",
-        "b": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
+        "b": "text.s05-core-label \"414 legs across 3 core seriesabsorb 63.06% of al\u2026\"",
         "bKind": "svgtext",
-        "ix": 361,
-        "iy": 18
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"0%\"",
-        "bKind": "svgtext",
-        "ix": 6,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"25%\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"50%\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"75%\"",
-        "bKind": "svgtext",
-        "ix": 25,
-        "iy": 15
-      },
-      {
-        "a": "text.s05-below-band-label \"21,567 markets \u00b7 under one dot each ($250,000) \u00b7\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"100%\"",
-        "bKind": "svgtext",
-        "ix": 32,
-        "iy": 15
-      },
-      {
-        "a": "text \"100%\"",
-        "aKind": "svgtext",
-        "b": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
-        "bKind": "svgtext",
-        "ix": 32,
-        "iy": 6
-      },
-      {
-        "a": "text.s05-diagonal-label \"if every market traded equally\"",
-        "aKind": "svgtext",
-        "b": "text.s05-core-label \"414 legs across 3 core series absorb 63.06% of a\u2026\"",
-        "bKind": "svgtext",
-        "ix": 167,
-        "iy": 14
+        "ix": 199,
+        "iy": 32
       }
     ],
     "stop": "s05/b2"
@@ -1798,20 +936,7 @@
     "scrollY": 14892,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"every dot below: the tournament\u2019s single biggest\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 10,
-        "rect": {
-          "x": 48,
-          "y": 230,
-          "w": 352,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = 1 trade \u00b7 showing every 1,578th of 999,8\u2026\"",
@@ -1819,7 +944,7 @@
         "b": "div.card \"Skill 2, continued \u2014 depth decides trustThe loud\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div.card \"Skill 2, continued \u2014 depth decides trustThe loud\u2026\"",
@@ -1848,10 +973,10 @@
       {
         "a": "div.card \"Skill 2, continued \u2014 depth decides trustThe loud\u2026\"",
         "aKind": "card",
-        "b": "text \"every dot below: the tournament\u2019s single biggest\u2026\"",
+        "b": "text \"every dot below: the tournament\u2019ssingle biggest \u2026\"",
         "bKind": "svgtext",
-        "ix": 342,
-        "iy": 16
+        "ix": 214,
+        "iy": 32
       },
       {
         "a": "div.card \"Skill 2, continued \u2014 depth decides trustThe loud\u2026\"",
@@ -1872,20 +997,7 @@
     "scrollY": 16669,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"every dot below: the tournament\u2019s single biggest\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 10,
-        "rect": {
-          "x": 48,
-          "y": 230,
-          "w": 352,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div.card \"Skill 2, continued: the tape\u2019s limitThe biggest \u2026\"",
@@ -1978,32 +1090,7 @@
     "scrollY": 17851,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"every dot below: the tournament\u2019s single biggest\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 10,
-        "rect": {
-          "x": 48,
-          "y": 230,
-          "w": 352,
-          "h": 16
-        }
-      },
-      {
-        "what": "text \"kickoff: the whistle doubles an already-flooding\u2026\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 35,
-        "rect": {
-          "x": -35,
-          "y": 160,
-          "w": 359,
-          "h": 18
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div.card \"Skill 2, continued: the tape\u2019s limitThe biggest \u2026\"",
@@ -2104,7 +1191,7 @@
         "b": "div.card \"Skill 3 of 5: reading a live matchThree differen\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 26
+        "iy": 18
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -2277,7 +1364,7 @@
         "b": "div.card \"Skill 3 of 5: reading a live matchA sportsbook s\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -2402,20 +1489,7 @@
     "scrollY": 21222,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"plus or minus 2 cents: friction\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 96,
-        "rect": {
-          "x": -96,
-          "y": 144,
-          "w": 203,
-          "h": 18
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = 1 trade \u00b7 showing every 426th of 32,744 \u2026\"",
@@ -2423,7 +1497,7 @@
         "b": "div.card \"Skill 3 of 5: reading a live matchA price never \u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -2534,7 +1608,7 @@
         "aKind": "card",
         "b": "text \"plus or minus 2 cents: friction\"",
         "bKind": "svgtext",
-        "ix": 107,
+        "ix": 203,
         "iy": 18
       },
       {
@@ -2544,22 +1618,6 @@
         "bKind": "svgtext",
         "ix": 125,
         "iy": 15
-      },
-      {
-        "a": "div.card \"Skill 3 of 5: reading a live matchA price never \u2026\"",
-        "aKind": "card",
-        "b": "text \"The spike is the price. Nothing to fade.\"",
-        "bKind": "svgtext",
-        "ix": 264,
-        "iy": 18
-      },
-      {
-        "a": "text \"80\u00a2\"",
-        "aKind": "svgtext",
-        "b": "text \"plus or minus 2 cents: friction\"",
-        "bKind": "svgtext",
-        "ix": 17,
-        "iy": 8
       },
       {
         "a": "text \"60\u00a2\"",
@@ -2580,36 +1638,79 @@
     "scrollY": 22066,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"penalty shootout\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 4,
-        "rect": {
-          "x": 299,
-          "y": 76,
-          "w": 95,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
-        "a": "div#grain-plate \"1 dot = 1 trade \u00b7 showing every 801st of 156,819\u2026\"",
+        "a": "div#grain-plate \"1 dot = 1 trade \u00b7 every 801st of 156,819 \u00b7 Germa\u2026\"",
         "aKind": "chrome",
         "b": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"120\u2019\"",
+        "bKind": "svgtext",
+        "ix": 12,
+        "iy": 12
+      },
+      {
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"135\u2019\"",
+        "bKind": "svgtext",
+        "ix": 19,
+        "iy": 12
+      },
+      {
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"150\u2019\"",
+        "bKind": "svgtext",
+        "ix": 19,
+        "iy": 12
+      },
+      {
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"165\u2019\"",
+        "bKind": "svgtext",
+        "ix": 19,
+        "iy": 12
+      },
+      {
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"180\u2019\"",
+        "bKind": "svgtext",
+        "ix": 19,
+        "iy": 12
+      },
+      {
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"match clock (minutes, wall time since kickoff)\"",
+        "bKind": "svgtext",
+        "ix": 204,
+        "iy": 8
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
-        "b": "text \"0\"",
+        "b": "text \"105\u2019\"",
         "bKind": "svgtext",
-        "ix": 6,
+        "ix": 19,
         "iy": 12
+      },
+      {
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "text \"match clock (minutes, wall time since kickoff)\"",
+        "bKind": "svgtext",
+        "ix": 74,
+        "iy": 8
       },
       {
         "a": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
@@ -2622,17 +1723,9 @@
       {
         "a": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
         "aKind": "card",
-        "b": "text \"extra time, first half\"",
+        "b": "text \"extra time\"",
         "bKind": "svgtext",
-        "ix": 110,
-        "iy": 15
-      },
-      {
-        "a": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
-        "aKind": "card",
-        "b": "text \"extra time, second half\"",
-        "bKind": "svgtext",
-        "ix": 129,
+        "ix": 56,
         "iy": 15
       },
       {
@@ -2640,7 +1733,7 @@
         "aKind": "card",
         "b": "text \"penalty shootout\"",
         "bKind": "svgtext",
-        "ix": 91,
+        "ix": 95,
         "iy": 15
       },
       {
@@ -2649,7 +1742,7 @@
         "b": "text \"0\"",
         "bKind": "svgtext",
         "ix": 6,
-        "iy": 11
+        "iy": 12
       },
       {
         "a": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
@@ -2708,19 +1801,11 @@
         "iy": 15
       },
       {
-        "a": "text \"extra time, first half\"",
-        "aKind": "svgtext",
-        "b": "text \"extra time, second half\"",
+        "a": "div.card \"Skill 3 of 5: reading a live matchCan you trust \u2026\"",
+        "aKind": "card",
+        "b": "text \"ADVANCE \u00b7 Germany goes through, still trading\"",
         "bKind": "svgtext",
-        "ix": 56,
-        "iy": 15
-      },
-      {
-        "a": "text \"extra time, second half\"",
-        "aKind": "svgtext",
-        "b": "text \"penalty shootout\"",
-        "bKind": "svgtext",
-        "ix": 46,
+        "ix": 266,
         "iy": 15
       }
     ],
@@ -2734,116 +1819,71 @@
     "scrollY": 24476,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"penalty shootout\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 4,
-        "rect": {
-          "x": 299,
-          "y": 76,
-          "w": 95,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
-        "a": "a.skip \"Skip to methods \u2193\"",
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
         "aKind": "chrome",
-        "b": "text \"0\"",
-        "bKind": "svgtext",
-        "ix": 6,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
-        "b": "text \"105\u2019\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
         "b": "text \"120\u2019\"",
         "bKind": "svgtext",
-        "ix": 19,
+        "ix": 12,
         "iy": 12
       },
       {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
         "b": "text \"135\u2019\"",
         "bKind": "svgtext",
         "ix": 19,
         "iy": 12
       },
       {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
         "b": "text \"150\u2019\"",
         "bKind": "svgtext",
         "ix": 19,
         "iy": 12
       },
       {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
         "b": "text \"165\u2019\"",
         "bKind": "svgtext",
         "ix": 19,
         "iy": 12
       },
       {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
         "b": "text \"180\u2019\"",
         "bKind": "svgtext",
         "ix": 19,
         "iy": 12
       },
       {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
+        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
+        "aKind": "chrome",
         "b": "text \"match clock (minutes, wall time since kickoff)\"",
         "bKind": "svgtext",
-        "ix": 284,
-        "iy": 16
+        "ix": 204,
+        "iy": 8
       },
       {
-        "a": "text \"extra time, first half\"",
-        "aKind": "svgtext",
-        "b": "text \"extra time, second half\"",
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "text \"105\u2019\"",
         "bKind": "svgtext",
-        "ix": 56,
-        "iy": 15
+        "ix": 19,
+        "iy": 12
       },
       {
-        "a": "text \"extra time, second half\"",
-        "aKind": "svgtext",
-        "b": "text \"penalty shootout\"",
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
+        "b": "text \"match clock (minutes, wall time since kickoff)\"",
         "bKind": "svgtext",
-        "ix": 46,
-        "iy": 15
-      },
-      {
-        "a": "text \"regulation-market price (cents)\"",
-        "aKind": "svgtext",
-        "b": "text \"final whistle of regulation\"",
-        "bKind": "svgtext",
-        "ix": 88,
-        "iy": 6
-      },
-      {
-        "a": "text \"regulation-market price (cents)\"",
-        "aKind": "svgtext",
-        "b": "text \"(with stoppage)\"",
-        "bKind": "svgtext",
-        "ix": 88,
-        "iy": 11
+        "ix": 74,
+        "iy": 8
       }
     ],
     "stop": "s08/b1@0.5"
@@ -2856,140 +1896,23 @@
     "scrollY": 26164,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"penalty shootout\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 4,
-        "rect": {
-          "x": 299,
-          "y": 76,
-          "w": 95,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
-        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"Jonathan Tah's goal, then VAR:96\u00a2 and back\"",
-        "bKind": "svgtext",
-        "ix": 17,
-        "iy": 28
-      },
-      {
-        "a": "div#chip \"Key cyan = the advance market, still tradingslat\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"Paraguay converts, the ticket dies\"",
-        "bKind": "svgtext",
-        "ix": 166,
-        "iy": 18
-      },
-      {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
-        "b": "text \"0\"",
-        "bKind": "svgtext",
-        "ix": 6,
-        "iy": 12
-      },
-      {
-        "a": "a.skip \"Skip to methods \u2193\"",
-        "aKind": "chrome",
-        "b": "text \"Paraguay converts, the ticket dies\"",
-        "bKind": "svgtext",
-        "ix": 26,
-        "iy": 11
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
         "b": "text \"105\u2019\"",
         "bKind": "svgtext",
         "ix": 19,
         "iy": 12
       },
       {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
-        "b": "text \"120\u2019\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
-        "b": "text \"135\u2019\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
-        "b": "text \"150\u2019\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
-        "b": "text \"165\u2019\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
-        "b": "text \"180\u2019\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"Skill 3, continued: check which ticket is talkin\u2026\"",
-        "aKind": "card",
+        "a": "a.skip \"Skip to methods \u2193\"",
+        "aKind": "chrome",
         "b": "text \"match clock (minutes, wall time since kickoff)\"",
         "bKind": "svgtext",
-        "ix": 284,
-        "iy": 16
-      },
-      {
-        "a": "text \"extra time, first half\"",
-        "aKind": "svgtext",
-        "b": "text \"extra time, second half\"",
-        "bKind": "svgtext",
-        "ix": 56,
-        "iy": 15
-      },
-      {
-        "a": "text \"extra time, second half\"",
-        "aKind": "svgtext",
-        "b": "text \"penalty shootout\"",
-        "bKind": "svgtext",
-        "ix": 46,
-        "iy": 15
-      },
-      {
-        "a": "text \"regulation-market price (cents)\"",
-        "aKind": "svgtext",
-        "b": "text \"final whistle of regulation\"",
-        "bKind": "svgtext",
-        "ix": 88,
-        "iy": 6
-      },
-      {
-        "a": "text \"regulation-market price (cents)\"",
-        "aKind": "svgtext",
-        "b": "text \"(with stoppage)\"",
-        "bKind": "svgtext",
-        "ix": 88,
-        "iy": 11
+        "ix": 74,
+        "iy": 8
       },
       {
         "a": "text \"40\"",
@@ -2997,7 +1920,7 @@
         "b": "text \"Jonathan Tah's goal, then VAR:96\u00a2 and back\"",
         "bKind": "svgtext",
         "ix": 10,
-        "iy": 9
+        "iy": 12
       }
     ],
     "stop": "s08/b1@0.9"
@@ -3007,7 +1930,7 @@
       "w": 390,
       "h": 844
     },
-    "scrollY": 27974,
+    "scrollY": 27902,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
     "edge": [],
@@ -3018,7 +1941,7 @@
         "b": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 18
       },
       {
         "a": "div#chip \"Key teal = Paraguay\u2019s winner ticketblue = Norway\u2026\"",
@@ -3026,7 +1949,7 @@
         "b": "text \"Jul 08\"",
         "bKind": "svgtext",
         "ix": 27,
-        "iy": 7
+        "iy": 11
       },
       {
         "a": "div#chip \"Key teal = Paraguay\u2019s winner ticketblue = Norway\u2026\"",
@@ -3041,7 +1964,7 @@
         "aKind": "chrome",
         "b": "text \"Spain quarterfinal already known\"",
         "bKind": "svgtext",
-        "ix": 44,
+        "ix": 77,
         "iy": 11
       },
       {
@@ -3234,47 +2157,31 @@
         "b": "text \"Norway\"",
         "bKind": "svgtext",
         "ix": 43,
-        "iy": 13
+        "iy": 15
       },
       {
-        "a": "text \"Round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"Germany\"",
+        "a": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
+        "aKind": "card",
+        "b": "text \"\u00d71\"",
         "bKind": "svgtext",
-        "ix": 39,
-        "iy": 7
+        "ix": 12,
+        "iy": 11
       },
       {
-        "a": "text \"Round of 16\"",
-        "aKind": "svgtext",
-        "b": "text \"France\"",
+        "a": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
+        "aKind": "card",
+        "b": "text \"\u00d72\"",
         "bKind": "svgtext",
-        "ix": 30,
-        "iy": 7
+        "ix": 12,
+        "iy": 11
       },
       {
-        "a": "text \"Quarterfinal\"",
-        "aKind": "svgtext",
-        "b": "text \"TBD\"",
+        "a": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
+        "aKind": "card",
+        "b": "text \"\u00d73.6\"",
         "bKind": "svgtext",
-        "ix": 19,
-        "iy": 7
-      },
-      {
-        "a": "text \"Semifinal\"",
-        "aKind": "svgtext",
-        "b": "text \"TBD\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 7
-      },
-      {
-        "a": "text \"Final\"",
-        "aKind": "svgtext",
-        "b": "text \"TBD\"",
-        "bKind": "svgtext",
-        "ix": 19,
-        "iy": 7
+        "ix": 22,
+        "iy": 12
       }
     ],
     "stop": "s09/b1"
@@ -3295,7 +2202,23 @@
         "b": "div.card \"Skill 3, continued: prices watch the road aheadW\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key blue = Norway, spikes while Egypt leadslaven\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"magnified: minute by minute, the Argentina-Egypt\u2026\"",
+        "bKind": "svgtext",
+        "ix": 228,
+        "iy": 15
+      },
+      {
+        "a": "div#chip \"Key blue = Norway, spikes while Egypt leadslaven\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"Egypt leads\"",
+        "bKind": "svgtext",
+        "ix": 44,
+        "iy": 11
       },
       {
         "a": "div#chip \"Key blue = Norway, spikes while Egypt leadslaven\u2026\"",
@@ -3319,6 +2242,14 @@
         "b": "text \"Norway\"",
         "bKind": "svgtext",
         "ix": 36,
+        "iy": 12
+      },
+      {
+        "a": "div#chip \"Key blue = Norway, spikes while Egypt leadslaven\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"Argentina\"",
+        "bKind": "svgtext",
+        "ix": 47,
         "iy": 12
       },
       {
@@ -3420,20 +2351,7 @@
     "scrollY": 29662,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"dashed spikes are recording echoes, reaching up \u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 134,
-        "rect": {
-          "x": 56,
-          "y": 108,
-          "w": 468,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"for this scene and the next, the dots rest; one \u2026\"",
@@ -3441,7 +2359,7 @@
         "b": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
@@ -3449,14 +2367,14 @@
         "b": "text \"same price\"",
         "bKind": "svgtext",
         "ix": 62,
-        "iy": 8
+        "iy": 15
       },
       {
         "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
         "aKind": "chrome",
         "b": "text \"Sat 04\"",
         "bKind": "svgtext",
-        "ix": 12,
+        "ix": 37,
         "iy": 13
       },
       {
@@ -3496,8 +2414,16 @@
         "aKind": "chrome",
         "b": "text \"the knockout stage (date)\"",
         "bKind": "svgtext",
-        "ix": 101,
+        "ix": 134,
         "iy": 15
+      },
+      {
+        "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"dashed spikes are recording echoes,reaching up t\u2026\"",
+        "bKind": "svgtext",
+        "ix": 167,
+        "iy": 29
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -3538,30 +2464,6 @@
         "bKind": "svgtext",
         "ix": 330,
         "iy": 15
-      },
-      {
-        "a": "div.card \"Skill 3, continued: prices watch the road aheadT\u2026\"",
-        "aKind": "card",
-        "b": "text \"dashed spikes are recording echoes, reaching up \u2026\"",
-        "bKind": "svgtext",
-        "ix": 334,
-        "iy": 15
-      },
-      {
-        "a": "text \"same price\"",
-        "aKind": "svgtext",
-        "b": "text \"Fri 10\"",
-        "bKind": "svgtext",
-        "ix": 31,
-        "iy": 10
-      },
-      {
-        "a": "text \"same price\"",
-        "aKind": "svgtext",
-        "b": "text \"Jul 12\"",
-        "bKind": "svgtext",
-        "ix": 12,
-        "iy": 10
       }
     ],
     "stop": "s09/b3"
@@ -3574,20 +2476,7 @@
     "scrollY": 30506,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"dashed spikes are recording echoes, reaching up \u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 134,
-        "rect": {
-          "x": 56,
-          "y": 108,
-          "w": 468,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"for this scene and the next, the dots rest; one \u2026\"",
@@ -3595,7 +2484,7 @@
         "b": "div.card \"Skill 4 of 5: who is behind the numberEvery matc\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
@@ -3603,14 +2492,14 @@
         "b": "text \"same price\"",
         "bKind": "svgtext",
         "ix": 62,
-        "iy": 8
+        "iy": 15
       },
       {
         "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
         "aKind": "chrome",
         "b": "text \"Sat 04\"",
         "bKind": "svgtext",
-        "ix": 12,
+        "ix": 37,
         "iy": 13
       },
       {
@@ -3650,8 +2539,16 @@
         "aKind": "chrome",
         "b": "text \"the knockout stage (date)\"",
         "bKind": "svgtext",
-        "ix": 101,
+        "ix": 134,
         "iy": 15
+      },
+      {
+        "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"dashed spikes are recording echoes,reaching up t\u2026\"",
+        "bKind": "svgtext",
+        "ix": 167,
+        "iy": 29
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -3692,30 +2589,6 @@
         "bKind": "svgtext",
         "ix": 330,
         "iy": 15
-      },
-      {
-        "a": "div.card \"Skill 4 of 5: who is behind the numberEvery matc\u2026\"",
-        "aKind": "card",
-        "b": "text \"dashed spikes are recording echoes, reaching up \u2026\"",
-        "bKind": "svgtext",
-        "ix": 334,
-        "iy": 15
-      },
-      {
-        "a": "text \"same price\"",
-        "aKind": "svgtext",
-        "b": "text \"Fri 10\"",
-        "bKind": "svgtext",
-        "ix": 31,
-        "iy": 10
-      },
-      {
-        "a": "text \"same price\"",
-        "aKind": "svgtext",
-        "b": "text \"Jul 12\"",
-        "bKind": "svgtext",
-        "ix": 12,
-        "iy": 10
       }
     ],
     "stop": "s10/b1"
@@ -3728,20 +2601,7 @@
     "scrollY": 31350,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"dashed spikes are recording echoes, reaching up \u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 134,
-        "rect": {
-          "x": 56,
-          "y": 108,
-          "w": 468,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
@@ -3749,14 +2609,14 @@
         "b": "text \"same price\"",
         "bKind": "svgtext",
         "ix": 62,
-        "iy": 8
+        "iy": 15
       },
       {
         "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
         "aKind": "chrome",
         "b": "text \"Sat 04\"",
         "bKind": "svgtext",
-        "ix": 12,
+        "ix": 37,
         "iy": 13
       },
       {
@@ -3796,8 +2656,16 @@
         "aKind": "chrome",
         "b": "text \"the knockout stage (date)\"",
         "bKind": "svgtext",
-        "ix": 101,
+        "ix": 134,
         "iy": 15
+      },
+      {
+        "a": "div#chip \"Key bright = how close Kalshi and Polymarket tra\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"dashed spikes are recording echoes,reaching up t\u2026\"",
+        "bKind": "svgtext",
+        "ix": 167,
+        "iy": 29
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -3814,22 +2682,6 @@
         "bKind": "svgtext",
         "ix": 34,
         "iy": 13
-      },
-      {
-        "a": "text \"same price\"",
-        "aKind": "svgtext",
-        "b": "text \"Fri 10\"",
-        "bKind": "svgtext",
-        "ix": 31,
-        "iy": 10
-      },
-      {
-        "a": "text \"same price\"",
-        "aKind": "svgtext",
-        "b": "text \"Jul 12\"",
-        "bKind": "svgtext",
-        "ix": 12,
-        "iy": 10
       }
     ],
     "stop": "s10/b2"
@@ -3850,7 +2702,7 @@
         "b": "div.card \"Skill 4 of 5: who is behind the numberSixteen ti\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div.card \"Skill 4 of 5: who is behind the numberSixteen ti\u2026\"",
@@ -3887,20 +2739,7 @@
     "scrollY": 33038,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.artifact-cap \"graded after the book closed (90:00)\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 35,
-        "rect": {
-          "x": 222,
-          "y": 280,
-          "w": 203,
-          "h": 13
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"the dots rest \u00b7 each column is an accuracy score\u2026\"",
@@ -3908,7 +2747,7 @@
         "b": "div.card \"Skill 4, continued: the pros tied, and the trapA\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#chip \"Key cyan = Kalshilavender = Polymarketgrey = the\u2026\"",
@@ -3955,7 +2794,7 @@
         "aKind": "card",
         "b": "text.artifact-cap \"graded after the book closed (90:00)\"",
         "bKind": "svgtext",
-        "ix": 168,
+        "ix": 203,
         "iy": 13
       },
       {
@@ -3977,32 +2816,7 @@
     "scrollY": 33882,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.artifact-cap \"graded after the book closed (90:00)\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 35,
-        "rect": {
-          "x": 222,
-          "y": 280,
-          "w": 203,
-          "h": 13
-        }
-      },
-      {
-        "what": "text.crossout-cap \"the blowout scores a closed book against a live \u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 136,
-        "rect": {
-          "x": 48,
-          "y": 163,
-          "w": 478,
-          "h": 18
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"the dots rest \u00b7 each column is an accuracy score\u2026\"",
@@ -4010,7 +2824,7 @@
         "b": "div.card \"Skill 4, continued: the pros tied, and the trapT\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#chip \"Key cyan = Kalshilavender = Polymarketgrey = the\u2026\"",
@@ -4057,16 +2871,16 @@
         "aKind": "card",
         "b": "text.artifact-cap \"graded after the book closed (90:00)\"",
         "bKind": "svgtext",
-        "ix": 168,
+        "ix": 203,
         "iy": 13
       },
       {
         "a": "div.card \"Skill 4, continued: the pros tied, and the trapT\u2026\"",
         "aKind": "card",
-        "b": "text.crossout-cap \"the blowout scores a closed book against a live \u2026\"",
+        "b": "text.crossout-cap \"the blowout scores a closed book against a livem\u2026\"",
         "bKind": "svgtext",
-        "ix": 342,
-        "iy": 18
+        "ix": 322,
+        "iy": 37
       },
       {
         "a": "text.sliver-cap \"0.003\"",
@@ -4095,22 +2909,14 @@
         "b": "div.card \"Skill 4, continued: the pros tied, and the trapT\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
-      },
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "text.s12-caption-label \"the naive read\"",
-        "bKind": "svgtext",
-        "ix": 117,
-        "iy": 9
+        "iy": 54
       },
       {
         "a": "div#chip \"Key blue = Mbappe's Golden Boot moneyteal = Mess\u2026\"",
         "aKind": "chrome",
         "b": "text.s12-lane-name \"Haaland (eliminated, reference)\"",
         "bKind": "svgtext",
-        "ix": 90,
+        "ix": 123,
         "iy": 18
       },
       {
@@ -4214,16 +3020,8 @@
         "aKind": "card",
         "b": "text.s12-caption-question \"Same goals, double the price?\"",
         "bKind": "svgtext",
-        "ix": 287,
-        "iy": 25
-      },
-      {
-        "a": "text \"100c\"",
-        "aKind": "svgtext",
-        "b": "text.s12-caption-question \"Same goals, double the price?\"",
-        "bKind": "svgtext",
-        "ix": 29,
-        "iy": 7
+        "ix": 196,
+        "iy": 17
       }
     ],
     "stop": "s11/b3"
@@ -4236,32 +3034,7 @@
     "scrollY": 35570,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"Kane: 120 scoreless minutes, price halved\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 45,
-        "rect": {
-          "x": 146,
-          "y": 365,
-          "w": 289,
-          "h": 18
-        }
-      },
-      {
-        "what": "text.s12-footnote-chip \"the contract's own tiebreak favors Mbappe: level\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 315,
-        "rect": {
-          "x": 48,
-          "y": 596,
-          "w": 657,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -4269,22 +3042,14 @@
         "b": "div.card \"Skill 5 of 5 \u2014 its fake flaws, and its real ones\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 41
-      },
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "text.s12-caption-label \"the resolved read\"",
-        "bKind": "svgtext",
-        "ix": 142,
-        "iy": 9
+        "iy": 33
       },
       {
         "a": "div#chip \"Key blue = Mbappe's Golden Boot moneyteal = Mess\u2026\"",
         "aKind": "chrome",
         "b": "text.s12-lane-name \"Haaland (eliminated, reference)\"",
         "bKind": "svgtext",
-        "ix": 90,
+        "ix": 123,
         "iy": 18
       },
       {
@@ -4306,10 +3071,10 @@
       {
         "a": "div#chip \"Key blue = Mbappe's Golden Boot moneyteal = Mess\u2026\"",
         "aKind": "chrome",
-        "b": "text \"Kane: 120 scoreless minutes, price halved\"",
+        "b": "text \"Kane: 120 scoreless minutes,price halved\"",
         "bKind": "svgtext",
-        "ix": 195,
-        "iy": 9
+        "ix": 202,
+        "iy": 36
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -4412,8 +3177,8 @@
         "aKind": "card",
         "b": "text.s12-caption-question \"Different futures, different price.\"",
         "bKind": "svgtext",
-        "ix": 318,
-        "iy": 25
+        "ix": 217,
+        "iy": 17
       },
       {
         "a": "div.card \"Skill 5 of 5 \u2014 its fake flaws, and its real ones\u2026\"",
@@ -4422,22 +3187,6 @@
         "bKind": "svgtext",
         "ix": 170,
         "iy": 36
-      },
-      {
-        "a": "text \"100c\"",
-        "aKind": "svgtext",
-        "b": "text.s12-caption-question \"Different futures, different price.\"",
-        "bKind": "svgtext",
-        "ix": 29,
-        "iy": 7
-      },
-      {
-        "a": "text.s12-caption-question \"Different futures, different price.\"",
-        "aKind": "svgtext",
-        "b": "text \"July 7\u20138: traded level,Mbappe one goal behind\"",
-        "bKind": "svgtext",
-        "ix": 170,
-        "iy": 5
       }
     ],
     "stop": "s12/b1"
@@ -4458,7 +3207,7 @@
         "b": "div.card \"Skill 5 of 5 \u2014 its fake flaws, and its real ones\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -4466,7 +3215,7 @@
         "b": "text \"Argentina\"",
         "bKind": "svgtext",
         "ix": 42,
-        "iy": 18
+        "iy": 11
       },
       {
         "a": "div#chip \"Key teal = Argentina's moneygrey = money at rest\u2026\"",
@@ -4499,22 +3248,6 @@
         "bKind": "svgtext",
         "ix": 107,
         "iy": 28
-      },
-      {
-        "a": "div.card \"Skill 5 of 5 \u2014 its fake flaws, and its real ones\u2026\"",
-        "aKind": "card",
-        "b": "text \"Ipsos poll\"",
-        "bKind": "svgtext",
-        "ix": 60,
-        "iy": 16
-      },
-      {
-        "a": "text.s13-units-caption \"Poll bars are agreement, not probability.Dot col\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"Ipsos poll\"",
-        "bKind": "svgtext",
-        "ix": 27,
-        "iy": 16
       }
     ],
     "stop": "s12/b2"
@@ -4535,7 +3268,15 @@
         "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key blue = the USA's moneygrey = money at rest, \u2026\"",
+        "aKind": "chrome",
+        "b": "text \"7% poll\"",
+        "bKind": "svgtext",
+        "ix": 30,
+        "iy": 18
       },
       {
         "a": "div#chip \"Key blue = the USA's moneygrey = money at rest, \u2026\"",
@@ -4560,22 +3301,6 @@
         "bKind": "svgtext",
         "ix": 49,
         "iy": 28
-      },
-      {
-        "a": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
-        "aKind": "card",
-        "b": "text \"Pew poll\"",
-        "bKind": "svgtext",
-        "ix": 53,
-        "iy": 16
-      },
-      {
-        "a": "text.s13-units-caption \"Poll bars are agreement, not probability.Dot col\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"Pew poll\"",
-        "bKind": "svgtext",
-        "ix": 20,
-        "iy": 16
       }
     ],
     "stop": "s13/b1"
@@ -4588,35 +3313,14 @@
     "scrollY": 38102,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s13-zombie-chip \"wind-down across every knocked-out team:302 trad\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 34,
-        "rect": {
-          "x": 48,
-          "y": 561,
-          "w": 376,
-          "h": 29
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
-        "bKind": "card",
-        "ix": 286,
-        "iy": 4
-      },
       {
         "a": "div#chip \"Key blue = the USA's moneypink = Mexico's moneyg\u2026\"",
         "aKind": "chrome",
-        "b": "text \"2xthe model's price\"",
+        "b": "text \"2xmodel price\"",
         "bKind": "svgtext",
-        "ix": 42,
+        "ix": 58,
         "iy": 32
       },
       {
@@ -4626,14 +3330,6 @@
         "bKind": "svgtext",
         "ix": 308,
         "iy": 32
-      },
-      {
-        "a": "text \"1.42xthe model's price\"",
-        "aKind": "svgtext",
-        "b": "text \"2xthe model's price\"",
-        "bKind": "svgtext",
-        "ix": 28,
-        "iy": 16
       }
     ],
     "stop": "s13/b2"
@@ -4651,26 +3347,10 @@
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
         "aKind": "chrome",
-        "b": "button \"count every market equally\"",
-        "bKind": "control",
-        "ix": 190,
-        "iy": 35
-      },
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "button \"weight by dollars traded\"",
-        "bKind": "control",
-        "ix": 92,
-        "iy": 35
-      },
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
         "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -4681,67 +3361,11 @@
         "iy": 16
       },
       {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10c\"",
-        "bKind": "svgtext",
-        "ix": 17,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"paid 0.6%\"",
-        "bKind": "svgtext",
-        "ix": 64,
-        "iy": 16
-      },
-      {
         "a": "button \"count every market equally\"",
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
         "bKind": "card",
-        "ix": 201,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -4749,7 +3373,7 @@
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
         "bKind": "card",
-        "ix": 175,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -4758,7 +3382,7 @@
         "b": "text \"60%\"",
         "bKind": "svgtext",
         "ix": 20,
-        "iy": 12
+        "iy": 11
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
@@ -4789,8 +3413,8 @@
         "aKind": "card",
         "b": "text.s14-diagonal-label \"perfectly priced\"",
         "bKind": "svgtext",
-        "ix": 73,
-        "iy": 89
+        "ix": 76,
+        "iy": 76
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the patriotism alarm is fal\u2026\"",
@@ -4811,44 +3435,15 @@
     "scrollY": 39790,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 87,
-        "rect": {
-          "x": 48,
-          "y": 65,
-          "w": 429,
-          "h": 32
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "button \"count every market equally\"",
-        "bKind": "control",
-        "ix": 190,
-        "iy": 35
-      },
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "button \"weight by dollars traded\"",
-        "bKind": "control",
-        "ix": 92,
-        "iy": 35
-      },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
         "aKind": "chrome",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realThe ch\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -4859,75 +3454,11 @@
         "iy": 16
       },
       {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
-        "bKind": "svgtext",
-        "ix": 254,
-        "iy": 12
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10c\"",
-        "bKind": "svgtext",
-        "ix": 17,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"paid 0.6%\"",
-        "bKind": "svgtext",
-        "ix": 64,
-        "iy": 16
-      },
-      {
         "a": "button \"count every market equally\"",
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realThe ch\u2026\"",
         "bKind": "card",
-        "ix": 201,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -4935,7 +3466,7 @@
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realThe ch\u2026\"",
         "bKind": "card",
-        "ix": 175,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -4944,7 +3475,7 @@
         "b": "text \"60%\"",
         "bKind": "svgtext",
         "ix": 20,
-        "iy": 12
+        "iy": 11
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realThe ch\u2026\"",
@@ -4975,8 +3506,8 @@
         "aKind": "card",
         "b": "text.s14-diagonal-label \"perfectly priced\"",
         "bKind": "svgtext",
-        "ix": 73,
-        "iy": 89
+        "ix": 76,
+        "iy": 76
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realThe ch\u2026\"",
@@ -4989,18 +3520,18 @@
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realThe ch\u2026\"",
         "aKind": "card",
-        "b": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
+        "b": "text \"72% of the overpriced ticketssit in prop ladders\u2026\"",
         "bKind": "svgtext",
-        "ix": 342,
-        "iy": 32
+        "ix": 258,
+        "iy": 65
       },
       {
-        "a": "text.s14-axis-x-title \"what the price implied (cents = % chance)\"",
+        "a": "text.s14-diagonal-label \"perfectly priced\"",
         "aKind": "svgtext",
-        "b": "text \"1-2 cents: the tick floor\"",
+        "b": "text \"72% of the overpriced ticketssit in prop ladders\u2026\"",
         "bKind": "svgtext",
-        "ix": 174,
-        "iy": 5
+        "ix": 76,
+        "iy": 23
       }
     ],
     "stop": "s14/b1"
@@ -5013,44 +3544,15 @@
     "scrollY": 40634,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 87,
-        "rect": {
-          "x": 48,
-          "y": 65,
-          "w": 429,
-          "h": 32
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "button \"count every market equally\"",
-        "bKind": "control",
-        "ix": 182,
-        "iy": 35
-      },
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "button \"weight by dollars traded\"",
-        "bKind": "control",
-        "ix": 100,
-        "iy": 35
-      },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
         "aKind": "chrome",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -5061,83 +3563,11 @@
         "iy": 16
       },
       {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
-        "bKind": "svgtext",
-        "ix": 254,
-        "iy": 12
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"counted equally (before)\"",
-        "bKind": "svgtext",
-        "ix": 88,
-        "iy": 16
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10c\"",
-        "bKind": "svgtext",
-        "ix": 17,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"paid 1.4%\"",
-        "bKind": "svgtext",
-        "ix": 64,
-        "iy": 16
-      },
-      {
         "a": "button \"count every market equally\"",
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
         "bKind": "card",
-        "ix": 193,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -5145,7 +3575,7 @@
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
         "bKind": "card",
-        "ix": 183,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -5154,7 +3584,7 @@
         "b": "text \"60%\"",
         "bKind": "svgtext",
         "ix": 20,
-        "iy": 12
+        "iy": 11
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
@@ -5185,8 +3615,16 @@
         "aKind": "card",
         "b": "text.s14-diagonal-label \"perfectly priced\"",
         "bKind": "svgtext",
-        "ix": 73,
-        "iy": 89
+        "ix": 76,
+        "iy": 76
+      },
+      {
+        "a": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
+        "aKind": "card",
+        "b": "text \"counted equally (before)\"",
+        "bKind": "svgtext",
+        "ix": 154,
+        "iy": 16
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
@@ -5199,26 +3637,18 @@
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realTake o\u2026\"",
         "aKind": "card",
-        "b": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
+        "b": "text \"72% of the overpriced ticketssit in prop ladders\u2026\"",
         "bKind": "svgtext",
-        "ix": 342,
-        "iy": 32
+        "ix": 258,
+        "iy": 65
       },
       {
-        "a": "text.s14-axis-x-title \"what the price implied (cents = % chance)\"",
+        "a": "text.s14-diagonal-label \"perfectly priced\"",
         "aKind": "svgtext",
-        "b": "text \"1-2 cents: the tick floor\"",
+        "b": "text \"72% of the overpriced ticketssit in prop ladders\u2026\"",
         "bKind": "svgtext",
-        "ix": 174,
-        "iy": 5
-      },
-      {
-        "a": "text \"counted equally (before)\"",
-        "aKind": "svgtext",
-        "b": "text \"paid 1.4%\"",
-        "bKind": "svgtext",
-        "ix": 27,
-        "iy": 14
+        "ix": 76,
+        "iy": 23
       }
     ],
     "stop": "s14/b2"
@@ -5231,44 +3661,15 @@
     "scrollY": 41478,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 87,
-        "rect": {
-          "x": 48,
-          "y": 65,
-          "w": 429,
-          "h": 32
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "button \"count every market equally\"",
-        "bKind": "control",
-        "ix": 190,
-        "iy": 35
-      },
-      {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "button \"weight by dollars traded\"",
-        "bKind": "control",
-        "ix": 92,
-        "iy": 35
-      },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
         "aKind": "chrome",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -5279,83 +3680,11 @@
         "iy": 16
       },
       {
-        "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
-        "aKind": "chrome",
-        "b": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
-        "bKind": "svgtext",
-        "ix": 254,
-        "iy": 12
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"weighted by dollars (before)\"",
-        "bKind": "svgtext",
-        "ix": 89,
-        "iy": 16
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5c\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10c\"",
-        "bKind": "svgtext",
-        "ix": 17,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"0%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"5%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"10%\"",
-        "bKind": "svgtext",
-        "ix": 11,
-        "iy": 11
-      },
-      {
-        "a": "div#chip \"Key pale = money at each price levelamber = the \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"paid 0.6%\"",
-        "bKind": "svgtext",
-        "ix": 64,
-        "iy": 16
-      },
-      {
         "a": "button \"count every market equally\"",
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
         "bKind": "card",
-        "ix": 201,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -5363,7 +3692,7 @@
         "aKind": "control",
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
         "bKind": "card",
-        "ix": 175,
+        "ix": 172,
         "iy": 46
       },
       {
@@ -5372,7 +3701,7 @@
         "b": "text \"60%\"",
         "bKind": "svgtext",
         "ix": 20,
-        "iy": 12
+        "iy": 11
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
@@ -5401,6 +3730,14 @@
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
         "aKind": "card",
+        "b": "text \"weighted by dollars (before)\"",
+        "bKind": "svgtext",
+        "ix": 176,
+        "iy": 16
+      },
+      {
+        "a": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
+        "aKind": "card",
         "b": "text.s14-mode-label \"weighted by: count of markets, equally\"",
         "bKind": "svgtext",
         "ix": 253,
@@ -5409,10 +3746,10 @@
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
         "aKind": "card",
-        "b": "text \"72% of the overpriced tickets sit in prop ladder\u2026\"",
+        "b": "text \"72% of the overpriced ticketssit in prop ladders\u2026\"",
         "bKind": "svgtext",
-        "ix": 342,
-        "iy": 32
+        "ix": 258,
+        "iy": 65
       },
       {
         "a": "div.card \"Skill 5, continued \u2014 the flaw that is realWeigh \u2026\"",
@@ -5420,23 +3757,7 @@
         "b": "text \"worst bucket: a favorite, not a longshot242 tick\u2026\"",
         "bKind": "svgtext",
         "ix": 284,
-        "iy": 36
-      },
-      {
-        "a": "text.s14-axis-x-title \"what the price implied (cents = % chance)\"",
-        "aKind": "svgtext",
-        "b": "text \"1-2 cents: the tick floor\"",
-        "bKind": "svgtext",
-        "ix": 174,
-        "iy": 5
-      },
-      {
-        "a": "text \"weighted by dollars (before)\"",
-        "aKind": "svgtext",
-        "b": "text \"5%\"",
-        "bKind": "svgtext",
-        "ix": 14,
-        "iy": 11
+        "iy": 33
       }
     ],
     "stop": "s14/b3"
@@ -5449,32 +3770,7 @@
     "scrollY": 42322,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s15-devig \"+4.5 to +6.6 points above the model, devigged (b\u2026\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 27,
-        "rect": {
-          "x": -27,
-          "y": 302,
-          "w": 470,
-          "h": 16
-        }
-      },
-      {
-        "what": "text.s15-devig \"+4.5 to +6.6 points above the model, devigged (b\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 52,
-        "rect": {
-          "x": -27,
-          "y": 302,
-          "w": 470,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -5482,14 +3778,22 @@
         "b": "div.card \"Skill 5, continued \u2014 the flaw that is realCount \u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key blue = France\u2019s moneyred = Spain\u2019s moneygrey\u2026\"",
+        "aKind": "chrome",
+        "b": "text.s15-model-label \"the model\u2019s guess, devigged, not money traded\"",
+        "bKind": "svgtext",
+        "ix": 172,
+        "iy": 16
       },
       {
         "a": "div#chip \"Key blue = France\u2019s moneyred = Spain\u2019s moneygrey\u2026\"",
         "aKind": "chrome",
         "b": "text.s15-label-spain \"Spain\u2019s money\"",
         "bKind": "svgtext",
-        "ix": 28,
+        "ix": 42,
         "iy": 18
       },
       {
@@ -5497,7 +3801,7 @@
         "aKind": "chrome",
         "b": "text.s15-label-spain \"Spain\u2019s money\"",
         "bKind": "svgtext",
-        "ix": 31,
+        "ix": 50,
         "iy": 15
       },
       {
@@ -5509,60 +3813,12 @@
         "iy": 16
       },
       {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the groups\"",
+        "a": "div.card \"Skill 5, continued \u2014 the flaw that is realCount \u2026\"",
+        "aKind": "card",
+        "b": "text.s15-devig \"+4.5 to +6.6 points above the model,devigged (bo\u2026\"",
         "bKind": "svgtext",
-        "ix": 63,
-        "iy": 15
-      },
-      {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 31,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 59,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 13,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 72,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 29,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 16\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 75,
-        "iy": 15
+        "ix": 234,
+        "iy": 14
       }
     ],
     "stop": "s14/b4"
@@ -5575,32 +3831,7 @@
     "scrollY": 43166,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s15-devig \"+4.5 to +6.6 points above the model, devigged (b\u2026\"",
-        "kind": "svgtext",
-        "side": "left",
-        "by": 27,
-        "rect": {
-          "x": -27,
-          "y": 302,
-          "w": 470,
-          "h": 16
-        }
-      },
-      {
-        "what": "text.s15-devig \"+4.5 to +6.6 points above the model, devigged (b\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 52,
-        "rect": {
-          "x": -27,
-          "y": 302,
-          "w": 470,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -5608,14 +3839,22 @@
         "b": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key blue = France\u2019s moneyred = Spain\u2019s moneygrey\u2026\"",
+        "aKind": "chrome",
+        "b": "text.s15-model-label \"the model\u2019s guess, devigged, not money traded\"",
+        "bKind": "svgtext",
+        "ix": 172,
+        "iy": 16
       },
       {
         "a": "div#chip \"Key blue = France\u2019s moneyred = Spain\u2019s moneygrey\u2026\"",
         "aKind": "chrome",
         "b": "text.s15-label-spain \"Spain\u2019s money\"",
         "bKind": "svgtext",
-        "ix": 28,
+        "ix": 42,
         "iy": 18
       },
       {
@@ -5623,7 +3862,7 @@
         "aKind": "chrome",
         "b": "text.s15-label-spain \"Spain\u2019s money\"",
         "bKind": "svgtext",
-        "ix": 31,
+        "ix": 50,
         "iy": 15
       },
       {
@@ -5643,68 +3882,12 @@
         "iy": 18
       },
       {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the groups\"",
+        "a": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
+        "aKind": "card",
+        "b": "text.s15-devig \"+4.5 to +6.6 points above the model,devigged (bo\u2026\"",
         "bKind": "svgtext",
-        "ix": 63,
-        "iy": 15
-      },
-      {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 31,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 59,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 13,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 72,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 29,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 16\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 75,
-        "iy": 15
-      },
-      {
-        "a": "text.s15-y-title \"ticket price (cents; 100 = certain)\"",
-        "aKind": "svgtext",
-        "b": "text.s15-pinned \"One opinion, read five times.\"",
-        "bKind": "svgtext",
-        "ix": 101,
-        "iy": 16
+        "ix": 234,
+        "iy": 14
       }
     ],
     "stop": "s15/b1"
@@ -5722,9 +3905,17 @@
       {
         "a": "div#chip \"Key grey = settled to zero, dead moneyred = Spai\u2026\"",
         "aKind": "chrome",
+        "b": "text.s15-model-label \"the model\u2019s guess, devigged, not money traded\"",
+        "bKind": "svgtext",
+        "ix": 172,
+        "iy": 16
+      },
+      {
+        "a": "div#chip \"Key grey = settled to zero, dead moneyred = Spai\u2026\"",
+        "aKind": "chrome",
         "b": "text.s15-label-spain \"Spain\u2019s money\"",
         "bKind": "svgtext",
-        "ix": 28,
+        "ix": 42,
         "iy": 18
       },
       {
@@ -5732,63 +3923,7 @@
         "aKind": "chrome",
         "b": "text.s15-label-spain \"Spain\u2019s money\"",
         "bKind": "svgtext",
-        "ix": 31,
-        "iy": 15
-      },
-      {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the groups\"",
-        "bKind": "svgtext",
-        "ix": 63,
-        "iy": 15
-      },
-      {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 31,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 59,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 13,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 72,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 29,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 16\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 75,
+        "ix": 50,
         "iy": 15
       }
     ],
@@ -5810,7 +3945,7 @@
         "by": 12,
         "rect": {
           "x": 64,
-          "y": 174,
+          "y": 147,
           "w": 338,
           "h": 16
         }
@@ -5823,7 +3958,7 @@
         "b": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -5831,14 +3966,14 @@
         "b": "text.s16-ord \"FIRST TONIGHT\"",
         "bKind": "svgtext",
         "ix": 109,
-        "iy": 15
+        "iy": 10
       },
       {
         "a": "div#chip \"Key cyan dot = one minute, both venuesdashed = p\u2026\"",
         "aKind": "chrome",
         "b": "text \"40c\"",
         "bKind": "svgtext",
-        "ix": 13,
+        "ix": 22,
         "iy": 7
       },
       {
@@ -5908,10 +4043,10 @@
       {
         "a": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
         "aKind": "card",
-        "b": "text.s16-ribbon \"x axis: Kalshi\u2019sprice (cents) \u00b7 yaxis: Polymarke\u2026\"",
+        "b": "text.s16-ribbon \"x axis: Kalshi\u2019s price (cents) \u00b7 y axis:Polymark\u2026\"",
         "bKind": "svgtext",
-        "ix": 139,
-        "iy": 55
+        "ix": 308,
+        "iy": 28
       },
       {
         "a": "div.card \"Skill 5, continued: the open question, and it is\u2026\"",
@@ -5946,12 +4081,12 @@
         "iy": 16
       },
       {
-        "a": "text.s16-ribbon \"x axis: Kalshi\u2019sprice (cents) \u00b7 yaxis: Polymarke\u2026\"",
+        "a": "text.s16-ribbon \"x axis: Kalshi\u2019s price (cents) \u00b7 y axis:Polymark\u2026\"",
         "aKind": "svgtext",
         "b": "text \"100c\"",
         "bKind": "svgtext",
         "ix": 7,
-        "iy": 15
+        "iy": 10
       }
     ],
     "stop": "s15/b3"
@@ -5964,32 +4099,7 @@
     "scrollY": 45698,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s16-title \"trust the pools, smile at the ladders\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 37,
-        "rect": {
-          "x": 48,
-          "y": 79,
-          "w": 379,
-          "h": 28
-        }
-      },
-      {
-        "what": "text \"penny tickets (under 10c): pay off less often th\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 19,
-        "rect": {
-          "x": 74,
-          "y": 477,
-          "w": 335,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -5997,7 +4107,7 @@
         "b": "div.card \"The exam, part one: your five skillsHere are you\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -6005,14 +4115,14 @@
         "b": "text.s16-ord \"SECOND TONIGHT\"",
         "bKind": "svgtext",
         "ix": 117,
-        "iy": 15
+        "iy": 10
       },
       {
         "a": "div#chip \"Key pale = money at each price levelwhite line =\u2026\"",
         "aKind": "chrome",
         "b": "text \"40c\"",
         "bKind": "svgtext",
-        "ix": 13,
+        "ix": 22,
         "iy": 7
       },
       {
@@ -6042,10 +4152,10 @@
       {
         "a": "div#chip \"Key pale = money at each price levelwhite line =\u2026\"",
         "aKind": "chrome",
-        "b": "text \"penny tickets (under 10c): pay off less often th\u2026\"",
+        "b": "text \"penny tickets (under 10c): pay off less oftentha\u2026\"",
         "bKind": "svgtext",
-        "ix": 195,
-        "iy": 15
+        "ix": 179,
+        "iy": 29
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -6074,7 +4184,7 @@
       {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
-        "b": "text \"penny tickets (under 10c): pay off less often th\u2026\"",
+        "b": "text \"penny tickets (under 10c): pay off less oftentha\u2026\"",
         "bKind": "svgtext",
         "ix": 65,
         "iy": 6
@@ -6090,18 +4200,18 @@
       {
         "a": "div.card \"The exam, part one: your five skillsHere are you\u2026\"",
         "aKind": "card",
-        "b": "text.s16-title \"trust the pools, smile at the ladders\"",
+        "b": "text.s16-title \"trust the pools, smile at theladders\"",
         "bKind": "svgtext",
-        "ix": 342,
-        "iy": 28
+        "ix": 292,
+        "iy": 56
       },
       {
         "a": "div.card \"The exam, part one: your five skillsHere are you\u2026\"",
         "aKind": "card",
-        "b": "text.s16-ribbon \"left axis: what theprice implied(cents) \u00b7 righta\u2026\"",
+        "b": "text.s16-ribbon \"left axis: what the price implied (cents)\u00b7 right\u2026\"",
         "bKind": "svgtext",
-        "ix": 146,
-        "iy": 69
+        "ix": 316,
+        "iy": 28
       },
       {
         "a": "div.card \"The exam, part one: your five skillsHere are you\u2026\"",
@@ -6144,12 +4254,20 @@
         "iy": 15
       },
       {
-        "a": "text.s16-ribbon \"left axis: what theprice implied(cents) \u00b7 righta\u2026\"",
+        "a": "text.s16-title \"trust the pools, smile at theladders\"",
         "aKind": "svgtext",
         "b": "text \"100%\"",
         "bKind": "svgtext",
         "ix": 7,
-        "iy": 15
+        "iy": 5
+      },
+      {
+        "a": "text.s16-ribbon \"left axis: what the price implied (cents)\u00b7 right\u2026\"",
+        "aKind": "svgtext",
+        "b": "text \"100%\"",
+        "bKind": "svgtext",
+        "ix": 7,
+        "iy": 9
       }
     ],
     "stop": "s16/l1"
@@ -6162,20 +4280,7 @@
     "scrollY": 46542,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"the shock\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 4,
-        "rect": {
-          "x": 338,
-          "y": 129,
-          "w": 55,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -6183,7 +4288,7 @@
         "b": "div.card \"The exam, part one: your five skillsSecond tonig\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -6191,14 +4296,14 @@
         "b": "text.s16-ord \"THIRD TONIGHT\"",
         "bKind": "svgtext",
         "ix": 109,
-        "iy": 15
+        "iy": 10
       },
       {
         "a": "div#chip \"Key blue = Norway, risinglavender = Argentina, f\u2026\"",
         "aKind": "chrome",
         "b": "text \"October\"",
         "bKind": "svgtext",
-        "ix": 10,
+        "ix": 38,
         "iy": 7
       },
       {
@@ -6252,10 +4357,10 @@
       {
         "a": "div.card \"The exam, part one: your five skillsSecond tonig\u2026\"",
         "aKind": "card",
-        "b": "text.s16-ribbon \"x axis: match date(dashed line marksthe shock) \u00b7\u2026\"",
+        "b": "text.s16-ribbon \"x axis: match date (dashed line marks theshock) \u2026\"",
         "bKind": "svgtext",
-        "ix": 154,
-        "iy": 69
+        "ix": 316,
+        "iy": 42
       },
       {
         "a": "div.card \"The exam, part one: your five skillsSecond tonig\u2026\"",
@@ -6278,7 +4383,15 @@
         "aKind": "card",
         "b": "text \"the shock\"",
         "bKind": "svgtext",
-        "ix": 52,
+        "ix": 55,
+        "iy": 15
+      },
+      {
+        "a": "text.s16-ribbon \"x axis: match date (dashed line marks theshock) \u2026\"",
+        "aKind": "svgtext",
+        "b": "text \"the shock\"",
+        "bKind": "svgtext",
+        "ix": 55,
         "iy": 15
       }
     ],
@@ -6300,7 +4413,7 @@
         "b": "div.card \"The exam, part one: your five skillsThird tonigh\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -6308,7 +4421,7 @@
         "b": "text.s16-ord \"FOURTH TONIGHT\"",
         "bKind": "svgtext",
         "ix": 117,
-        "iy": 15
+        "iy": 10
       },
       {
         "a": "div#chip \"Key outline = what fans said (poll %)filled = wh\u2026\"",
@@ -6345,10 +4458,10 @@
       {
         "a": "div.card \"The exam, part one: your five skillsThird tonigh\u2026\"",
         "aKind": "card",
-        "b": "text.s16-ribbon \"left axis: fans whosaid win (%) \u00b7 rightaxis: mar\u2026\"",
+        "b": "text.s16-ribbon \"left axis: fans who said win (%) \u00b7 rightaxis: ma\u2026\"",
         "bKind": "svgtext",
-        "ix": 154,
-        "iy": 55
+        "ix": 308,
+        "iy": 28
       },
       {
         "a": "div.card \"The exam, part one: your five skillsThird tonigh\u2026\"",
@@ -6391,28 +4504,12 @@
         "iy": 15
       },
       {
-        "a": "text.s16-ribbon \"left axis: fans whosaid win (%) \u00b7 rightaxis: mar\u2026\"",
+        "a": "text.s16-ribbon \"left axis: fans who said win (%) \u00b7 rightaxis: ma\u2026\"",
         "aKind": "svgtext",
         "b": "text \"100\u00a2\"",
         "bKind": "svgtext",
         "ix": 7,
-        "iy": 15
-      },
-      {
-        "a": "text.s16-ribbon \"left axis: fans whosaid win (%) \u00b7 rightaxis: mar\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"87% said win (poll)\"",
-        "bKind": "svgtext",
-        "ix": 106,
-        "iy": 5
-      },
-      {
-        "a": "text \"poll bars are agreement, not probability\"",
-        "aKind": "svgtext",
-        "b": "text \"87% said win (poll)\"",
-        "bKind": "svgtext",
-        "ix": 109,
-        "iy": 11
+        "iy": 10
       }
     ],
     "stop": "s16/l3"
@@ -6433,7 +4530,7 @@
         "b": "div.card \"The exam, part one: your five skillsFourth tonig\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -6441,30 +4538,22 @@
         "b": "text.s16-ord \"FIFTH TONIGHT\"",
         "bKind": "svgtext",
         "ix": 109,
-        "iy": 15
+        "iy": 10
       },
       {
         "a": "div#chip \"Key grey = France, settled to zerored = Spain\u2019s \u2026\"",
         "aKind": "chrome",
-        "b": "text \"before the tournament\"",
+        "b": "text \"after round of 16\"",
         "bKind": "svgtext",
-        "ix": 13,
-        "iy": 7
-      },
-      {
-        "a": "div#chip \"Key grey = France, settled to zerored = Spain\u2019s \u2026\"",
-        "aKind": "chrome",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 118,
+        "ix": 96,
         "iy": 7
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
         "aKind": "chrome",
-        "b": "text \"before the tournament\"",
+        "b": "text \"before\"",
         "bKind": "svgtext",
-        "ix": 74,
+        "ix": 37,
         "iy": 7
       },
       {
@@ -6494,10 +4583,10 @@
       {
         "a": "div.card \"The exam, part one: your five skillsFourth tonig\u2026\"",
         "aKind": "card",
-        "b": "text.s16-ribbon \"left axis: fivecheckpoints \u00b7 rightaxis: ticket p\u2026\"",
+        "b": "text.s16-ribbon \"left axis: five checkpoints \u00b7 right axis:ticket \u2026\"",
         "bKind": "svgtext",
-        "ix": 146,
-        "iy": 111
+        "ix": 316,
+        "iy": 42
       },
       {
         "a": "div.card \"The exam, part one: your five skillsFourth tonig\u2026\"",
@@ -6524,15 +4613,7 @@
         "iy": 15
       },
       {
-        "a": "text.s16-ribbon \"left axis: fivecheckpoints \u00b7 rightaxis: ticket p\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"80c\"",
-        "bKind": "svgtext",
-        "ix": 7,
-        "iy": 15
-      },
-      {
-        "a": "text.s16-ribbon \"left axis: fivecheckpoints \u00b7 rightaxis: ticket p\u2026\"",
+        "a": "text.s16-ribbon \"left axis: five checkpoints \u00b7 right axis:ticket \u2026\"",
         "aKind": "svgtext",
         "b": "text \"100c\"",
         "bKind": "svgtext",
@@ -6558,7 +4639,7 @@
         "b": "div.card \"The exam, part one: your five skillsFifth tonigh\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       }
     ],
     "stop": "s16/l5"
@@ -6579,15 +4660,15 @@
         "b": "div.card \"The exam, part two: your readThis is where the p\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
-        "a": "div#grain-plate \"1 dot = $250,000 traded again \u00b7 this is the whol\u2026\"",
+        "a": "div#chip \"Key crimson = Spain, this morning and at the whi\u2026\"",
         "aKind": "chrome",
-        "b": "text \"the winner ticket paid\"",
+        "b": "text \"Spain\"",
         "bKind": "svgtext",
-        "ix": 137,
-        "iy": 16
+        "ix": 24,
+        "iy": 13
       },
       {
         "a": "div#chip \"Key crimson = Spain, this morning and at the whi\u2026\"",
@@ -6596,6 +4677,22 @@
         "bKind": "svgtext",
         "ix": 55,
         "iy": 13
+      },
+      {
+        "a": "div#chip \"Key crimson = Spain, this morning and at the whi\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"42\u00a2\"",
+        "bKind": "svgtext",
+        "ix": 24,
+        "iy": 16
+      },
+      {
+        "a": "div#chip \"Key crimson = Spain, this morning and at the whi\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"this morning\"",
+        "bKind": "svgtext",
+        "ix": 63,
+        "iy": 12
       },
       {
         "a": "div#chip \"Key crimson = Spain, this morning and at the whi\u2026\"",
@@ -6672,14 +4769,6 @@
       {
         "a": "div.card \"The exam, part two: your readThis is where the p\u2026\"",
         "aKind": "card",
-        "b": "text \"the whistle\"",
-        "bKind": "svgtext",
-        "ix": 55,
-        "iy": 12
-      },
-      {
-        "a": "div.card \"The exam, part two: your readThis is where the p\u2026\"",
-        "aKind": "card",
         "b": "text \"the winner ticket paid\"",
         "bKind": "svgtext",
         "ix": 137,
@@ -6692,14 +4781,6 @@
         "bKind": "svgtext",
         "ix": 42,
         "iy": 10
-      },
-      {
-        "a": "text.s19-y-title \"contract price (cents; 100 = certain)\"",
-        "aKind": "svgtext",
-        "b": "text \"the whistle\"",
-        "bKind": "svgtext",
-        "ix": 55,
-        "iy": 11
       }
     ],
     "stop": "s17/b1"
@@ -6720,7 +4801,15 @@
         "b": "div.card \"The epilogue \u2014 the market, gradedThis morning, b\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key white = the level-after-ninety ticket, minut\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"40\"",
+        "bKind": "svgtext",
+        "ix": 11,
+        "iy": 13
       },
       {
         "a": "div#chip \"Key white = the level-after-ninety ticket, minut\u2026\"",
@@ -6759,8 +4848,16 @@
         "aKind": "chrome",
         "b": "text \"16,961 trades: the draw hardens\"",
         "bKind": "svgtext",
-        "ix": 160,
+        "ix": 193,
         "iy": 16
+      },
+      {
+        "a": "div#chip \"Key white = the level-after-ninety ticket, minut\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"33\u00a2 before kickoff\"",
+        "bKind": "svgtext",
+        "ix": 32,
+        "iy": 15
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -6817,14 +4914,6 @@
         "bKind": "svgtext",
         "ix": 85,
         "iy": 16
-      },
-      {
-        "a": "text.s19-y-title \"price of a level match after ninety minutes (cen\u2026\"",
-        "aKind": "svgtext",
-        "b": "text \"settled at 99\u00a2\"",
-        "bKind": "svgtext",
-        "ix": 76,
-        "iy": 15
       }
     ],
     "stop": "s19/b1"
@@ -6837,20 +4926,7 @@
     "scrollY": 51606,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.s19-y-title \"market price minus model odds (percentage points\u2026\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 10,
-        "rect": {
-          "x": 48,
-          "y": 88,
-          "w": 352,
-          "h": 15
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 traded again \u00b7 this is the whol\u2026\"",
@@ -6858,30 +4934,14 @@
         "b": "div.card \"The epilogue \u2014 the market, gradedNinety minutes \u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
       },
       {
         "a": "div#chip \"Key crimson = Spain's gap to the modelgrey dashe\u2026\"",
         "aKind": "chrome",
-        "b": "text \"after the groups\"",
+        "b": "text \"before the tournament\"",
         "bKind": "svgtext",
-        "ix": 28,
-        "iy": 13
-      },
-      {
-        "a": "div#chip \"Key crimson = Spain's gap to the modelgrey dashe\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 88,
-        "iy": 13
-      },
-      {
-        "a": "div#chip \"Key crimson = Spain's gap to the modelgrey dashe\u2026\"",
-        "aKind": "chrome",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 116,
+        "ix": 34,
         "iy": 13
       },
       {
@@ -6895,10 +4955,18 @@
       {
         "a": "div#chip \"Key crimson = Spain's gap to the modelgrey dashe\u2026\"",
         "aKind": "chrome",
+        "b": "text \"Spain\u2019s money\"",
+        "bKind": "svgtext",
+        "ix": 43,
+        "iy": 15
+      },
+      {
+        "a": "div#chip \"Key crimson = Spain's gap to the modelgrey dashe\u2026\"",
+        "aKind": "chrome",
         "b": "text \"the discounted team won\"",
         "bKind": "svgtext",
         "ix": 155,
-        "iy": 9
+        "iy": 16
       },
       {
         "a": "a.skip \"Skip to methods \u2193\"",
@@ -6906,14 +4974,6 @@
         "b": "text \"before the tournament\"",
         "bKind": "svgtext",
         "ix": 86,
-        "iy": 13
-      },
-      {
-        "a": "a.skip \"Skip to methods \u2193\"",
-        "aKind": "chrome",
-        "b": "text \"after the groups\"",
-        "bKind": "svgtext",
-        "ix": 22,
         "iy": 13
       },
       {
@@ -6927,9 +4987,9 @@
       {
         "a": "div.card \"The epilogue \u2014 the market, gradedNinety minutes \u2026\"",
         "aKind": "card",
-        "b": "text.s19-y-title \"market price minus model odds (percentage points\u2026\"",
+        "b": "text.s19-y-title \"market price minus model odds (pp, devigged)\"",
         "bKind": "svgtext",
-        "ix": 342,
+        "ix": 264,
         "iy": 15
       },
       {
@@ -6939,62 +4999,6 @@
         "bKind": "svgtext",
         "ix": 115,
         "iy": 13
-      },
-      {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the groups\"",
-        "bKind": "svgtext",
-        "ix": 63,
-        "iy": 15
-      },
-      {
-        "a": "text \"before the tournament\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 30,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 32\"",
-        "bKind": "svgtext",
-        "ix": 58,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the groups\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 12,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the round of 16\"",
-        "bKind": "svgtext",
-        "ix": 71,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 32\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 29,
-        "iy": 15
-      },
-      {
-        "a": "text \"after the round of 16\"",
-        "aKind": "svgtext",
-        "b": "text \"after the quarterfinals\"",
-        "bKind": "svgtext",
-        "ix": 74,
-        "iy": 15
       }
     ],
     "stop": "s19/b2"
@@ -7007,20 +5011,7 @@
     "scrollY": 52450,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text \"already the loudest of 82\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 67,
-        "rect": {
-          "x": 299,
-          "y": 98,
-          "w": 158,
-          "h": 16
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 traded again \u00b7 this is the whol\u2026\"",
@@ -7028,7 +5019,15 @@
         "b": "div.card \"The epilogue \u2014 the market, gradedNow grade the d\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key crimson = Spain's 2030 winner ticketgrey = t\u2026\"",
+        "aKind": "chrome",
+        "b": "text \"$2K\"",
+        "bKind": "svgtext",
+        "ix": 23,
+        "iy": 5
       },
       {
         "a": "div.card \"The epilogue \u2014 the market, gradedNow grade the d\u2026\"",
@@ -7115,7 +5114,7 @@
         "aKind": "card",
         "b": "text \"already the loudest of 82\"",
         "bKind": "svgtext",
-        "ix": 91,
+        "ix": 158,
         "iy": 16
       }
     ],
@@ -7129,20 +5128,7 @@
     "scrollY": 53294,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
-      {
-        "what": "text.label \"still open \u2014 explore it below\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 41,
-        "rect": {
-          "x": 241,
-          "y": 378,
-          "w": 190,
-          "h": 18
-        }
-      }
-    ],
+    "edge": [],
     "overlaps": [
       {
         "a": "div#grain-plate \"1 dot = $250,000 of real money traded\"",
@@ -7150,7 +5136,15 @@
         "b": "div.card \"The epilogue \u2014 the market, gradedAbout eleven mi\u2026\"",
         "bKind": "card",
         "ix": 286,
-        "iy": 61
+        "iy": 54
+      },
+      {
+        "a": "div#chip \"Key grey = money at rest, the whole tournamentam\u2026\"",
+        "aKind": "chrome",
+        "b": "text.label \"still open \u2014explore it below\"",
+        "bKind": "svgtext",
+        "ix": 108,
+        "iy": 11
       }
     ],
     "stop": "s19/b4"
@@ -7163,21 +5157,17 @@
     "scrollY": 54066,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
+    "edge": [],
+    "overlaps": [
       {
-        "what": "text.label \"still open \u2014 explore it below\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 41,
-        "rect": {
-          "x": 241,
-          "y": 378,
-          "w": 190,
-          "h": 18
-        }
+        "a": "div#chip \"Key grey = money at rest, the whole tournamentam\u2026\"",
+        "aKind": "chrome",
+        "b": "text.label \"still open \u2014explore it below\"",
+        "bKind": "svgtext",
+        "ix": 108,
+        "iy": 11
       }
     ],
-    "overlaps": [],
     "stop": "s18/b1"
   },
   {
@@ -7188,21 +5178,17 @@
     "scrollY": 54438,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
+    "edge": [],
+    "overlaps": [
       {
-        "what": "text.label \"still open \u2014 explore it below\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 41,
-        "rect": {
-          "x": 241,
-          "y": 378,
-          "w": 190,
-          "h": 18
-        }
+        "a": "div#chip \"Key grey = money at rest, the whole tournamentam\u2026\"",
+        "aKind": "chrome",
+        "b": "text.label \"still open \u2014explore it below\"",
+        "bKind": "svgtext",
+        "ix": 108,
+        "iy": 11
       }
     ],
-    "overlaps": [],
     "stop": "coda"
   },
   {
@@ -7213,21 +5199,17 @@
     "scrollY": 55609,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
+    "edge": [],
+    "overlaps": [
       {
-        "what": "text.label \"still open \u2014 explore it below\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 41,
-        "rect": {
-          "x": 241,
-          "y": 378,
-          "w": 190,
-          "h": 18
-        }
+        "a": "div#chip \"Key grey = money at rest, the whole tournamentam\u2026\"",
+        "aKind": "chrome",
+        "b": "text.label \"still open \u2014explore it below\"",
+        "bKind": "svgtext",
+        "ix": 108,
+        "iy": 11
       }
     ],
-    "overlaps": [],
     "stop": "methods"
   },
   {
@@ -7238,21 +5220,17 @@
     "scrollY": 58456,
     "pageOverflowPx": 0,
     "overflowCulprits": [],
-    "edge": [
+    "edge": [],
+    "overlaps": [
       {
-        "what": "text.label \"still open \u2014 explore it below\"",
-        "kind": "svgtext",
-        "side": "right",
-        "by": 41,
-        "rect": {
-          "x": 241,
-          "y": 378,
-          "w": 190,
-          "h": 18
-        }
+        "a": "div#chip \"Key grey = money at rest, the whole tournamentam\u2026\"",
+        "aKind": "chrome",
+        "b": "text.label \"still open \u2014explore it below\"",
+        "bKind": "svgtext",
+        "ix": 108,
+        "iy": 11
       }
     ],
-    "overlaps": [],
     "stop": "bottom"
   }
 ]
